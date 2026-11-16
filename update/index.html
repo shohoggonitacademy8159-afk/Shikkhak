@@ -181,12 +181,14 @@ const P = {
   copy:'<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
   refresh:'<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>',
   x:'<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  users:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  list:'<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/>',
   upload:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>'
 };
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '1.2';
+const WEB_VERSION = '1.3';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -230,6 +232,7 @@ function checkUpdate(manual){ if (BR) try { BR.checkUpdate(!!manual); } catch(e)
 /* ---------- helpers ---------- */
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const bn = n => String(n).replace(/\d/g, d => '০১২৩৪৫৬৭৮৯'[d]);
+const toEn = s => String(s ?? '').replace(/[০-৯]/g, d => '০১২৩৪৫৬৭৮৯'.indexOf(d));
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const SKIP = ['মোঃ','মোহাম্মদ','মুহাম্মদ','মো.','মোছাঃ','মোসাঃ','মিসেস','md','md.','mst','mst.'];
 function initials(name){
@@ -281,10 +284,19 @@ const DEFAULTS = () => ({
     pta:[m('সেলিনা আক্তার','সভাপতি (অভিভাবক)'),m('নাসরিন সুলতানা','সদস্য সচিব (প্রধান শিক্ষক)'),m('ফারজানা আক্তার','শিক্ষক সদস্য'),m('মোঃ মিজানুর হোসেন','অভিভাবক সদস্য')],
     slip:[m('নাসরিন সুলতানা','আহ্বায়ক (প্রধান শিক্ষক)'),m('মোঃ আব্দুল করিম','এসএমসি প্রতিনিধি'),m('ফারজানা আক্তার','শিক্ষক প্রতিনিধি'),m('তানিয়া ইসলাম','অভিভাবক প্রতিনিধি')]
   },
-  students:[], plans:[], customSubjects:{}
+  teachers:[], students:[], plans:[], customSubjects:{}
 });
 
 const KEY = 'shikkhok_app_v1';
+// First time: start the teacher list with the user's own profile.
+function withTeachers(db){
+  if (!Array.isArray(db.teachers)) db.teachers = [];
+  if (!db.teachersSeeded) {
+    if (!db.teachers.length && db.teacher && db.teacher.name) db.teachers.push({id:uid(), name:db.teacher.name, designation:db.teacher.designation||'সহকারী শিক্ষক', mobile:db.teacher.mobile||'', me:true});
+    db.teachersSeeded = true;
+  }
+  return db;
+}
 let canStore = true;
 let DB = (() => {
   const d = DEFAULTS();
@@ -292,10 +304,10 @@ let DB = (() => {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const s = JSON.parse(raw);
-      return {...d, ...s, teacher:{...d.teacher, ...(s.teacher||{})}, committees:{...d.committees, ...(s.committees||{})}};
+      return withTeachers({...d, ...s, teacher:{...d.teacher, ...(s.teacher||{})}, committees:{...d.committees, ...(s.committees||{})}});
     }
   } catch(e) { canStore = false; }
-  return d;
+  return withTeachers(d);
 })();
 function save(){
   try { localStorage.setItem(KEY, JSON.stringify(DB)); return true; }
@@ -307,14 +319,16 @@ const UI = {committeeTab:'smc', showAllMembers:false, stuClass:'all', stuQuery:'
 try { UI.committeeTab = localStorage.getItem('committeeTab') || 'smc'; } catch(e) {}
 
 const FEATURES_A = [
+  ['teachers','users','#0E7490','শিক্ষক তালিকা','শিক্ষকদের নাম ও তথ্য'],
+  ['student-profile','profile','#D23F74','শিক্ষার্থী তালিকা','নাম ও প্রোফাইল যোগ'],
   ['teacher-att','teacher','#1E8A55','শিক্ষক উপস্থিতি','হাজিরা ও আগমন-প্রস্থান'],
   ['student-att','students','#2563C9','শিক্ষার্থী উপস্থিতি','শ্রেণিভিত্তিক হাজিরা'],
   ['leave','leave','#E0701A','ছুটি ও আবেদন','আবেদন ও ছুটির হিসাব'],
   ['lesson-plan','plan','#7C4DCC','পাঠ পরিকল্পনা','সকল শ্রেণি ও বিষয়'],
   ['textbooks','book','#0E8C82','পাঠ্যবই','বই ও শিক্ষক সহায়িকা'],
-  ['student-profile','profile','#D23F74','শিক্ষার্থী প্রোফাইল','প্রোফাইল তৈরি ও সংরক্ষণ'],
   ['assessment','tools','#4F46E5','মূল্যায়ন টুলস','নম্বর, ফলাফল ও অগ্রগতি'],
   ['certificates','cert','#C27C0E','সনদ ও কাগজপত্র','প্রত্যয়নপত্র, ছাড়পত্র ও ফরম'],
+  ['committee','committee','#C0392B','কমিটি','এসএমসি, পিটিএ ও স্লিপ'],
 ];
 const FEATURES_B = [
   ['salary','salary','#1F4E8C','শিক্ষকের বেতন হিসাব ও ইনক্রিমেন্ট','বার্ষিক ইনক্রিমেন্ট: ১ জুলাই'],
@@ -381,10 +395,12 @@ function home(){
     </button>
   </header>
   <section class="card overlap" aria-label="আজকের সারসংক্ষেপ">
-    <div class="top"><h2 style="font-size:16px">আজকের উপস্থিতি</h2><span class="pill"><span style="color:#C77700;display:flex">${ic('cloud',16)}</span>২৬° আংশিক মেঘলা</span></div>
+    <div class="top"><h2 style="font-size:16px">বিদ্যালয়ের সারসংক্ষেপ</h2><span class="pill"><span style="color:#C77700;display:flex">${ic('cloud',16)}</span>২৬° আংশিক মেঘলা</span></div>
     <div class="row2">
-      <div class="stat" style="background:#E8F5EE"><span style="font-size:13px;color:#2F4A3B">শিক্ষক</span><span class="n">৫<span> / ৬ জন</span></span><div class="bar" style="background:#CFE6D9"><i style="width:83%;background:#1E7F4F"></i></div><span style="font-size:12px;color:#2F4A3B">১ জন ছুটিতে</span></div>
-      <div class="stat" style="background:#E9EFF8"><span style="font-size:13px;color:#2C3F5E">শিক্ষার্থী</span><span class="n">২১৪<span> / ২৩৮ জন</span></span><div class="bar" style="background:#CBD8EC"><i style="width:90%;background:#1F3A68"></i></div><span style="font-size:12px;color:#2C3F5E">উপস্থিতি ৯০%</span></div>
+      ${(() => { const T = DB.teachers.length, St = DB.students.length;
+        const boys = DB.students.filter(x => x.gender==='ছেলে').length, girls = DB.students.filter(x => x.gender==='মেয়ে').length;
+        return `<button class="stat" data-go="teachers" style="background:#E8F5EE;border:0;text-align:left"><span style="font-size:13px;color:#2F4A3B">শিক্ষক</span><span class="n">${bn(T)}<span> জন</span></span><span style="font-size:12px;color:#17663F;font-weight:600">${T?'তালিকা দেখুন ›':'+ নাম যোগ করুন'}</span></button>
+        <button class="stat" data-go="students" style="background:#E9EFF8;border:0;text-align:left"><span style="font-size:13px;color:#2C3F5E">শিক্ষার্থী</span><span class="n">${bn(St)}<span> জন</span></span><span style="font-size:12px;color:#1F3A68;font-weight:600">${St?`ছেলে ${bn(boys)} · মেয়ে ${bn(girls)}`:'+ নাম যোগ করুন'}</span></button>`; })()}
     </div>
     <div class="ticker"><b>${ic('mega',16)} নোটিশ</b><div class="tkw"><div class="tk">
       <span>বার্ষিক পরীক্ষার সময়সূচি প্রকাশিত হয়েছে</span><span>১৬ ডিসেম্বর বিজয় দিবস — বিদ্যালয় বন্ধ থাকবে</span><span>উপবৃত্তির তথ্য হালনাগাদের শেষ তারিখ শীঘ্রই</span>
@@ -395,7 +411,6 @@ function home(){
     <div class="sech"><i style="background:#1E7F4F"></i>দাপ্তরিক ও পাঠদান</div>
     <div class="row2">
       ${FEATURES_A.map(tileA).join('')}
-      <button class="tile wide" data-go="committee"><span class="ib" style="background:#C0392B;box-shadow:0 6px 14px #C0392B40">${S(P.committee)}</span><span class="grow"><span class="t1">কমিটি</span><span class="t2">এসএমসি, পিটিএ, স্লিপ কমিটি ও সভার রেজুলেশন</span></span><span style="color:var(--mute)">${ic('chev',20)}</span></button>
     </div>
   </section>
   <section class="sec" style="padding-bottom:20px" aria-label="আর্থিক ও অবসর সেবা">
@@ -481,17 +496,114 @@ function memberSheet(id){
   });
 }
 
+/* ---------- teachers ---------- */
+const T_DESIG = ['প্রধান শিক্ষক','ভারপ্রাপ্ত প্রধান শিক্ষক','চলতি দায়িত্বপ্রাপ্ত প্রধান শিক্ষক','সহকারী শিক্ষক','সহকারী শিক্ষক (প্রাক-প্রাথমিক)','দপ্তরি কাম প্রহরী','অন্যান্য'];
+function teachers(){
+  const rank = t => { const i = T_DESIG.indexOf(t.designation); return i < 0 ? 99 : i; };
+  const list = [...DB.teachers].sort((a,b) => rank(a) - rank(b) || a.name.localeCompare(b.name, 'bn'));
+  return innerHeader('শিক্ষক তালিকা','users','#0E7490') + `
+  <div class="sec" style="padding-top:16px">
+    <button class="btn solid big full" data-teacher-new>${ic('plus',20)} নতুন শিক্ষক যোগ করুন</button>
+    <div class="top"><h2 style="font-size:17px">মোট ${bn(list.length)} জন</h2></div>
+    ${list.length ? `<div class="list">${list.map((t,i) => `
+      <div class="mem">
+        <span class="ma" style="background:${PAL[i%PAL.length]}" aria-hidden="true">${esc(initials(t.name))}</span>
+        <span class="grow"><span class="t1" style="font-weight:600">${esc(t.name)}${t.me?' <span class="st" style="background:#E3F4EA;color:#17663F;margin:0">আমি</span>':''}</span><span class="t2">${esc(t.designation)}${t.mobile?' · '+esc(t.mobile):''}</span></span>
+        ${t.mobile?`<a class="sq" href="tel:${esc(toEn(t.mobile).replace(/[^\d+]/g,''))}" aria-label="${esc(t.name)}-কে ফোন করুন">${ic('phone',20)}</a>`:''}
+        <button class="sq blue" data-teacher="${t.id}" aria-label="${esc(t.name)} সম্পাদনা">${ic('edit',20)}</button>
+      </div>`).join('')}</div>`
+    : `<div class="card empty"><span class="ib" style="background:#0E7490">${S(P.users)}</span><p class="t2" style="font-size:14px;line-height:1.6">এখনও কোনো শিক্ষকের নাম যোগ করা হয়নি।</p></div>`}
+  </div>`;
+}
+function teacherSheet(id){
+  const t = id ? DB.teachers.find(x => x.id === id) : {designation:'সহকারী শিক্ষক'};
+  if (!t) return;
+  openSheet(`<form class="f" id="teacherForm">
+    <h2 style="font-size:18px">${id?'শিক্ষকের তথ্য':'নতুন শিক্ষক'}</h2>
+    ${field('t_name','নাম', inp('t_name', t.name, 'required maxlength="80"'), true)}
+    ${field('t_desig','পদবি', sel('t_desig', T_DESIG.includes(t.designation)?T_DESIG:[t.designation,...T_DESIG], t.designation))}
+    ${field('t_mobile','মোবাইল নম্বর', inp('t_mobile', t.mobile, 'type="tel" inputmode="tel" maxlength="20" placeholder="০১XXXXXXXXX"'))}
+    <div class="row2">
+      ${field('t_join','যোগদানের তারিখ', inp('t_join', t.join, 'type="date"'))}
+      ${field('t_dob','জন্ম তারিখ', inp('t_dob', t.dob, 'type="date"'))}
+    </div>
+    ${field('t_pds','পিডিএস আইডি', inp('t_pds', t.pds, 'inputmode="numeric" maxlength="20"'))}
+    ${field('t_edu','শিক্ষাগত যোগ্যতা', inp('t_edu', t.edu, 'maxlength="80" placeholder="যেমন: স্নাতক, সি-ইন-এড/ডিপিএড"'))}
+    ${field('t_notes','মন্তব্য', ta('t_notes', t.notes, 2, 'maxlength="300"'))}
+    <div class="row2"><button type="button" class="btn big" data-close>বাতিল</button><button type="submit" class="btn big solid">সংরক্ষণ</button></div>
+    ${id?`<button type="button" class="btn danger full" data-teacher-del="${id}">${ic('trash',18)} তালিকা থেকে মুছুন</button>`:''}
+  </form>`);
+  document.getElementById('teacherForm').addEventListener('submit', e => {
+    e.preventDefault();
+    const d = formData(e.target);
+    const rec = {name:d.t_name.trim(), designation:d.t_desig, mobile:d.t_mobile.trim(), join:d.t_join, dob:d.t_dob, pds:toEn(d.t_pds.trim()), edu:d.t_edu.trim(), notes:d.t_notes.trim()};
+    if (!rec.name) return;
+    if (id) Object.assign(t, rec); else DB.teachers.push({id:uid(), ...rec});
+    if (save()) toast(id?'শিক্ষকের তথ্য হালনাগাদ হয়েছে':'নতুন শিক্ষক যোগ হয়েছে');
+    closeSheet(); render();
+  });
+}
+
+/* ---------- students: add many names at once ---------- */
+function nextRoll(cls, section){
+  const r = DB.students.filter(x => x.cls===cls && (x.section||'')===(section||'')).map(x => parseInt(toEn(x.roll))||0);
+  return (r.length ? Math.max(...r) : 0) + 1;
+}
+function bulkSheet(){
+  const cls = UI.stuClass==='all' ? '1' : UI.stuClass;
+  openSheet(`<form class="f" id="bulkForm" novalidate>
+    <h2 style="font-size:18px">একসাথে অনেক শিক্ষার্থীর নাম যোগ</h2>
+    <p class="t2" style="font-size:13px;line-height:1.6">প্রতি লাইনে একজনের নাম লিখুন। রোল নম্বর শুরুর রোল থেকে ক্রমানুসারে বসবে। পরে প্রত্যেকের প্রোফাইলে বাকি তথ্য যোগ করতে পারবেন।</p>
+    <div class="row2">
+      ${field('b_cls','শ্রেণি', sel('b_cls', CLASSES, cls), true)}
+      ${field('b_section','শাখা', inp('b_section', '', 'maxlength="10" placeholder="ঐচ্ছিক"'))}
+    </div>
+    <div class="row2">
+      ${field('b_roll','শুরুর রোল', inp('b_roll', String(nextRoll(cls,'')), 'inputmode="numeric" maxlength="5"'))}
+      ${field('b_gender','লিঙ্গ (সবার)', sel('b_gender', [['','পরে দেব'],...GENDERS.map(g=>[g,g])], ''))}
+    </div>
+    ${field('b_names','শিক্ষার্থীদের নাম', ta('b_names','',9,'placeholder="আয়েশা সিদ্দিকা&#10;মোঃ রাকিব হাসান&#10;সুমাইয়া আক্তার"'), true)}
+    <p class="hint" id="bulkCount" role="status">০ জন</p>
+    <p class="hint" id="bulkErr" style="color:var(--red);display:none"></p>
+    <div class="row2"><button type="button" class="btn big" data-close>বাতিল</button><button type="submit" class="btn big solid">সব যোগ করুন</button></div>
+  </form>`);
+  const f = document.getElementById('bulkForm');
+  const names = () => f.elements.b_names.value.split(/\n/).map(x => x.replace(/^\s*[\d০-৯]+[.)।:-]?\s*/, '').trim()).filter(Boolean);
+  const upd = () => { document.getElementById('bulkCount').textContent = bn(names().length) + ' জন'; };
+  const reroll = () => { f.elements.b_roll.value = String(nextRoll(f.elements.b_cls.value, f.elements.b_section.value.trim())); };
+  f.elements.b_names.addEventListener('input', upd);
+  f.elements.b_cls.addEventListener('change', reroll);
+  f.elements.b_section.addEventListener('change', reroll);
+  f.addEventListener('submit', e => {
+    e.preventDefault();
+    const err = document.getElementById('bulkErr');
+    const list = names(), clsV = f.elements.b_cls.value, sec = f.elements.b_section.value.trim();
+    const start = parseInt(toEn(f.elements.b_roll.value)) || 1;
+    if (!list.length) { err.textContent = 'অন্তত একজনের নাম লিখুন।'; err.style.display = 'block'; return; }
+    const taken = new Set(DB.students.filter(x => x.cls===clsV && (x.section||'')===sec).map(x => toEn(x.roll)));
+    const clash = list.map((_, i) => String(start + i)).filter(r => taken.has(r));
+    if (clash.length) { err.textContent = `রোল ${clash.map(bn).join(', ')} আগে থেকেই আছে। শুরুর রোল ${bn(nextRoll(clsV, sec))} দিন।`; err.style.display = 'block'; return; }
+    const now = Date.now();
+    list.forEach((name, i) => DB.students.push({id:uid(), created:now, updated:now, name, cls:clsV, section:sec, roll:String(start + i), gender:f.elements.b_gender.value}));
+    if (save()) toast(`${bn(list.length)} জন শিক্ষার্থী যোগ হয়েছে`);
+    UI.stuClass = clsV; closeSheet(); render();
+  });
+}
+
 /* ---------- students ---------- */
 const GENDERS = ['ছেলে','মেয়ে','অন্যান্য'];
 function students(){
   const q = UI.stuQuery.trim().toLowerCase();
   const all = DB.students;
-  const list = all.filter(s => (UI.stuClass==='all' || s.cls===UI.stuClass) && (!q || [s.name,s.roll,s.father,s.mother,s.phone].join(' ').toLowerCase().includes(q)))
-    .sort((a,b) => (a.cls+'').localeCompare(b.cls+'') || (parseInt(a.roll)||999) - (parseInt(b.roll)||999));
+  const list = all.filter(s => (UI.stuClass==='all' || s.cls===UI.stuClass) && (!q || [s.name,s.roll,bn(s.roll||''),s.father,s.mother,s.phone].join(' ').toLowerCase().includes(q)))
+    .sort((a,b) => (a.cls+'').localeCompare(b.cls+'') || (parseInt(toEn(a.roll))||999) - (parseInt(toEn(b.roll))||999));
   const cnt = c => all.filter(s => s.cls===c).length;
-  return innerHeader('শিক্ষার্থী প্রোফাইল','profile','#D23F74') + `
+  return innerHeader('শিক্ষার্থী তালিকা','profile','#D23F74') + `
   <div class="sec" style="padding-top:16px">
-    <button class="btn solid big full" data-stu-new>${ic('plus',20)} নতুন শিক্ষার্থী যোগ করুন</button>
+    <div class="row2">
+      <button class="btn solid big" data-stu-new>${ic('plus',20)} একজন যোগ</button>
+      <button class="btn big" data-stu-bulk>${ic('list',20)} অনেক নাম একসাথে</button>
+    </div>
     <label class="search">${ic('search',20)}<input id="stuSearch" type="search" placeholder="নাম, রোল বা অভিভাবকের নাম খুঁজুন" value="${esc(UI.stuQuery)}" aria-label="শিক্ষার্থী খুঁজুন"></label>
     <div class="chips" role="tablist" aria-label="শ্রেণি অনুযায়ী">
       <button class="${UI.stuClass==='all'?'on':''}" data-stu-class="all">সব (${bn(all.length)})</button>
@@ -501,7 +613,7 @@ function students(){
   </div>`;
 }
 function stuListHtml(list){
-  if (!DB.students.length) return `<div class="card empty"><span class="ib" style="background:#D23F74">${S(P.profile)}</span><h2 style="font-size:17px">এখনও কোনো শিক্ষার্থী নেই</h2><p class="t2" style="font-size:14px;line-height:1.6">উপরের বোতাম চেপে প্রথম শিক্ষার্থীর প্রোফাইল তৈরি করুন। সব তথ্য এই ফোনেই সংরক্ষিত থাকবে।</p></div>`;
+  if (!DB.students.length) return `<div class="card empty"><span class="ib" style="background:#D23F74">${S(P.profile)}</span><h2 style="font-size:17px">এখনও কোনো শিক্ষার্থী নেই</h2><p class="t2" style="font-size:14px;line-height:1.6">"একজন যোগ" দিয়ে প্রোফাইল তৈরি করুন, অথবা "অনেক নাম একসাথে" দিয়ে পুরো শ্রেণির নাম একবারে যোগ করুন। সব তথ্য এই ফোনেই সংরক্ষিত থাকবে।</p></div>`;
   if (!list.length) return `<div class="card empty"><p class="t2" style="font-size:14px">এই খোঁজে কোনো শিক্ষার্থী পাওয়া যায়নি।</p></div>`;
   return `<div class="list">${list.map((s,i) => `<button class="mem tap" data-stu="${s.id}">
     <span class="ma" style="background:${s.gender==='মেয়ে'?'#D23F74':s.gender==='ছেলে'?'#2563C9':'#7C4DCC'}" aria-hidden="true">${esc(initials(s.name))}</span>
@@ -521,7 +633,7 @@ function studentSheet(id){
     </div>
     <div class="row2">
       ${field('s_roll','রোল', inp('s_roll', s.roll, 'inputmode="numeric" maxlength="5"'))}
-      ${field('s_gender','লিঙ্গ', sel('s_gender', GENDERS, s.gender))}
+      ${field('s_gender','লিঙ্গ', sel('s_gender', [['','নির্বাচন করুন'],...GENDERS.map(g=>[g,g])], s.gender||''))}
     </div>
     <div class="row2">
       ${field('s_dob','জন্ম তারিখ', inp('s_dob', s.dob, 'type="date"'))}
@@ -545,9 +657,9 @@ function studentSheet(id){
     const d = formData(e.target);
     const err = document.getElementById('stuErr');
     if (!d.s_name.trim()) { err.textContent = 'শিক্ষার্থীর নাম লিখুন।'; err.style.display='block'; document.getElementById('s_name').focus(); return; }
-    const rec = {name:d.s_name.trim(), cls:d.s_cls, section:d.s_section.trim(), roll:d.s_roll.trim(), gender:d.s_gender, dob:d.s_dob, blood:d.s_blood,
+    const rec = {name:d.s_name.trim(), cls:d.s_cls, section:d.s_section.trim(), roll:toEn(d.s_roll.trim()), gender:d.s_gender, dob:d.s_dob, blood:d.s_blood,
       birthreg:d.s_birthreg.trim(), father:d.s_father.trim(), mother:d.s_mother.trim(), phone:d.s_phone.trim(), address:d.s_address.trim(), stipend:d.s_stipend, notes:d.s_notes.trim(), updated:Date.now()};
-    if (rec.roll && DB.students.some(x => x.id !== id && x.cls === rec.cls && (x.section||'') === rec.section && x.roll === rec.roll)) {
+    if (rec.roll && DB.students.some(x => x.id !== id && x.cls === rec.cls && (x.section||'') === rec.section && toEn(x.roll) === rec.roll)) {
       err.textContent = `${CLASS_NAME[rec.cls]}-এ রোল ${bn(rec.roll)} আগে থেকেই আছে।`; err.style.display='block'; return;
     }
     if (id) Object.assign(s, rec); else DB.students.push({id:uid(), created:Date.now(), ...rec});
@@ -642,7 +754,7 @@ function settings(){
     <div class="card">
       <h2 style="font-size:16px">তথ্য সংরক্ষণ</h2>
       <p class="t2" style="font-size:14px;line-height:1.6">সব তথ্য শুধু এই ফোনে সংরক্ষিত থাকে। অ্যাপ মুছে ফেললে বা ফোন বদলালে তথ্য হারিয়ে যাবে, তাই মাঝে মাঝে ব্যাকআপ নিন।</p>
-      <dl class="kv"><dt>শিক্ষার্থী</dt><dd>${bn(DB.students.length)} জন</dd><dt>পাঠ পরিকল্পনা</dt><dd>${bn(DB.plans.length)}টি</dd><dt>কমিটি সদস্য</dt><dd>${bn(Object.values(DB.committees).reduce((a,b)=>a+b.length,0))} জন</dd></dl>
+      <dl class="kv"><dt>শিক্ষক</dt><dd>${bn(DB.teachers.length)} জন</dd><dt>শিক্ষার্থী</dt><dd>${bn(DB.students.length)} জন</dd><dt>পাঠ পরিকল্পনা</dt><dd>${bn(DB.plans.length)}টি</dd><dt>কমিটি সদস্য</dt><dd>${bn(Object.values(DB.committees).reduce((a,b)=>a+b.length,0))} জন</dd></dl>
       ${canStore?'':'<p class="hint" style="color:var(--red)">এই ব্রাউজারে সংরক্ষণ বন্ধ আছে; তথ্য পেজ বন্ধ করলে হারিয়ে যাবে।</p>'}
       <button class="btn big full" data-backup>${ic('copy',20)} ব্যাকআপ কপি করুন</button>
       <button class="btn big full" data-restore>${ic('upload',20)} ব্যাকআপ থেকে ফেরত আনুন</button>
@@ -659,7 +771,7 @@ function settings(){
     </div>
     <div class="card">
       <h2 style="font-size:16px">সব তথ্য মুছুন</h2>
-      <p class="t2" style="font-size:14px;line-height:1.6">শিক্ষার্থী, পাঠ পরিকল্পনা, কমিটি ও প্রোফাইলের সব তথ্য মুছে অ্যাপ শুরুর অবস্থায় ফিরবে।</p>
+      <p class="t2" style="font-size:14px;line-height:1.6">শিক্ষক, শিক্ষার্থী, পাঠ পরিকল্পনা, কমিটি ও প্রোফাইলের সব তথ্য মুছে অ্যাপ শুরুর অবস্থায় ফিরবে।</p>
       <button class="btn danger big full" data-reset>${ic('trash',20)} সব তথ্য মুছুন</button>
     </div>
     <p class="hint" style="text-align:center">প্রাথমিক শিক্ষক অ্যাপ · সংস্করণ ${bn(appInfo().content || WEB_VERSION)}</p>
@@ -686,7 +798,7 @@ function restoreSheet(){
       const s = JSON.parse(formData(e.target).rs);
       if (!s || !s.teacher || !s.committees || !Array.isArray(s.students)) throw 0;
       const d = DEFAULTS();
-      DB = {...d, ...s, teacher:{...d.teacher, ...s.teacher}, plans:Array.isArray(s.plans)?s.plans:[]};
+      DB = withTeachers({...d, ...s, teacher:{...d.teacher, ...s.teacher}, plans:Array.isArray(s.plans)?s.plans:[]});
       if (save()) toast('ব্যাকআপ থেকে তথ্য ফেরত এসেছে');
       closeSheet(); render();
     } catch(_) { document.getElementById('rsErr').style.display='block'; }
@@ -719,11 +831,11 @@ const ROUTE_ALIAS = {'student-profile':'students'};
 function render(){
   let r = (location.hash || '#home').slice(1) || 'home';
   r = ROUTE_ALIAS[r] || r;
-  if (!(TOP.includes(r) || r==='committee' || r==='students' || r==='lesson-plan' || ALL[r])) r = 'home';
+  if (!(TOP.includes(r) || r==='committee' || r==='students' || r==='teachers' || r==='lesson-plan' || ALL[r])) r = 'home';
   const inner = !TOP.includes(r);
   $app.classList.toggle('inner', inner);
   $nav.style.display = inner ? 'none' : 'grid';
-  const views = {home, profile, settings, committee, students, 'lesson-plan':lessonPlan};
+  const views = {home, profile, settings, committee, students, teachers, 'lesson-plan':lessonPlan};
   $app.innerHTML = (views[r] || (() => placeholder(r)))();
   $nav.innerHTML = NAV.map(n => `<button class="${n[0]===r?'on':''}" data-go="${n[0]}" aria-label="${n[1]}" ${n[0]===r?'aria-current="page"':''}><span class="p">${ic(n[2])}</span>${n[1]}</button>`).join('');
   bindView(r);
@@ -735,6 +847,8 @@ function bindView(r){
       const d = formData(e.target);
       if (!d.school.trim() || !d.name.trim()) return;
       DB.teacher = {name:d.name.trim(), designation:d.designation, school:d.school.trim(), mobile:d.mobile.trim()};
+      const me = DB.teachers.find(x => x.me);
+      if (me) Object.assign(me, {name:DB.teacher.name, designation:DB.teacher.designation, mobile:DB.teacher.mobile});
       if (save()) toast('প্রোফাইল সংরক্ষিত হয়েছে');
       render();
     });
@@ -744,7 +858,7 @@ function bindView(r){
     s.addEventListener('input', () => {
       UI.stuQuery = s.value;
       const q = s.value.trim().toLowerCase();
-      const list = DB.students.filter(x => (UI.stuClass==='all' || x.cls===UI.stuClass) && (!q || [x.name,x.roll,x.father,x.mother,x.phone].join(' ').toLowerCase().includes(q)));
+      const list = DB.students.filter(x => (UI.stuClass==='all' || x.cls===UI.stuClass) && (!q || [x.name,x.roll,bn(x.roll||''),x.father,x.mother,x.phone].join(' ').toLowerCase().includes(q)));
       document.getElementById('stuList').innerHTML = stuListHtml(list);
     });
   }
@@ -793,7 +907,13 @@ document.addEventListener('click', e => {
   if ('toggleMembers' in ds) { UI.showAllMembers = !UI.showAllMembers; return render(); }
   if (ds.memberDel) { const id = ds.memberDel; const k = UI.committeeTab;
     return confirmSheet('সদস্য মুছবেন?', 'এই সদস্যের তথ্য কমিটি থেকে মুছে যাবে।', 'মুছুন', () => { DB.committees[k] = DB.committees[k].filter(x => x.id !== id); if (save()) toast('সদস্য মুছে ফেলা হয়েছে'); }); }
+  // teachers
+  if ('teacherNew' in ds) return teacherSheet(null);
+  if (ds.teacher) return teacherSheet(ds.teacher);
+  if (ds.teacherDel) { const id = ds.teacherDel;
+    return confirmSheet('শিক্ষককে তালিকা থেকে মুছবেন?', 'এই শিক্ষকের তথ্য তালিকা থেকে মুছে যাবে।', 'মুছুন', () => { DB.teachers = DB.teachers.filter(x => x.id !== id); if (save()) toast('তালিকা থেকে মুছে ফেলা হয়েছে'); }); }
   // students
+  if ('stuBulk' in ds) return bulkSheet();
   if ('stuNew' in ds) return studentSheet(null);
   if (ds.stu) return studentSheet(ds.stu);
   if (ds.stuClass) { UI.stuClass = ds.stuClass; return render(); }
@@ -826,7 +946,7 @@ document.addEventListener('click', e => {
     return;
   }
   if ('restore' in ds) return restoreSheet();
-  if ('reset' in ds) return confirmSheet('সব তথ্য মুছবেন?', 'শিক্ষার্থী, পাঠ পরিকল্পনা, কমিটি ও প্রোফাইলের সব তথ্য স্থায়ীভাবে মুছে যাবে। আগে ব্যাকআপ নিয়ে রাখুন।', 'সব মুছুন', () => { DB = DEFAULTS(); DB.committees = {smc:[],pta:[],slip:[]}; if (save()) toast('সব তথ্য মুছে ফেলা হয়েছে'); });
+  if ('reset' in ds) return confirmSheet('সব তথ্য মুছবেন?', 'শিক্ষার্থী, পাঠ পরিকল্পনা, কমিটি ও প্রোফাইলের সব তথ্য স্থায়ীভাবে মুছে যাবে। আগে ব্যাকআপ নিয়ে রাখুন।', 'সব মুছুন', () => { DB = DEFAULTS(); DB.committees = {smc:[],pta:[],slip:[]}; DB.teachersSeeded = true; if (save()) toast('সব তথ্য মুছে ফেলা হয়েছে'); });
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheet(); });
 window.addEventListener('hashchange', () => { closeSheet(); render(); window.scrollTo(0,0); });
