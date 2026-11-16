@@ -164,6 +164,13 @@ img.ma{object-fit:cover;background:#E8EEF5}
 .gtab th:first-child,.gtab td:first-child{text-align:left}
 .gtab th{color:var(--mute);font-weight:600;border-top:0}
 .scrollx{overflow-x:auto}
+.gtab th:first-child,.gtab td:first-child{position:sticky;left:0;background:#fff;z-index:1}
+.gtab tfoot td{border-top:2px solid #CFE6D9;font-weight:700;background:#F3FAF6}
+.gtab tfoot td:first-child{background:#F3FAF6}
+.gtab .cum{color:#0E5F58;font-weight:600}
+.stat2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.stat2 div{border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:2px}
+.stat2 b{font-size:20px;line-height:1.25}
 #updbar{max-width:480px;margin:0 auto;position:sticky;top:0;z-index:6}
 #updbar:empty{display:none}
 .upd{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;color:#fff;background:#12284A}
@@ -224,7 +231,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '1.6';
+const WEB_VERSION = '1.7';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -1226,7 +1233,8 @@ function gpfYearHtml(d){
     <span class="big-num">${tk(y.close)}</span>
     <dl class="kv">
       <dt>প্রারম্ভিক স্থিতি</dt><dd>${tk(open)}</dd>
-      <dt>এ বছরের চাঁদা (${bn(M)} মাস)</dt><dd>${tk(y.contrib)}</dd>
+      <dt>মাসিক কর্তন</dt><dd>${tk(monthly)}</dd>
+      <dt>এ বছরে মোট কর্তন (${bn(M)} মাস)</dt><dd>${tk(y.contrib)}</dd>
       <dt>স্থিতির ওপর মুনাফা (${bn(y.r1)}%)</dt><dd>${tk(y.iOpen)}</dd>
       <dt>চাঁদার ওপর মুনাফা (${bn(y.r2)}%)</dt><dd>${tk(y.iC)}</dd>
       <dt>মোট মুনাফা</dt><dd style="color:#17663F">${tk(y.profit)}</dd>
@@ -1238,16 +1246,32 @@ function gpfRetHtml(d){
   const pj = gpfProjection(d);
   if (!pj) return '<div class="card empty"><p class="t2" style="font-size:14px">অবসর পর্যন্ত হিসাবের জন্য জন্ম তারিখ দিন।</p></div>';
   if (!pj.rows.length) return '<div class="card empty"><p class="t2" style="font-size:14px">এই জন্ম তারিখ অনুযায়ী অবসরের সময় পেরিয়ে গেছে।</p></div>';
-  const tot = pj.rows.reduce((a, r) => ({c: a.c + r.contrib, p: a.p + r.profit}), {c:0, p:0});
-  return `<div class="card" style="gap:10px">
-    <span class="t2" style="font-size:13px">অবসরের সময় (${esc(bn(fmtDate(pj.ret.getFullYear() + '-' + String(pj.ret.getMonth() + 1).padStart(2,'0') + '-' + String(pj.ret.getDate()).padStart(2,'0'))))}) আনুমানিক জিপিএফ</span>
-    <span class="big-num">${tk(pj.final)}</span>
-    <dl class="kv"><dt>বর্তমান স্থিতি</dt><dd>${tk(num(d.open))}</dd><dt>মোট নতুন চাঁদা</dt><dd>${tk(tot.c)}</dd><dt>মোট মুনাফা</dt><dd style="color:#17663F">${tk(tot.p)}</dd></dl>
+  let cum = 0;
+  const rows = pj.rows.map(r => ({...r, cum: (cum += r.contrib)}));
+  const tot = rows.reduce((a, r) => ({c: a.c + r.contrib, p: a.p + r.profit, m: a.m + r.M}), {c:0, p:0, m:0});
+  const retIso = pj.ret.getFullYear() + '-' + String(pj.ret.getMonth() + 1).padStart(2,'0') + '-' + String(pj.ret.getDate()).padStart(2,'0');
+  return `<div class="card" style="gap:12px">
+    <span class="t2" style="font-size:13px">চাকরি শেষে (অবসর: ${esc(bn(fmtDate(retIso)))})</span>
+    <div class="stat2">
+      <div style="background:#E9EFF8"><span class="t2">অবসর পর্যন্ত মোট কর্তন</span><b style="color:#1F3A68">${tk(tot.c)}</b><span class="t2">${bn(tot.m)} মাসে</span></div>
+      <div style="background:#E3F4EA"><span class="t2">অবসরে মোট জিপিএফ</span><b style="color:#0E5F58">${tk(pj.final)}</b><span class="t2">মুনাফাসহ</span></div>
+    </div>
+    <dl class="kv"><dt>বর্তমান স্থিতি (১ জুলাই)</dt><dd>${tk(num(d.open))}</dd><dt>এখন থেকে মোট কর্তন</dt><dd>${tk(tot.c)}</dd><dt>মোট মুনাফা</dt><dd style="color:#17663F">${tk(tot.p)}</dd><dt>অবসরে মোট জিপিএফ</dt><dd>${tk(pj.final)}</dd></dl>
   </div>
-  <div class="card" style="padding:12px"><h2 style="font-size:15px;margin-bottom:6px">অর্থবছরভিত্তিক হিসাব</h2><div class="scrollx"><table class="gtab">
-    <thead><tr><th>অর্থবছর</th><th>মূল বেতন</th><th>চাঁদা</th><th>মুনাফা</th><th>সমাপনী স্থিতি</th></tr></thead>
-    <tbody>${pj.rows.map(r => `<tr><td>${fyLabel(r.fy)}${r.M < 12 ? ` <small>(${bn(r.M)} মাস)</small>` : ''}</td><td>${tk(r.basic)}</td><td>${tk(r.contrib)}</td><td>${tk(r.profit)}</td><td><b>${tk(r.close)}</b></td></tr>`).join('')}</tbody>
-  </table></div></div>`;
+  <div class="card" style="padding:12px;gap:8px">
+    <div class="top"><h2 style="font-size:15px">বছরভিত্তিক কর্তন ও স্থিতি</h2><button class="btn ghost" data-gpf-copy style="min-height:36px">${ic('copy',16)} কপি</button></div>
+    <div class="scrollx"><table class="gtab">
+    <thead><tr><th>অর্থবছর</th><th>মূল বেতন</th><th>মাসিক কর্তন</th><th>বছরে কর্তন</th><th>মোট কর্তন (ক্রমপুঞ্জিত)</th><th>মুনাফা</th><th>বছর শেষে স্থিতি</th></tr></thead>
+    <tbody>${rows.map(r => `<tr><td>${fyLabel(r.fy)}${r.M < 12 ? ` <small>(${bn(r.M)} মাস)</small>` : ''}</td><td>${tk(r.basic)}</td><td>${tk(r.monthly)}</td><td>${tk(r.contrib)}</td><td class="cum">${tk(r.cum)}</td><td>${tk(r.profit)}</td><td><b>${tk(r.close)}</b></td></tr>`).join('')}</tbody>
+    <tfoot><tr><td>চাকরি শেষে</td><td></td><td></td><td>${tk(tot.c)}</td><td class="cum">${tk(tot.c)}</td><td>${tk(tot.p)}</td><td>${tk(pj.final)}</td></tr></tfoot>
+  </table></div>
+  <p class="hint">টেবিলটি ডানে-বামে সরিয়ে সব কলাম দেখুন।</p></div>`;
+}
+function gpfRetText(d){
+  const pj = gpfProjection(d); if (!pj || !pj.rows.length) return '';
+  let cum = 0, prof = 0;
+  const lines = pj.rows.map(r => { cum += r.contrib; prof += r.profit; return `${fyLabel(r.fy)}${r.M < 12 ? ` (${bn(r.M)} মাস)` : ''}: মাসিক কর্তন ${tk(r.monthly)}, বছরে ${tk(r.contrib)}, মোট কর্তন ${tk(cum)}, স্থিতি ${tk(r.close)}`; });
+  return `জিপিএফ হিসাব — ${DB.teacher.name}\nবর্তমান স্থিতি: ${tk(num(d.open))}\n\n${lines.join('\n')}\n\nচাকরি শেষে মোট কর্তন: ${tk(cum)}\nমোট মুনাফা: ${tk(prof)}\nঅবসরে মোট জিপিএফ: ${tk(pj.final)}\n(আনুমানিক; ${GPF_RATES_FY} অর্থবছরের হার ধরে)`;
 }
 function gpf(){
   const d = gpfData(), yr = UI.gpfView === 'year';
@@ -1453,6 +1477,7 @@ document.addEventListener('click', e => {
     return confirmSheet('সদস্য মুছবেন?', 'এই সদস্যের তথ্য কমিটি থেকে মুছে যাবে।', 'মুছুন', () => { DB.committees[k] = DB.committees[k].filter(x => x.id !== id); if (save()) toast('সদস্য মুছে ফেলা হয়েছে'); }); }
   // gpf
   if (ds.gpfView) { UI.gpfView = ds.gpfView; return render(); }
+  if ('gpfCopy' in ds) return copyText(gpfRetText(gpfData()), 'জিপিএফ হিসাব কপি হয়েছে');
   // certificates
   if (ds.certType) { UI.cert.type = ds.certType; return render(); }
   if (ds.certClass) { UI.cert.cls = ds.certClass; UI.cert.q = ''; return render(); }
