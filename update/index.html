@@ -164,6 +164,14 @@ img.ma{object-fit:cover;background:#E8EEF5}
 .gtab th:first-child,.gtab td:first-child{text-align:left}
 .gtab th{color:var(--mute);font-weight:600;border-top:0}
 .scrollx{overflow-x:auto}
+.bigfield{display:flex;flex-direction:column;gap:6px}
+.bigfield label{font-size:15px;font-weight:600;color:var(--ink)}
+.bigfield input{font:inherit;font-size:17px;color:var(--ink);border:1.5px solid #9AA8B8;border-radius:16px;padding:14px 16px;min-height:58px;background:#fff;width:100%}
+.bigfield input:focus{outline:2px solid #12284A;outline-offset:1px;border-color:#12284A}
+.bigfield .hint{padding-left:6px;font-size:13px}
+.btn.dark{background:#12284A;border-color:#12284A;color:#fff;border-radius:16px;min-height:56px;font-size:17px}
+.btn.outline{border:1.5px solid #12284A;color:#12284A;border-radius:16px;min-height:52px;font-size:15px}
+.resbox{background:#F4F6F9;border-radius:14px;padding:22px 14px;text-align:center;font-size:16px;font-weight:600;color:var(--mute)}
 .gtab th:first-child,.gtab td:first-child{position:sticky;left:0;background:#fff;z-index:1}
 .gtab tfoot td{border-top:2px solid #CFE6D9;font-weight:700;background:#F3FAF6}
 .gtab tfoot td:first-child{background:#F3FAF6}
@@ -238,7 +246,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '1.8';
+const WEB_VERSION = '1.9';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -433,7 +441,7 @@ function save(){
 }
 
 /* ---------- ui state ---------- */
-const UI = {as:{view:'entry', year:String(new Date().getFullYear()), term:'t1', cls:null, subj:null, sid:null}, gpfView:'year', cert:{type:'study', cls:null, sid:null, q:'', memo:'', date:null, reason:'অভিভাবকের অনুরোধে', passed:''}, attDate:null, attView:'day', attMonth:null, attClass:null, committeeTab:'smc', showAllMembers:false, stuClass:'all', stuQuery:'', lpClass:'1', lpSubject:null};
+const UI = {as:{view:'entry', year:String(new Date().getFullYear()), term:'t1', cls:null, subj:null, sid:null}, gpfView:'simple', gpfShow:false, cert:{type:'study', cls:null, sid:null, q:'', memo:'', date:null, reason:'অভিভাবকের অনুরোধে', passed:''}, attDate:null, attView:'day', attMonth:null, attClass:null, committeeTab:'smc', showAllMembers:false, stuClass:'all', stuQuery:'', lpClass:'1', lpSubject:null};
 try { UI.committeeTab = localStorage.getItem('committeeTab') || 'smc'; } catch(e) {}
 
 const FEATURES_A = [
@@ -1286,23 +1294,80 @@ function gpfRetText(d){
   const lines = pj.rows.map(r => { cum += r.contrib; prof += r.profit; return `${fyLabel(r.fy)}${r.M < 12 ? ` (${bn(r.M)} মাস)` : ''}: মাসিক কর্তন ${tk(r.monthly)}, বছরে ${tk(r.contrib)}, মোট কর্তন ${tk(cum)}, স্থিতি ${tk(r.close)}`; });
   return `জিপিএফ হিসাব — ${DB.teacher.name}\nবর্তমান স্থিতি: ${tk(num(d.open))}\n\n${lines.join('\n')}\n\nচাকরি শেষে মোট কর্তন: ${tk(cum)}\nমোট মুনাফা: ${tk(prof)}\nঅবসরে মোট জিপিএফ: ${tk(pj.final)}\n(আনুমানিক; ${GPF_RATES_FY} অর্থবছরের হার ধরে)`;
 }
-function gpf(){
-  const d = gpfData(), yr = UI.gpfView === 'year';
-  return innerHeader('জিপিএফ ক্যালকুলেটর','gpf','#0E7C74') + `<div class="sec" style="padding-top:16px">
-    <div class="tabs2" role="tablist"><button role="tab" class="${yr?'on':''}" data-gpf-view="year">এই অর্থবছর</button><button role="tab" class="${yr?'':'on'}" data-gpf-view="ret">অবসর পর্যন্ত</button></div>
-    ${gpfInputs(d, !yr)}
-    <div id="gpfOut">${yr ? gpfYearHtml(d) : gpfRetHtml(d)}</div>
-    <div class="card" style="gap:6px;background:#F7FAF8">
-      <b style="font-size:14px">${GPF_RATES_FY} অর্থবছরের মুনাফার হার</b>
-      <span class="t2" style="font-size:13px;line-height:1.7">বছরের শুরুর স্থিতি ১৫ লাখ টাকা পর্যন্ত ১৩%, ১৫–৩০ লাখ ১২%, ৩০ লাখের বেশি ১১%। চাঁদা মূল বেতনের ৫%–২৫%।</span>
-      <span class="hint" style="line-height:1.6">এটি আনুমানিক হিসাব (মাসিক গুণফল পদ্ধতি)। পরের বছরগুলোতেও এই হার ধরা হয়েছে; প্রতি বছর সরকার হার নতুন করে ঘোষণা করে। চূড়ান্ত অঙ্কের জন্য হিসাবরক্ষণ অফিসের বিবরণী দেখুন।</span>
+/* simple calculator: opening balance + fixed monthly deduction + number of years */
+function gpfSimpleCalc(open, monthly, years){
+  let bal = open, cum = 0, fy = fyStartOf(new Date()).getFullYear();
+  const rows = [];
+  for (let i = 0; i < years; i++) {
+    const y = gpfYear(bal, monthly, 12);
+    cum += y.contrib;
+    rows.push({n: i + 1, fy: fy + i, open: bal, ...y, cum});
+    bal = y.close;
+  }
+  return {rows, final: bal, totC: cum, totP: rows.reduce((a, r) => a + r.profit, 0)};
+}
+function gpfSimple(){
+  const g = DB.gpf.simple || {};
+  return `<div class="card" style="gap:16px;padding:20px 16px">
+      <div class="bigfield"><label for="gs_open">প্রারম্ভিক স্থিতি (Opening Balance)</label><input id="gs_open" inputmode="numeric" value="${esc(g.open != null ? bn(g.open) : '')}" placeholder="৳ যেমন: ৪,৫০,০০০"><span class="hint">বর্তমানে জিপিএফে কত টাকা জমা আছে</span></div>
+      <div class="bigfield"><label for="gs_monthly">মাসিক কর্তন (Monthly Subscription)</label><input id="gs_monthly" inputmode="numeric" value="${esc(g.monthly != null ? bn(g.monthly) : '')}" placeholder="৳ যেমন: ২,২০০"><span class="hint">প্রতি মাসে কত টাকা কাটবেন</span></div>
+      <div class="bigfield"><label for="gs_years">কত বছরের জন্য (Number of Years)</label><input id="gs_years" inputmode="numeric" maxlength="2" value="${esc(g.years != null ? bn(g.years) : '')}" placeholder="যেমন: ১০"><span class="hint">কত বছর পরের হিসাব দেখতে চান</span></div>
+      <p class="hint" id="gsErr" style="color:var(--red);display:none;font-size:14px"></p>
+      <button class="btn dark full" data-gpf-calc>হিসাব করুন (Calculate Now)</button>
+      <button class="btn outline full" data-gpf-info>${ic('doc',20)} তথ্যসূত্র ও ডিসক্লেইমার</button>
     </div>
+    <div class="card" style="gap:12px;padding:18px 16px">
+      <h2 style="font-size:17px;text-align:center;padding-bottom:10px;border-bottom:1px solid #E1E7EF">ফলাফল বিবরণী</h2>
+      <div id="gsOut">${(UI.gpfShow || DB.gpf.simple) ? gpfSimpleResult() : '<div class="resbox">ফলাফল এখানে প্রদর্শিত হবে</div>'}</div>
+    </div>`;
+}
+function gpfSimpleResult(){
+  const g = DB.gpf.simple || {}, open = num(g.open), m = num(g.monthly), n = Math.round(num(g.years));
+  if (!n) return '<div class="resbox">ফলাফল এখানে প্রদর্শিত হবে</div>';
+  const R = gpfSimpleCalc(open, m, n);
+  return `<div class="stat2">
+      <div style="background:#E9EFF8"><span class="t2">${bn(n)} বছরে মোট কর্তন</span><b style="color:#1F3A68">${tk(R.totC)}</b><span class="t2">${bn(n * 12)} মাস × ${tk(m)}</span></div>
+      <div style="background:#E3F4EA"><span class="t2">${bn(n)} বছর পরে মোট স্থিতি</span><b style="color:#0E5F58">${tk(R.final)}</b><span class="t2">মুনাফাসহ</span></div>
+    </div>
+    <dl class="kv"><dt>প্রারম্ভিক স্থিতি</dt><dd>${tk(open)}</dd><dt>মোট কর্তন</dt><dd>${tk(R.totC)}</dd><dt>মোট মুনাফা</dt><dd style="color:#17663F">${tk(R.totP)}</dd><dt>সর্বমোট স্থিতি</dt><dd>${tk(R.final)}</dd></dl>
+    <div class="top"><b style="font-size:15px">বছরভিত্তিক হিসাব</b><button class="btn ghost" data-gpf-scopy style="min-height:36px">${ic('copy',16)} কপি</button></div>
+    <div class="scrollx"><table class="gtab">
+      <thead><tr><th>বছর</th><th>প্রারম্ভিক স্থিতি</th><th>বছরে কর্তন</th><th>মোট কর্তন</th><th>মুনাফা</th><th>বছর শেষে স্থিতি</th></tr></thead>
+      <tbody>${R.rows.map(r => `<tr><td>${bn(r.n)}. ${fyLabel(r.fy)}</td><td>${tk(r.open)}</td><td>${tk(r.contrib)}</td><td class="cum">${tk(r.cum)}</td><td>${tk(r.profit)} <small>(${bn(r.r1)}%)</small></td><td><b>${tk(r.close)}</b></td></tr>`).join('')}</tbody>
+      <tfoot><tr><td>মোট</td><td></td><td>${tk(R.totC)}</td><td class="cum">${tk(R.totC)}</td><td>${tk(R.totP)}</td><td>${tk(R.final)}</td></tr></tfoot>
+    </table></div>
+    <p class="hint">টেবিলটি ডানে-বামে সরিয়ে সব কলাম দেখুন।</p>`;
+}
+function gpfSimpleText(){
+  const g = DB.gpf.simple || {}, open = num(g.open), m = num(g.monthly), n = Math.round(num(g.years));
+  const R = gpfSimpleCalc(open, m, n);
+  return `জিপিএফ হিসাব — ${DB.teacher.name}\nপ্রারম্ভিক স্থিতি: ${tk(open)}, মাসিক কর্তন: ${tk(m)}, ${bn(n)} বছর\n\n` +
+    R.rows.map(r => `${bn(r.n)}. ${fyLabel(r.fy)}: বছরে কর্তন ${tk(r.contrib)}, মোট কর্তন ${tk(r.cum)}, মুনাফা ${tk(r.profit)}, স্থিতি ${tk(r.close)}`).join('\n') +
+    `\n\nমোট কর্তন: ${tk(R.totC)}\nমোট মুনাফা: ${tk(R.totP)}\n${bn(n)} বছর পরে মোট স্থিতি: ${tk(R.final)}\n(আনুমানিক; ${GPF_RATES_FY} অর্থবছরের হার ধরে)`;
+}
+function gpfInfoSheet(){
+  openSheet(`<h2 style="font-size:18px;margin-bottom:10px">তথ্যসূত্র ও ডিসক্লেইমার</h2>
+    <div style="display:flex;flex-direction:column;gap:10px;font-size:14px;line-height:1.7">
+      <p><b>মুনাফার হার (${GPF_RATES_FY}):</b> অর্থবছরের শুরুর স্থিতি ১৫ লাখ টাকা পর্যন্ত ১৩%, ১৫ লাখ ১ টাকা থেকে ৩০ লাখ পর্যন্ত ১২%, ৩০ লাখের বেশি হলে ১১%। সূত্র: অর্থ মন্ত্রণালয়ের অর্থ বিভাগের প্রজ্ঞাপন (সেপ্টেম্বর ২০২৬)।</p>
+      <p><b>চাঁদার হার:</b> মূল বেতনের সর্বনিম্ন ৫% থেকে সর্বোচ্চ ২৫%।</p>
+      <p><b>হিসাবের পদ্ধতি:</b> বছরের শুরুর স্থিতির ওপর ১২ মাসের মুনাফা, আর প্রতি মাসের কর্তনের ওপর সেই মাস থেকে বছর শেষ পর্যন্ত মুনাফা (মাসিক গুণফল পদ্ধতি: ১২+১১+…+১ = ৭৮ মাস)। প্রতি বছরের শেষ স্থিতি পরের বছরের প্রারম্ভিক স্থিতি ধরা হয়েছে।</p>
+      <p class="t2" style="font-size:13px;background:#FFF6E5;border-radius:10px;padding:10px"><b>ডিসক্লেইমার:</b> এটি শুধু ধারণা পাওয়ার জন্য আনুমানিক হিসাব। ভবিষ্যতের বছরগুলোতেও এ বছরের হার ধরা হয়েছে, কিন্তু সরকার প্রতি বছর হার নতুন করে ঘোষণা করে। অগ্রিম উত্তোলন বা কর্তনের পরিবর্তন এখানে ধরা হয়নি। চূড়ান্ত অঙ্কের জন্য হিসাবরক্ষণ অফিসের জিপিএফ বিবরণী দেখুন।</p>
+    </div>
+    <button class="btn solid big full" style="margin-top:14px" data-close>বন্ধ করুন</button>`);
+}
+function gpf(){
+  const d = gpfData(), v = UI.gpfView === 'year' ? 'simple' : UI.gpfView;
+  return innerHeader('জিপিএফ ক্যালকুলেটর','gpf','#0E7C74') + `<div class="sec" style="padding-top:16px">
+    <div class="card" style="gap:4px;text-align:center;padding:18px 16px"><h2 style="font-size:20px">ভবিষ্যৎ জিপিএফ হিসাব</h2><span class="t2" style="font-size:14px">কয়েক বছর পরে আপনার জিপিএফের অর্থের পরিমাণ জেনে নিন।</span></div>
+    <div class="tabs2" role="tablist"><button role="tab" class="${v==='simple'?'on':''}" data-gpf-view="simple">সহজ হিসাব</button><button role="tab" class="${v==='ret'?'on':''}" data-gpf-view="ret">বেতন অনুযায়ী (অবসর পর্যন্ত)</button></div>
+    ${v === 'simple' ? gpfSimple() : `${gpfInputs(d, true)}<div id="gpfOut">${gpfRetHtml(d)}</div>
+    <div class="card" style="gap:6px;background:#F7FAF8"><span class="hint" style="line-height:1.6">${GPF_RATES_FY} অর্থবছরের হার ধরে আনুমানিক হিসাব। বিস্তারিত: </span><button class="btn outline" data-gpf-info style="min-height:44px">${ic('doc',18)} তথ্যসূত্র ও ডিসক্লেইমার</button></div>`}
   </div>`;
 }
 function gpfRefresh(){
   const d = gpfData(), out = document.getElementById('gpfOut'), m = document.getElementById('gpfMonthly');
   if (m) m.innerHTML = `মাসিক জমা: <b>${tk(gpfMonthly(d))}</b>`;
-  if (out) out.innerHTML = UI.gpfView === 'year' ? gpfYearHtml(d) : gpfRetHtml(d);
+  if (out) out.innerHTML = gpfRetHtml(d);
 }
 
 /* ---------- assessment: marks & progress reports ---------- */
@@ -1745,6 +1810,19 @@ document.addEventListener('click', e => {
   // gpf
   if (ds.gpfView) { UI.gpfView = ds.gpfView; return render(); }
   if ('gpfCopy' in ds) return copyText(gpfRetText(gpfData()), 'জিপিএফ হিসাব কপি হয়েছে');
+  if ('gpfScopy' in ds) return copyText(gpfSimpleText(), 'জিপিএফ হিসাব কপি হয়েছে');
+  if ('gpfInfo' in ds) return gpfInfoSheet();
+  if ('gpfCalc' in ds) {
+    const v = id => document.getElementById(id).value, err = document.getElementById('gsErr');
+    const open = num(v('gs_open')), monthly = num(v('gs_monthly')), years = Math.round(num(v('gs_years')));
+    const msg = !toEn(v('gs_open')).trim() ? 'প্রারম্ভিক স্থিতি লিখুন (না থাকলে ০ লিখুন)।' : !monthly ? 'মাসিক কর্তনের পরিমাণ লিখুন।' : (!years || years > 45) ? 'বছরের সংখ্যা ১ থেকে ৪৫-এর মধ্যে লিখুন।' : '';
+    if (msg) { err.textContent = msg; err.style.display = 'block'; return; }
+    err.style.display = 'none';
+    DB.gpf.simple = {open, monthly, years}; save(); UI.gpfShow = true;
+    document.getElementById('gsOut').innerHTML = gpfSimpleResult();
+    const o = document.getElementById('gsOut'); if (o.scrollIntoView) o.scrollIntoView({behavior:'smooth', block:'start'});
+    return;
+  }
   // certificates
   if (ds.certType) { UI.cert.type = ds.certType; return render(); }
   if (ds.certClass) { UI.cert.cls = ds.certClass; UI.cert.q = ''; return render(); }
