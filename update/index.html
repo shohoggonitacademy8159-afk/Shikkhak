@@ -246,7 +246,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '2.2';
+const WEB_VERSION = '2.3';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -1645,7 +1645,7 @@ function penAutoForm(){
       ${field('pa_grade','বেতন গ্রেড', sel('pa_grade', (nine ? PS9_GRADES : Object.keys(PS8).map(Number)).map(g => [String(g), `${gradeOrd(+g)} গ্রেড`]), String(A.grade)))}
       ${field('pa_step','বর্তমান মূল বেতন', sel('pa_step', steps.map((v, i) => [String(i + 1), `${bn(v.toLocaleString('en-IN'))} (ধাপ ${bn(i + 1)})`]), String(Math.min(A.step, steps.length))))}
     </div>
-    <p class="hint" style="margin-top:-6px">${nine ? '৯ম' : '৮ম'} স্কেলে ${gradeOrd(A.grade)} গ্রেড: ${tk(steps[0])} – ${tk(steps[steps.length - 1])}, মোট ${bn(steps.length)} ধাপ। সহকারী শিক্ষক ১৩তম, প্রধান শিক্ষক ১০ম গ্রেড।${nine ? ' নতুন স্কেলে আপনার ধাপ জানতে <a href="#salary">বেতন নির্ধারণ</a> পাতা দেখুন।' : ''}${nine && ps9Approx(A.grade) ? ' এই গ্রেডের ধাপ আনুমানিক।' : ''}</p>
+    <p class="hint" style="margin-top:-6px">${nine ? '৯ম' : '৮ম'} স্কেলে ${gradeOrd(A.grade)} গ্রেড: ${tk(steps[0])} – ${tk(steps[steps.length - 1])}, মোট ${bn(steps.length)} ধাপ। সহকারী শিক্ষক ১৩তম, প্রধান শিক্ষক ১০ম গ্রেড।${nine ? ' নতুন স্কেলে আপনার ধাপ জানতে <a href="#salary">বেতন নির্ধারণ</a> পাতা দেখুন।' : ''}${nine && ps9Approx(A.grade) ? ' এই গ্রেডের শেষ ধাপটি আনুমানিক।' : ''}</p>
     <div class="row2">
       ${field('pa_join','চাকরিতে যোগদানের তারিখ', inp('pa_join', A.join, 'type="date"'))}
       ${field('pa_dob','জন্ম তারিখ', inp('pa_dob', A.dob, 'type="date"'))}
@@ -1714,53 +1714,52 @@ function penAutoSave(){
 }
 
 /* ---------- 9th National Pay Scale (2026) ---------- */
-// Grades 10 and 13: step lists as published with the 2026 pay order (start and end also match news reports).
-// Grades 11 and 12: start (and grade-11 end) as reported; the steps between follow the same rule as grades 10 and 13
-// (start × 1.05ⁿ, rounded up to the next 100), so they are marked approximate.
-const PS9_FIXED = {
-  10:[32000,33600,35300,37100,38900,40900,42900,45100,47300,49700,52200,54800,57500,60400,63400,66600,69900,73400,77300],
-  13:[24000,25200,26500,27800,29200,30700,32200,33800,35500,37300,39100,41100,43200,45300,47600,49900,52400,55100,58000]
-};
-const PS9_APPROX = {11:[25000, 60500], 12:[24300, null]};
+// Each step = start × 1.05ⁿ rounded up to the next 100. This matches the published step lists for grades 10, 13 and 18
+// in every step except the last, which the scale fixes separately (known for grades 10, 11, 13, 16, 18, 20).
+const PS9_START = {10:32000, 11:25000, 12:24300, 13:24000, 14:23500, 15:22800, 16:21900, 17:21400, 18:21000, 19:20500, 20:20000};
+const PS9_LAST = {10:77300, 11:60500, 13:58000, 16:52900, 18:50900, 20:48400};
+const PS9_GRADES = [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
 function ps9Steps(g){
-  if (PS9_FIXED[g]) return PS9_FIXED[g];
-  const [a, end] = PS9_APPROX[g]; const out = [];
+  const a = PS9_START[g], out = [];
   for (let n = 0; n < 19; n++) out.push(Math.ceil(a * Math.pow(1.05, n) / 100) * 100);
-  if (end) out[18] = end;
+  if (PS9_LAST[g]) out[18] = PS9_LAST[g];
   return out;
 }
-const PS9_GRADES = [10, 11, 12, 13];
-const ps9Approx = g => !!PS9_APPROX[g];
-// Pay fixation from the 2015 scale (basic on 30 June 2026): new start + (old basic − old start), then the next step at or above it.
-function fix9(grade, oldBasic){
+const ps9Approx = g => !PS9_LAST[g];  // only the top step is uncertain
+// Pay fixation (para 5): new start + (basic on 30 June 2026 − old start), at that step or the next higher one.
+// Then para 9(2): one annual increment on 1 July 2026 (if due).
+function fix9(grade, oldBasic, inc = true){
   const s8 = ps8Steps(grade), s9 = ps9Steps(grade);
   const diff = oldBasic - s8[0], target = s9[0] + diff;
-  let idx = s9.findIndex(v => v >= target); if (idx < 0) idx = s9.length - 1;
-  return {diff, target, idx, basic: s9[idx], s9, start8: s8[0], start9: s9[0]};
+  let fixIdx = s9.findIndex(v => v >= target); if (fixIdx < 0) fixIdx = s9.length - 1;
+  const idx = inc ? Math.min(s9.length - 1, fixIdx + 1) : fixIdx;
+  return {diff, target, fixIdx, fixBasic: s9[fixIdx], idx, basic: s9[idx], inc, s9, start8: s8[0], start9: s9[0]};
 }
-// Grades 10–20 get the rise in three parts: 50% from 1 Jul 2026, 75% from 1 Jan 2027, all of it from 1 Jul 2027 (with the yearly increment).
+// Grades 10–20 get the rise in three parts: 50% from 1 Jul 2026, 75% from 1 Jan 2027, all of it from 1 Jul 2027.
 function phases(oldBasic, newBasic, s9, idx){
   const d = newBasic - oldBasic;
   return [
     {when:'১ জুলাই – ৩১ ডিসেম্বর ২০২৬', pct:50, basic: oldBasic + d * 0.5},
     {when:'১ জানুয়ারি – ৩০ জুন ২০২৭', pct:75, basic: oldBasic + d * 0.75},
     {when:'১ জুলাই ২০২৭ থেকে', pct:100, basic: newBasic},
-    {when:'১ জুলাই ২০২৭ ইনক্রিমেন্টসহ', pct:null, basic: s9[Math.min(s9.length - 1, idx + 1)], inc:true}
+    {when:'১ জুলাই ২০২৭-এর বার্ষিক ইনক্রিমেন্টসহ', pct:null, basic: s9[Math.min(s9.length - 1, idx + 1)], inc:true}
   ];
 }
 function salaryDefaults(){
   const S = DB.salary, me = DB.teachers.find(x => x.me) || {};
   const grade = S.grade || (/প্রধান শিক্ষক/.test(me.designation || DB.teacher.designation || '') ? 10 : 13);
-  return {grade, step8: S.step8 || 1};
+  return {grade, step8: S.step8 || 1, inc: S.inc !== false};
 }
 function salary(){
   const S = salaryDefaults(), s8 = ps8Steps(S.grade), step8 = Math.min(S.step8, s8.length), old = s8[step8 - 1];
-  const F = fix9(S.grade, old), P = phases(old, F.basic, F.s9, F.idx);
+  const F = fix9(S.grade, old, S.inc), P = phases(old, F.basic, F.s9, F.idx);
   return innerHeader('বেতন নির্ধারণ','salary','#1F4E8C') + `<div class="sec" style="padding-top:16px">
     <div class="card" style="gap:4px;text-align:center;padding:18px 16px"><h2 style="font-size:20px">৯ম পে স্কেল অনুযায়ী মূল বেতন</h2><span class="t2" style="font-size:14px">জাতীয় বেতন স্কেল ২০২৬ (১ জুলাই ২০২৬ থেকে কার্যকর)</span></div>
     <div class="card" style="gap:14px;padding:18px 16px">
-      ${field('sl_grade','বেতন গ্রেড', sel('sl_grade', PS9_GRADES.map(g => [String(g), `${gradeOrd(g)} গ্রেড${g === 10 ? ' (প্রধান শিক্ষক)' : g === 13 ? ' (সহকারী শিক্ষক)' : ' (উচ্চতর গ্রেড)'}`]), String(S.grade)))}
+      ${field('sl_grade','বেতন গ্রেড', sel('sl_grade', PS9_GRADES.map(g => [String(g), `${gradeOrd(g)} গ্রেড${g === 10 ? ' (প্রধান শিক্ষক)' : g === 13 ? ' (সহকারী শিক্ষক)' : (g === 11 || g === 12) ? ' (উচ্চতর গ্রেড)' : ''}`]), String(S.grade)))}
       ${field('sl_step','৩০ জুন ২০২৬ তারিখের মূল বেতন (৮ম স্কেল)', sel('sl_step', s8.map((v, i) => [String(i + 1), `${bn(v.toLocaleString('en-IN'))} (ধাপ ${bn(i + 1)})`]), String(step8)), false, 'বেতন বিবরণী বা স্লিপে যে মূল বেতন ছিল')}
+      <div class="field"><span style="font-size:14px;font-weight:600">১ জুলাই ২০২৬ তারিখে বার্ষিক ইনক্রিমেন্ট প্রাপ্য কি?</span>
+        <div class="tabs2" role="radiogroup"><button type="button" role="radio" aria-checked="${S.inc}" class="${S.inc?'on':''}" data-sl-inc="1">হ্যাঁ (চাকরিকাল ≥ ৬ মাস)</button><button type="button" role="radio" aria-checked="${!S.inc}" class="${S.inc?'':'on'}" data-sl-inc="0">না</button></div></div>
     </div>
     <div class="card" style="gap:12px;padding:18px 16px">
       <h2 style="font-size:17px;text-align:center;padding-bottom:10px;border-bottom:1px solid #E1E7EF">নির্ধারিত নতুন মূল বেতন</h2>
@@ -1773,24 +1772,25 @@ function salary(){
         <dl class="kv">
           <dt>আগের মূল বেতন − আগের প্রারম্ভিক</dt><dd>${tk(old)} − ${tk(F.start8)} = ${tk(F.diff)}</dd>
           <dt>নতুন প্রারম্ভিক + পার্থক্য</dt><dd>${tk(F.start9)} + ${tk(F.diff)} = ${tk(F.target)}</dd>
-          <dt>${F.basic === F.target ? 'মিলে যাওয়া ধাপ' : 'পরের উচ্চতর ধাপ'}</dt><dd style="color:#1F4E8C">${tk(F.basic)} (ধাপ ${bn(F.idx + 1)})</dd>
+          <dt>${F.fixBasic === F.target ? 'মিলে যাওয়া ধাপ' : 'পরের উচ্চতর ধাপ'}</dt><dd>${tk(F.fixBasic)} (ধাপ ${bn(F.fixIdx + 1)})</dd>
+          ${F.inc ? `<dt>১ জুলাই ২০২৬ বার্ষিক ইনক্রিমেন্ট</dt><dd style="color:#1F4E8C">${tk(F.fixBasic)} → ${tk(F.basic)} (ধাপ ${bn(F.idx + 1)})</dd>` : ''}
         </dl>
       </div>
       <b style="font-size:15px">কবে কত মূল বেতন পাবেন</b>
       <div class="list">${P.map(x => `<div class="mem"><span class="grow"><span class="t1" style="font-weight:600;font-size:14px">${x.when}</span><span class="t2">${x.inc ? 'বার্ষিক ইনক্রিমেন্ট যোগ হয়ে পরের ধাপ' : `বৃদ্ধির ${bn(x.pct)}% কার্যকর`}</span></span><b style="font-size:15px;color:${x.pct === 100 || x.inc ? '#1F4E8C' : 'var(--ink)'}">${tk(x.basic)}</b></div>`).join('')}</div>
-      <p class="hint">মাঝের দুই সময়ে মূল বেতন = আগের মূল বেতন + (নতুন − আগের) × ৫০% বা ৭৫%। ভাতাগুলো আলাদা সময়ে কার্যকর হবে।</p>
+      <p class="hint">মাঝের দুই সময়ে মূল বেতন = ৩০ জুনের মূল বেতন + (নতুন − ৩০ জুনের) × ৫০% বা ৭৫%। যেমন এখন: ${tk(old)} + (${tk(F.basic)} − ${tk(old)}) × ৫০% = ${tk(P[0].basic)}। ভাতাগুলো আলাদা সময়ে কার্যকর হবে।</p>
       <div class="row2"><button class="btn" data-sl-copy>${ic('copy',18)} কপি</button><button class="btn solid" data-sl-pension>পেনশন হিসাবে ব্যবহার</button></div>
     </div>
     <div class="card" style="gap:8px;padding:14px">
-      <b style="font-size:15px">${gradeOrd(S.grade)} গ্রেডের সব ধাপ (৯ম স্কেল)${ps9Approx(S.grade) ? ' — আনুমানিক' : ''}</b>
+      <b style="font-size:15px">${gradeOrd(S.grade)} গ্রেডের সব ধাপ (৯ম স্কেল)</b>
       <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px">${F.s9.map((v, i) => `<span style="font-size:13px;padding:6px 8px;border-radius:8px;text-align:center;${i === F.idx ? 'background:#1F4E8C;color:#fff;font-weight:700' : 'background:#F1F5FA'}">${bn(i + 1)}. ${bn(v.toLocaleString('en-IN'))}</span>`).join('')}</div>
-      ${ps9Approx(S.grade) ? '<p class="hint" style="color:#7A4A00">এই গ্রেডের মাঝের ধাপগুলো গেজেটের তালিকা থেকে নয়, ১০ম ও ১৩তম গ্রেডের নিয়মে হিসাব করা। গেজেটের সঙ্গে মিলিয়ে নিন।</p>' : '<p class="hint">ধাপগুলো জাতীয় বেতন স্কেল ২০২৬-এর প্রকাশিত তালিকা অনুযায়ী।</p>'}
+      ${ps9Approx(S.grade) ? '<p class="hint" style="color:#7A4A00">এই গ্রেডের শেষ (১৯তম) ধাপটি আনুমানিক; বাকি ধাপ প্রকাশিত তালিকার নিয়মে হিসাব করা।</p>' : '<p class="hint">ধাপগুলো জাতীয় বেতন স্কেল ২০২৬-এর প্রকাশিত তালিকার সঙ্গে মেলানো।</p>'}
     </div>
   </div>`;
 }
 function salaryText(){
-  const S = salaryDefaults(), s8 = ps8Steps(S.grade), old = s8[Math.min(S.step8, s8.length) - 1], F = fix9(S.grade, old), P = phases(old, F.basic, F.s9, F.idx);
-  return `বেতন নির্ধারণ (৯ম জাতীয় বেতন স্কেল ২০২৬) — ${DB.teacher.name}\n${gradeOrd(S.grade)} গ্রেড\nআগের মূল বেতন (৩০ জুন ২০২৬): ${tk(old)}\nপার্থক্য: ${tk(old)} − ${tk(F.start8)} = ${tk(F.diff)}\n${tk(F.start9)} + ${tk(F.diff)} = ${tk(F.target)} → নতুন মূল বেতন ${tk(F.basic)} (ধাপ ${bn(F.idx + 1)})\n\n` +
+  const S = salaryDefaults(), s8 = ps8Steps(S.grade), old = s8[Math.min(S.step8, s8.length) - 1], F = fix9(S.grade, old, S.inc), P = phases(old, F.basic, F.s9, F.idx);
+  return `বেতন নির্ধারণ (৯ম জাতীয় বেতন স্কেল ২০২৬) — ${DB.teacher.name}\n${gradeOrd(S.grade)} গ্রেড\nআগের মূল বেতন (৩০ জুন ২০২৬): ${tk(old)}\nপার্থক্য: ${tk(old)} − ${tk(F.start8)} = ${tk(F.diff)}\n${tk(F.start9)} + ${tk(F.diff)} = ${tk(F.target)} → ধাপ ${bn(F.fixIdx + 1)}: ${tk(F.fixBasic)}${F.inc ? `\n১ জুলাই ২০২৬ ইনক্রিমেন্টসহ: ${tk(F.basic)} (ধাপ ${bn(F.idx + 1)})` : ''}\n\n` +
     P.map(x => `${x.when}: ${tk(x.basic)}`).join('\n') + '\n(আনুমানিক; অফিসের বেতন নির্ধারণী আদেশ দেখে মিলিয়ে নিন)';
 }
 
@@ -2142,8 +2142,9 @@ document.addEventListener('click', e => {
     if (ds.paPs === '8' && A.ps === '9') step = 1;
     const steps = ds.paPs === '9' ? ps9Steps(grade) : ps8Steps(grade);
     DB.pension.auto = {...(DB.pension.auto || {}), ...A, ps: ds.paPs, grade, step: Math.min(step, steps.length)}; save(); return render(); }
+  if (ds.slInc) { DB.salary.inc = ds.slInc === '1'; save(); return render(); }
   if ('slCopy' in ds) return copyText(salaryText(), 'বেতন নির্ধারণের হিসাব কপি হয়েছে');
-  if ('slPension' in ds) { const S = salaryDefaults(), old = ps8Steps(S.grade)[Math.min(S.step8, ps8Steps(S.grade).length) - 1], F = fix9(S.grade, old);
+  if ('slPension' in ds) { const S = salaryDefaults(), old = ps8Steps(S.grade)[Math.min(S.step8, ps8Steps(S.grade).length) - 1], F = fix9(S.grade, old, S.inc);
     DB.pension.auto = {...(DB.pension.auto || {}), ...penAutoDefaults(), ps:'9', grade:S.grade, step:F.idx + 1}; save(); UI.penMode = 'auto'; toast('নতুন মূল বেতন পেনশন হিসাবে বসানো হয়েছে'); return go('pension'); }
   if ('paCopy' in ds) return copyText(penAutoText(), 'পেনশন হিসাব কপি হয়েছে');
   if ('penCopy' in ds) return copyText(penText(), 'পেনশন হিসাব কপি হয়েছে');
