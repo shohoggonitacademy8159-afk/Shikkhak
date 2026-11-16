@@ -246,7 +246,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '2.0';
+const WEB_VERSION = '2.1';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -442,7 +442,7 @@ function save(){
 }
 
 /* ---------- ui state ---------- */
-const UI = {as:{view:'entry', year:String(new Date().getFullYear()), term:'t1', cls:null, subj:null, sid:null}, gpfView:'simple', gpfShow:false, penShow:false, cert:{type:'study', cls:null, sid:null, q:'', memo:'', date:null, reason:'অভিভাবকের অনুরোধে', passed:''}, attDate:null, attView:'day', attMonth:null, attClass:null, committeeTab:'smc', showAllMembers:false, stuClass:'all', stuQuery:'', lpClass:'1', lpSubject:null};
+const UI = {as:{view:'entry', year:String(new Date().getFullYear()), term:'t1', cls:null, subj:null, sid:null}, gpfView:'simple', gpfShow:false, penShow:false, penMode:'auto', cert:{type:'study', cls:null, sid:null, q:'', memo:'', date:null, reason:'অভিভাবকের অনুরোধে', passed:''}, attDate:null, attView:'day', attMonth:null, attClass:null, committeeTab:'smc', showAllMembers:false, stuClass:'all', stuQuery:'', lpClass:'1', lpSubject:null};
 try { UI.committeeTab = localStorage.getItem('committeeTab') || 'smc'; } catch(e) {}
 
 const FEATURES_A = [
@@ -460,7 +460,7 @@ const FEATURES_A = [
 const FEATURES_B = [
   ['salary','salary','#1F4E8C','শিক্ষকের বেতন হিসাব ও ইনক্রিমেন্ট','বার্ষিক ইনক্রিমেন্ট: ১ জুলাই'],
   ['gpf','gpf','#0E7C74','জিপিএফ (GPF) ক্যালকুলেটর','মুনাফা ও অবসরকালীন স্থিতি'],
-  ['pension','pension','#6D3FB8','পেনশন ও আনুতোষিক ক্যালকুলেটর','মাসিক পেনশন, আনুতোষিক ও ছুটি নগদায়ন'],
+  ['pension','pension','#6D3FB8','পেনশন ও আনুতোষিক ক্যালকুলেটর','৮ম পে স্কেল অনুযায়ী স্বয়ংক্রিয় হিসাব'],
 ];
 const ALL = Object.fromEntries([...FEATURES_A, ...FEATURES_B, ['committee','committee','#C0392B','কমিটি','']].map(f => [f[0], f]));
 
@@ -1601,6 +1601,114 @@ function onMarkInput(el){
   if (t) t.textContent = box[id] ? bn(Math.round((num(m.c) + (mx.s ? num(m.s) : 0)) * 10) / 10) : '–';
 }
 
+/* ---------- 8th National Pay Scale (2015) ---------- */
+// Grades 9–20: start and end of each scale. Each step is 5% more than the last, rounded up to the next 10 taka
+// (checked against the published grade-10 and grade-13 step lists).
+const PS8 = {9:[22000,53060],10:[16000,38640],11:[12500,30230],12:[11300,27300],13:[11000,26590],14:[10200,24680],15:[9700,23490],16:[9300,22490],17:[9000,21800],18:[8800,21310],19:[8500,20570],20:[8250,20010]};
+function ps8Steps(g){
+  const [a, b] = PS8[g]; const out = [a];
+  while (out[out.length - 1] < b) { const nx = Math.ceil(out[out.length - 1] * 1.05 / 10) * 10; out.push(nx >= b ? b : nx); }
+  return out;
+}
+const gradeOrd = g => bn(g) + (g === 9 ? 'ম' : g === 10 ? 'ম' : 'তম');
+function penAutoDefaults(){
+  const A = DB.pension.auto || {}, me = DB.teachers.find(x => x.me) || {};
+  const grade = A.grade || (/প্রধান শিক্ষক/.test(me.designation || DB.teacher.designation || '') ? 10 : 13);
+  return {grade, step: A.step || 1, join: A.join || me.join || '', dob: A.dob || me.dob || '', retAge: A.retAge || 59, leave: A.leave ?? 18, med: A.med ?? '', gpf: A.gpf ?? ''};
+}
+// Everything follows from grade, present step, joining date and birth date.
+function penAuto(A){
+  const steps = ps8Steps(A.grade), idx = Math.min(steps.length, Math.max(1, A.step)) - 1;
+  if (!A.join || !A.dob) return {steps, idx, missing:true};
+  const dob = new Date(A.dob + 'T00:00:00'), join = new Date(A.join + 'T00:00:00');
+  if (isNaN(dob) || isNaN(join)) return {steps, idx, missing:true};
+  const ret = new Date(dob.getFullYear() + (parseInt(toEn(A.retAge)) || 59), dob.getMonth(), dob.getDate());
+  // service: completed years and months from joining to retirement
+  let months = (ret.getFullYear() - join.getFullYear()) * 12 + (ret.getMonth() - join.getMonth()); if (ret.getDate() < join.getDate()) months--;
+  const years = Math.floor(months / 12), restM = months % 12;
+  // yearly increments on 1 July from now until retirement, stopping at the top of the scale
+  const now = new Date(); let jul = new Date(now.getMonth() >= 6 ? now.getFullYear() + 1 : now.getFullYear(), 6, 1), inc = 0;
+  while (jul <= ret) { inc++; jul = new Date(jul.getFullYear() + 1, 6, 1); }
+  const lastIdx = Math.min(steps.length - 1, idx + inc), capped = idx + inc > steps.length - 1;
+  const basic = steps[lastIdx];
+  const R = penCalc({basic, years, rate:'', grat:'', leave:A.leave, med:A.med, gpf:A.gpf});
+  return {steps, idx, ret, years, restM, inc, lastIdx, capped, basic, R, retired: ret <= now};
+}
+function penAutoForm(){
+  const A = penAutoDefaults(), steps = ps8Steps(A.grade);
+  return `<div class="card" style="gap:14px;padding:18px 16px">
+    <div class="row2">
+      ${field('pa_grade','বেতন গ্রেড', sel('pa_grade', Object.keys(PS8).map(g => [String(g), `${gradeOrd(+g)} গ্রেড`]), String(A.grade)))}
+      ${field('pa_step','বর্তমান মূল বেতন', sel('pa_step', steps.map((v, i) => [String(i + 1), `${bn(v.toLocaleString('en-IN'))} (ধাপ ${bn(i + 1)})`]), String(Math.min(A.step, steps.length))))}
+    </div>
+    <p class="hint" style="margin-top:-6px">${gradeOrd(A.grade)} গ্রেড: ${tk(steps[0])} – ${tk(steps[steps.length - 1])}, মোট ${bn(steps.length)} ধাপ। সহকারী শিক্ষক ১৩তম, প্রধান শিক্ষক ১০ম গ্রেড; উচ্চতর গ্রেড পেলে সেটি বেছে নিন।</p>
+    <div class="row2">
+      ${field('pa_join','চাকরিতে যোগদানের তারিখ', inp('pa_join', A.join, 'type="date"'))}
+      ${field('pa_dob','জন্ম তারিখ', inp('pa_dob', A.dob, 'type="date"'))}
+    </div>
+    <div class="row2">
+      ${field('pa_ret','অবসরের বয়স', inp('pa_ret', bn(A.retAge), 'inputmode="numeric" maxlength="2"'))}
+      ${field('pa_leave','ছুটি নগদায়ন (মাস)', inp('pa_leave', bn(A.leave), 'inputmode="numeric" maxlength="2"'))}
+    </div>
+    <div class="row2">
+      ${field('pa_med','মাসিক চিকিৎসা ভাতা', inp('pa_med', A.med !== '' ? bn(A.med) : '', 'inputmode="numeric" placeholder="৳ ঐচ্ছিক"'))}
+      ${field('pa_gpf','অবসরে জিপিএফ', inp('pa_gpf', A.gpf !== '' ? bn(A.gpf) : '', 'inputmode="numeric" placeholder="৳ ঐচ্ছিক"'))}
+    </div>
+    <button class="btn outline full" data-pen-info>${ic('doc',20)} তথ্যসূত্র ও ডিসক্লেইমার</button>
+  </div>
+  <div class="card" style="gap:12px;padding:18px 16px">
+    <h2 style="font-size:17px;text-align:center;padding-bottom:10px;border-bottom:1px solid #E1E7EF">ফলাফল বিবরণী</h2>
+    <div id="paOut">${penAutoResult()}</div>
+  </div>`;
+}
+function penAutoResult(){
+  const A = penAutoDefaults(), X = penAuto(A);
+  if (X.missing) return '<div class="resbox">যোগদান ও জন্ম তারিখ দিলেই হিসাব নিজে থেকে দেখাবে</div>';
+  if (X.years < 5) return `<div class="resbox">চাকরিকাল ${bn(X.years)} বছর — ৫ বছরের কম চাকরিতে পেনশন প্রাপ্য নয়</div>`;
+  const R = X.R, retIso = X.ret.getFullYear() + '-' + String(X.ret.getMonth() + 1).padStart(2,'0') + '-' + String(X.ret.getDate()).padStart(2,'0');
+  return `<div class="stat2">
+      <div style="background:#F1EAFA"><span class="t2">মাসিক নিট পেনশন</span><b style="color:#5B2F99">${tk(R.net)}</b><span class="t2">${R.med ? `চিকিৎসা ভাতাসহ ${tk(R.monthly)}` : 'প্রতি মাসে আজীবন'}</span></div>
+      <div style="background:#E3F4EA"><span class="t2">এককালীন মোট প্রাপ্তি</span><b style="color:#0E5F58">${tk(R.lump)}</b><span class="t2">আনুতোষিক + ছুটি নগদায়ন${R.gpf ? ' + জিপিএফ' : ''}</span></div>
+    </div>
+    <div class="card" style="gap:6px;padding:12px;background:#F7FAF8;box-shadow:none">
+      <b style="font-size:15px">চাকরির হিসাব (স্বয়ংক্রিয়)</b>
+      <dl class="kv">
+        <dt>অবসরের তারিখ</dt><dd>${esc(fmtDate(retIso))}${X.retired ? ' (পেরিয়ে গেছে)' : ''}</dd>
+        <dt>মোট চাকরিকাল</dt><dd>${bn(X.years)} বছর${X.restM ? ' ' + bn(X.restM) + ' মাস' : ''}</dd>
+        <dt>বর্তমান মূল বেতন</dt><dd>${tk(X.steps[X.idx])} (ধাপ ${bn(X.idx + 1)})</dd>
+        <dt>অবসর পর্যন্ত ইনক্রিমেন্ট</dt><dd>${bn(X.lastIdx - X.idx)}টি${X.capped ? ' (গ্রেডের শেষ ধাপে পৌঁছাবে)' : ''}</dd>
+        <dt>শেষ মূল বেতন</dt><dd style="color:#5B2F99">${tk(X.basic)} (ধাপ ${bn(X.lastIdx + 1)})</dd>
+        <dt>পেনশনের হার</dt><dd>${bn(R.rate)}% (${bn(X.years)} বছর)</dd>
+        <dt>আনুতোষিকের হার</dt><dd>প্রতি টাকায় ${bn(R.gr)}</dd>
+      </dl>
+    </div>
+    <dl class="kv">
+      <dt>মোট (গ্রস) পেনশন</dt><dd>${tk(R.gross)}</dd>
+      <dt>মাসিক নিট পেনশন (৫০%)</dt><dd>${tk(R.net)}</dd>
+      ${R.med ? `<dt>চিকিৎসা ভাতা</dt><dd>${tk(R.med)}</dd><dt>মাসে মোট হাতে</dt><dd>${tk(R.monthly)}</dd>` : ''}
+      <dt>বছরে ২টি উৎসব ভাতা</dt><dd>${tk(R.festival)}</dd>
+      <dt>আনুতোষিক (${tk(R.net)} × ${bn(R.gr)})</dt><dd>${tk(R.gratuity)}</dd>
+      <dt>ছুটি নগদায়ন (${bn(Math.min(18, num(A.leave)))} মাস)</dt><dd>${tk(R.leave)}</dd>
+      ${R.gpf ? `<dt>জিপিএফ</dt><dd>${tk(R.gpf)}</dd>` : ''}
+      <dt><b>এককালীন মোট</b></dt><dd style="color:#17663F">${tk(R.lump)}</dd>
+    </dl>
+    <button class="btn ghost" data-pa-copy style="align-self:flex-end;min-height:36px">${ic('copy',16)} হিসাব কপি করুন</button>`;
+}
+function penAutoText(){
+  const A = penAutoDefaults(), X = penAuto(A); if (X.missing || X.years < 5) return '';
+  const R = X.R;
+  return `পেনশন ও আনুতোষিক হিসাব (৮ম জাতীয় বেতন স্কেল) — ${DB.teacher.name}\n${gradeOrd(A.grade)} গ্রেড, বর্তমান মূল বেতন ${tk(X.steps[X.idx])}\nঅবসর: ${fmtDate(X.ret.toISOString().slice(0,10))}, চাকরিকাল ${bn(X.years)} বছর${X.restM ? ' ' + bn(X.restM) + ' মাস' : ''}\nশেষ মূল বেতন: ${tk(X.basic)} (${bn(X.lastIdx - X.idx)}টি ইনক্রিমেন্ট)\nপেনশনের হার ${bn(R.rate)}%, আনুতোষিক প্রতি টাকায় ${bn(R.gr)}\n\nমোট পেনশন: ${tk(R.gross)}\nমাসিক নিট পেনশন: ${tk(R.net)}${R.med ? `\nচিকিৎসা ভাতাসহ: ${tk(R.monthly)}` : ''}\nবছরে ২টি উৎসব ভাতা: ${tk(R.festival)}\nআনুতোষিক: ${tk(R.gratuity)}\nছুটি নগদায়ন: ${tk(R.leave)}${R.gpf ? `\nজিপিএফ: ${tk(R.gpf)}` : ''}\nএককালীন মোট: ${tk(R.lump)}\n(আনুমানিক হিসাব)`;
+}
+function penAutoSave(){
+  const v = id => { const el = document.getElementById(id); return el ? el.value : ''; };
+  const prev = penAutoDefaults(), grade = parseInt(v('pa_grade')) || prev.grade;
+  DB.pension.auto = {grade, step: grade === prev.grade ? (parseInt(v('pa_step')) || 1) : Math.min(prev.step, ps8Steps(grade).length),
+    join: v('pa_join'), dob: v('pa_dob'), retAge: parseInt(toEn(v('pa_ret'))) || 59,
+    leave: toEn(v('pa_leave')).trim() === '' ? 18 : Math.min(18, num(v('pa_leave'))), med: toEn(v('pa_med')).trim() === '' ? '' : num(v('pa_med')), gpf: toEn(v('pa_gpf')).trim() === '' ? '' : num(v('pa_gpf'))};
+  save();
+  return grade !== prev.grade;
+}
+
 /* ---------- pension & gratuity calculator ---------- */
 // Pension rate (% of last basic) by completed years of pensionable service. 9th pay scale (2026) kept the existing rates.
 // Sources disagree for 17–19 years, so the rate stays editable on screen.
@@ -1635,10 +1743,17 @@ function penCalc(P){
   return {basic, years, rate, gr, gross, net, gratuity, leave, med, gpf, monthly: net + med, festival: net * 2, lump: gratuity + leave + gpf};
 }
 function pension(){
+  const auto = UI.penMode !== 'manual';
+  return innerHeader('পেনশন ও আনুতোষিক','pension','#6D3FB8') + `<div class="sec" style="padding-top:16px">
+    <div class="card" style="gap:4px;text-align:center;padding:18px 16px"><h2 style="font-size:20px">পেনশন ও আনুতোষিক হিসাব</h2><span class="t2" style="font-size:14px">৮ম জাতীয় বেতন স্কেল অনুযায়ী চাকরির বয়স থেকে নিজে থেকে হিসাব।</span></div>
+    <div class="tabs2" role="tablist"><button role="tab" class="${auto?'on':''}" data-pen-mode="auto">স্বয়ংক্রিয় (৮ম পে স্কেল)</button><button role="tab" class="${auto?'':'on'}" data-pen-mode="manual">নিজে লিখুন</button></div>
+    ${auto ? penAutoForm() : penManual()}
+  </div>`;
+}
+function penManual(){
   const P = penDefaults(), d = DB.pension;
   const showRes = UI.penShow || d.done;
-  return innerHeader('পেনশন ও আনুতোষিক','pension','#6D3FB8') + `<div class="sec" style="padding-top:16px">
-    <div class="card" style="gap:4px;text-align:center;padding:18px 16px"><h2 style="font-size:20px">পেনশন ও আনুতোষিক হিসাব</h2><span class="t2" style="font-size:14px">শেষ মূল বেতন ও চাকরিকাল দিয়ে অবসরকালীন প্রাপ্য জেনে নিন।</span></div>
+  return `
     <div class="card" style="gap:16px;padding:20px 16px">
       <div class="bigfield"><label for="pn_basic">শেষ মূল বেতন (Last Basic Pay)</label><input id="pn_basic" inputmode="numeric" value="${esc(P.basic != null ? bn(P.basic) : '')}" placeholder="৳ যেমন: ২৯,২০০"><span class="hint">অবসরের সময় যে মূল বেতন হবে (বাড়ি ভাড়া ও ভাতা ছাড়া)</span></div>
       <div class="bigfield"><label for="pn_years">পেনশনযোগ্য চাকরিকাল (বছর)</label><input id="pn_years" inputmode="numeric" maxlength="2" value="${esc(P.years != null ? bn(P.years) : '')}" placeholder="যেমন: ২৫"><span class="hint">${(DB.teachers.find(x => x.me) || {}).join ? 'শিক্ষক তালিকার যোগদান ও জন্ম তারিখ থেকে হিসাব করা; দরকার হলে বদলান' : 'কমপক্ষে ৫ বছর চাকরি হলে পেনশন প্রাপ্য'}</span></div>
@@ -1659,8 +1774,7 @@ function pension(){
     <div class="card" style="gap:12px;padding:18px 16px">
       <h2 style="font-size:17px;text-align:center;padding-bottom:10px;border-bottom:1px solid #E1E7EF">ফলাফল বিবরণী</h2>
       <div id="pnOut">${showRes ? penResult() : '<div class="resbox">ফলাফল এখানে প্রদর্শিত হবে</div>'}</div>
-    </div>
-  </div>`;
+    </div>`;
 }
 function penResult(){
   const R = penCalc(penDefaults());
@@ -1695,6 +1809,7 @@ function penText(){
 function penInfoSheet(){
   openSheet(`<h2 style="font-size:18px;margin-bottom:10px">তথ্যসূত্র ও ডিসক্লেইমার</h2>
     <div style="display:flex;flex-direction:column;gap:10px;font-size:14px;line-height:1.7">
+      <p><b>স্বয়ংক্রিয় হিসাব:</b> ৮ম জাতীয় বেতন স্কেল (২০১৫)-এর গ্রেড ও ধাপ থেকে প্রতি ১ জুলাই একটি করে ইনক্রিমেন্ট (৫%) ধরে অবসরের দিনের মূল বেতন বের করা হয়; গ্রেডের শেষ ধাপে পৌঁছালে বেতন আর বাড়ে না। চাকরিকাল = যোগদান থেকে অবসর (জন্ম তারিখ + ৫৯ বছর) পর্যন্ত পূর্ণ বছর।</p>
       <p><b>মোট পেনশন</b> = শেষ মূল বেতন × চাকরিকাল অনুযায়ী হার। ৫ বছরে ২১% থেকে ২৫ বছর বা বেশিতে সর্বোচ্চ ৯০%। নবম জাতীয় বেতনস্কেল ২০২৬-এ পেনশন ও আনুতোষিকের হার অপরিবর্তিত রাখা হয়েছে।</p>
       <p><b>নিট পেনশন</b> = মোট পেনশনের অর্ধেক; বাকি অর্ধেক বাধ্যতামূলকভাবে সমর্পণ করে আনুতোষিক নেওয়া হয়।</p>
       <p><b>আনুতোষিক</b> = নিট পেনশন × প্রতি টাকার হার: ৫–৯ বছরে ২৬৫, ১০–১৪ বছরে ২৬০, ১৫–১৯ বছরে ২৪৫, ২০ বছর বা বেশিতে ২৩০ টাকা।</p>
@@ -1830,6 +1945,12 @@ function bindView(r){
     });
   }
   if (r === 'pension') {
+    ['pa_grade','pa_step','pa_join','pa_dob','pa_ret','pa_leave','pa_med','pa_gpf'].forEach(id => { const el = document.getElementById(id); if (!el) return;
+      el.addEventListener(el.tagName === 'SELECT' || el.type === 'date' ? 'change' : 'input', () => {
+        const gradeChanged = penAutoSave();
+        if (gradeChanged) return render();
+        document.getElementById('paOut').innerHTML = penAutoResult();
+      }); });
     const y = document.getElementById('pn_years');
     if (y) y.addEventListener('input', () => { const n = Math.round(num(toEn(y.value)));
       document.getElementById('pn_rate').placeholder = n >= 5 ? bn(penRate(n)) + ' (নিজে থেকে)' : 'নিজে থেকে';
@@ -1924,6 +2045,8 @@ document.addEventListener('click', e => {
   if ('gpfScopy' in ds) return copyText(gpfSimpleText(), 'জিপিএফ হিসাব কপি হয়েছে');
   if ('gpfInfo' in ds) return gpfInfoSheet();
   if ('penInfo' in ds) return penInfoSheet();
+  if (ds.penMode) { UI.penMode = ds.penMode; return render(); }
+  if ('paCopy' in ds) return copyText(penAutoText(), 'পেনশন হিসাব কপি হয়েছে');
   if ('penCopy' in ds) return copyText(penText(), 'পেনশন হিসাব কপি হয়েছে');
   if ('penCalc' in ds) {
     const v = id => toEn(document.getElementById(id).value).trim(), err = document.getElementById('pnErr');
@@ -1932,7 +2055,7 @@ document.addEventListener('click', e => {
     if (msg) { err.textContent = msg; err.style.display = 'block'; return; }
     err.style.display = 'none';
     const opt = id => v(id) === '' ? '' : num(v(id));
-    DB.pension = {basic, years, rate: opt('pn_rate'), grat: opt('pn_grat'), leave: v('pn_leave') === '' ? 18 : Math.min(18, num(v('pn_leave'))), med: opt('pn_med'), gpf: opt('pn_gpf'), done: true};
+    DB.pension = {auto: DB.pension.auto, basic, years, rate: opt('pn_rate'), grat: opt('pn_grat'), leave: v('pn_leave') === '' ? 18 : Math.min(18, num(v('pn_leave'))), med: opt('pn_med'), gpf: opt('pn_gpf'), done: true};
     save(); UI.penShow = true;
     const o = document.getElementById('pnOut'); o.innerHTML = penResult(); if (o.scrollIntoView) o.scrollIntoView({behavior:'smooth', block:'start'});
     return;
