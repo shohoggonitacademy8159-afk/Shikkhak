@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#1E7F4F">
+<meta name="app-id" content="SHIKKHOK_APP">
+<title>প্রাথমিক শিক্ষক অ্যাপ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--g:#1E7F4F;--gt:#E8F5EE;--ink:#12284A;--mute:#4A5B73;--bg:#F4F8F5;--line:#E1ECE5;--blue:#1F3A68;--red:#B42318}
+*{box-sizing:border-box}
+html,body{margin:0;background:#E4ECE7}
+body{font-family:'Hind Siliguri','SolaimanLipi','Nikosh','Noto Sans Bengali',sans-serif;color:var(--ink);-webkit-tap-highlight-color:transparent}
+button{font:inherit;color:inherit;cursor:pointer}
+a{color:var(--g)}
+.app{max-width:480px;margin:0 auto;min-height:100vh;background:var(--bg);position:relative;padding-bottom:90px;box-shadow:0 0 40px rgba(18,40,74,.08)}
+.app.inner{padding-bottom:24px}
+h1,h2,h3,p{margin:0}
+.hdr{background:var(--g);color:#fff;padding:18px 18px 76px;border-radius:0 0 28px 28px;display:flex;flex-direction:column;gap:16px}
+.hdr.slim{padding-bottom:20px}
+.top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.sch{display:flex;align-items:center;gap:10px;min-width:0}
+.sch .ic{width:40px;height:40px;flex-shrink:0;border-radius:12px;background:#fff;color:var(--g);display:flex;align-items:center;justify-content:center}
+.sch b{font-size:16px;line-height:1.3;display:block}
+.sch small{font-size:12px;opacity:.92}
+.iconbtn{position:relative;width:44px;height:44px;flex-shrink:0;border-radius:14px;border:0;background:rgba(255,255,255,.16);color:#fff;display:flex;align-items:center;justify-content:center}
+.badge{position:absolute;top:5px;right:5px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:#C62828;color:#fff;font-size:11px;font-weight:700;line-height:14px;text-align:center;border:2px solid var(--g)}
+.me{display:flex;align-items:center;gap:14px;background:transparent;border:0;color:#fff;text-align:left;padding:0}
+.av{width:60px;height:60px;flex-shrink:0;border-radius:50%;background:var(--gt);color:var(--g);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;border:3px solid rgba(255,255,255,.55)}
+.chip{display:inline-block;font-size:12px;font-weight:600;background:#fff;color:var(--g);padding:2px 10px;border-radius:999px}
+.editpen{display:inline-flex;align-items:center;gap:4px;font-size:12px;opacity:.95;margin-left:6px}
+.card{background:#fff;border-radius:20px;box-shadow:0 6px 20px rgba(18,40,74,.08);padding:16px;display:flex;flex-direction:column;gap:14px}
+.overlap{margin:-58px 16px 0}
+.row2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.stat{border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:6px}
+.stat .n{font-size:22px;font-weight:700;line-height:1.2}
+.stat .n span{font-size:14px;font-weight:500;color:#3E5070}
+.bar{height:6px;border-radius:3px}
+.bar i{display:block;height:100%;border-radius:3px}
+.pill{display:flex;align-items:center;gap:6px;font-size:13px;color:#3E5070;background:#F1F5FA;padding:4px 10px;border-radius:999px}
+.ticker{display:flex;align-items:center;gap:10px;background:#FFF6E5;border-radius:12px;padding:8px 10px;overflow:hidden}
+.ticker b{display:flex;align-items:center;gap:4px;flex-shrink:0;font-size:12px;color:#8A4B00}
+.tkw{overflow:hidden;flex:1;min-width:0}
+.tk{display:flex;gap:48px;white-space:nowrap;width:max-content;animation:tk 26s linear infinite;font-size:13px;color:#4A3200}
+@keyframes tk{to{transform:translateX(-50%)}}
+@media (prefers-reduced-motion:reduce){.tk{animation:none}}
+.sec{padding:22px 16px 0;display:flex;flex-direction:column;gap:12px}
+.sech{display:flex;align-items:center;gap:8px;font-size:17px;font-weight:700}
+.sech i{width:8px;height:8px;border-radius:50%}
+.tile{text-align:left;background:#fff;border:1px solid var(--line);border-radius:18px;padding:16px 14px;display:flex;flex-direction:column;gap:12px;min-height:150px}
+.tile:active,.lrow:active{transform:scale(.98)}
+.tile.wide{grid-column:span 2;flex-direction:row;align-items:center;min-height:0;padding:14px;gap:14px}
+.ib{width:64px;height:64px;flex-shrink:0;border-radius:18px;display:flex;align-items:center;justify-content:center;color:#fff}
+.ib svg{width:34px;height:34px}
+.ib.sm{width:48px;height:48px;border-radius:14px}
+.ib.sm svg{width:26px;height:26px}
+.t1{font-size:15px;font-weight:700;line-height:1.4;display:block}
+.t2{font-size:12px;color:var(--mute);display:block}
+.grow{flex:1;min-width:0}
+.lrow{text-align:left;background:#fff;border:1px solid #E2E9F3;border-radius:18px;padding:14px;display:flex;align-items:center;gap:14px;width:100%}
+.nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;background:#fff;border-top:1px solid var(--line);padding:8px 8px 12px;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;z-index:5}
+.nav button{border:0;background:transparent;min-height:52px;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--mute);font-size:12px;font-weight:500}
+.nav button span.p{width:52px;height:30px;border-radius:15px;display:flex;align-items:center;justify-content:center}
+.nav button.on{color:var(--g);font-weight:700}
+.nav button.on span.p{background:var(--gt)}
+.seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;background:rgba(255,255,255,.16);padding:4px;border-radius:14px}
+.seg button{border:0;min-height:44px;border-radius:11px;font-size:15px;font-weight:700;background:transparent;color:#fff}
+.seg button.on{background:#fff;color:var(--g)}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 6px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chips button{flex-shrink:0;border:1px solid #CBD6E2;background:#fff;border-radius:999px;min-height:40px;padding:0 14px;font-size:14px;font-weight:600;color:var(--ink)}
+.chips button.on{background:var(--g);border-color:var(--g);color:#fff}
+.mini{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.mini div{background:#F1F5FA;border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:2px}
+.mini small{font-size:12px;color:var(--mute)}
+.mini b{font-size:15px}
+.next{display:flex;align-items:center;gap:12px;background:var(--gt);border-radius:14px;padding:12px}
+.btn{min-height:44px;border-radius:12px;padding:0 14px;font-size:14px;font-weight:700;border:1px solid var(--g);background:#fff;color:var(--g);display:inline-flex;align-items:center;justify-content:center;gap:6px;text-decoration:none}
+.btn.solid{background:var(--g);color:#fff;border-color:var(--g)}
+.btn.danger{border-color:var(--red);color:var(--red)}
+.btn.danger.solid{background:var(--red);color:#fff}
+.btn.ghost{border-color:transparent;padding:0 6px}
+.btn.big{min-height:52px;font-size:15px;border-radius:14px}
+.btn.full{width:100%}
+.list{background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden}
+.mem{display:flex;align-items:center;gap:12px;padding:12px 14px;border-top:1px solid #EDF2EF}
+.mem:first-child{border-top:0}
+.mem.tap{width:100%;background:#fff;border-left:0;border-right:0;border-bottom:0;text-align:left}
+.list .mem.tap:first-child{border-top:0}
+.ma{width:44px;height:44px;flex-shrink:0;border-radius:50%;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700}
+.sq{width:44px;height:44px;flex-shrink:0;border:0;border-radius:12px;background:var(--gt);color:var(--g);display:flex;align-items:center;justify-content:center;text-decoration:none}
+.sq.blue{background:#E9EFF8;color:var(--blue)}
+.date{width:52px;flex-shrink:0;border-radius:12px;background:#E9EFF8;color:var(--blue);display:flex;flex-direction:column;align-items:center;padding:6px 0}
+.date b{font-size:18px;line-height:1.2}
+.date small{font-size:11px;font-weight:600}
+.st{font-size:12px;font-weight:600;padding:1px 8px;border-radius:999px;display:inline-block;margin-top:4px}
+.actions{position:sticky;bottom:0;padding:14px 16px 18px;background:#fff;border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:20px 0 -24px}
+.empty{margin:16px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px;padding:28px 20px}
+.toast{position:fixed;left:50%;bottom:100px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:10px 16px;border-radius:12px;font-size:14px;opacity:0;transition:.25s;pointer-events:none;z-index:30;max-width:90%;text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.sheet-bg{position:fixed;inset:0;background:rgba(18,40,74,.45);display:none;z-index:10}
+.sheet{position:fixed;left:50%;bottom:0;transform:translateX(-50%);width:100%;max-width:480px;background:#fff;border-radius:24px 24px 0 0;padding:18px 16px 24px;z-index:11;display:none;max-height:92vh;overflow:auto}
+.sheet.open,.sheet-bg.open{display:block}
+.grab{width:40px;height:4px;border-radius:2px;background:#CBD6E2;margin:0 auto 12px}
+.note{display:flex;gap:12px;padding:12px 0;border-top:1px solid #EDF2EF}
+.note:first-of-type{border-top:0}
+.dot{width:10px;height:10px;border-radius:50%;background:#C62828;margin-top:7px;flex-shrink:0}
+.dot.read{background:#C9D3E0}
+form.f{display:flex;flex-direction:column;gap:14px}
+.field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.field label{font-size:14px;font-weight:600}
+.field label em{color:var(--red);font-style:normal}
+.field input,.field select,.field textarea{font:inherit;font-size:15px;color:var(--ink);border:1px solid #B8C6D6;border-radius:12px;padding:10px 12px;min-height:46px;background:#fff;width:100%}
+.field input:focus,.field select:focus,.field textarea:focus{outline:2px solid var(--g);outline-offset:1px;border-color:var(--g)}
+.field textarea{resize:vertical;line-height:1.5}
+.hint{font-size:12px;color:var(--mute)}
+.search{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #B8C6D6;border-radius:14px;padding:0 12px;min-height:48px}
+.search input{border:0;outline:0;font:inherit;font-size:15px;flex:1;min-width:0;background:transparent;color:var(--ink)}
+.subj{text-align:left;background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:10px;min-height:118px}
+.subj.add{border-style:dashed;border-color:#9FB3C8;align-items:center;justify-content:center;color:var(--g);font-weight:700}
+.count{font-size:12px;font-weight:600;color:var(--mute)}
+.plan{text-align:left;background:#fff;border:1px solid #E2E9F3;border-radius:16px;padding:14px;display:flex;gap:12px;width:100%}
+.clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.crumb{display:flex;align-items:center;gap:6px;font-size:14px;font-weight:600;color:var(--g);background:none;border:0;padding:0;min-height:40px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:14px}
+.kv dt{color:var(--mute)}
+.kv dd{margin:0;font-weight:600}
+#updbar{max-width:480px;margin:0 auto;position:sticky;top:0;z-index:6}
+#updbar:empty{display:none}
+.upd{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;color:#fff;background:#12284A}
+.upd.web{background:#17663F}
+.upd .btn{border-color:#fff;color:#12284A;background:#fff;min-height:40px;font-size:13px;flex-shrink:0}
+.upd .x{background:transparent;border:0;color:#fff;width:36px;height:36px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border-radius:10px}
+.updline{font-size:13px;color:var(--mute);min-height:20px}
+</style>
+</head>
+<body>
+<div id="updbar" role="region" aria-label="আপডেট"></div>
+<div class="app" id="app"></div>
+<nav class="nav" id="nav" aria-label="প্রধান মেনু"></nav>
+<div class="sheet-bg" id="sbg"></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" tabindex="-1"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ---------- icons ---------- */
+const S = (p, extra='') => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${extra}>${p}</svg>`;
+const P = {
+  school:'<path d="m2 9 10-6 10 6"/><path d="M4 10v11h16V10"/><path d="M10 21v-5h4v5"/><path d="M9 12h.01"/><path d="M15 12h.01"/>',
+  bell:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+  cloud:'<path d="M12 2v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="M20 12h2"/><path d="m19.07 4.93-1.41 1.41"/><path d="M15.95 12.65a4 4 0 0 0-5.93-4.61"/><path d="M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6Z"/>',
+  mega:'<path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>',
+  teacher:'<path d="M2 3h20"/><path d="M3 3v10h7"/><path d="M21 3v8"/><circle cx="16" cy="12" r="2.5"/><path d="M11.5 21a4.5 4.5 0 0 1 9 0"/><path d="m5 9 2 2 3-3"/>',
+  students:'<circle cx="9" cy="7" r="3.5"/><path d="M2 21v-1.5A5.5 5.5 0 0 1 7.5 14h3"/><path d="M16 3.5a3.5 3.5 0 0 1 0 7"/><path d="m14 18 2.5 2.5L22 15"/>',
+  leave:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="m9 16 2 2 4-4"/>',
+  plan:'<rect x="5" y="3" width="14" height="19" rx="2"/><path d="M9 3V2h6v1"/><path d="M9 9h7"/><path d="M9 13h7"/><path d="M9 17h4"/>',
+  book:'<path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/>',
+  profile:'<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="11" r="2.5"/><path d="M5.5 17a3.5 3.5 0 0 1 7 0"/><path d="M15 10h3"/><path d="M15 14h3"/>',
+  tools:'<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/><path d="M15 8h4v4"/>',
+  cert:'<circle cx="12" cy="9" r="6"/><path d="m8.5 14-1.5 8 5-3 5 3-1.5-8"/><path d="m10 9 1.5 1.5 3-3"/>',
+  committee:'<circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="9" r="2"/><circle cx="19" cy="9" r="2"/><path d="M8.5 12.5a3.5 3.5 0 0 1 7 0"/><path d="M2 15h20"/><path d="M4 15v6"/><path d="M20 15v6"/><path d="M2.5 13a2.5 2.5 0 0 1 4-1"/><path d="M21.5 13a2.5 2.5 0 0 0-4-1"/>',
+  salary:'<rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20"/><path d="M16 14.5h2"/><path d="M6 3h12"/>',
+  gpf:'<path d="M3 21h18"/><path d="M5 21V10"/><path d="M19 21V10"/><path d="M9 21v-7"/><path d="M15 21v-7"/><path d="m2 10 10-6 10 6"/>',
+  pension:'<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8"/><path d="M8 10h.01"/><path d="M12 10h.01"/><path d="M16 10h.01"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14v4"/><path d="M8 18h.01"/><path d="M12 18h.01"/>',
+  chev:'<path d="m9 18 6-6-6-6"/>', back:'<path d="m15 18-6-6 6-6"/>',
+  home:'<path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2h-4v-6H9v6H5a2 2 0 0 1-2-2z"/>',
+  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  report:'<path d="M3 3v18h18"/><path d="M8 16v-4"/><path d="M13 16V8"/><path d="M18 16v-6"/>',
+  user:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  gear:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+  phone:'<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/>',
+  doc:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 12v6"/><path d="M9 15h6"/>',
+  cal:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="M12 14v3l2 1"/>',
+  plus:'<path d="M12 5v14"/><path d="M5 12h14"/>',
+  edit:'<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
+  trash:'<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/>',
+  copy:'<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  refresh:'<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>',
+  x:'<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  upload:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>'
+};
+const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
+
+/* ---------- version & updates ---------- */
+const WEB_VERSION = '1.2';
+const BR = window.AppBridge || null;
+let UPD = {state: BR ? 'idle' : 'webapp'};
+let updDismissed = false;
+function appInfo(){
+  if (!BR) return {apk:null, content:WEB_VERSION, configured:false};
+  try { return JSON.parse(BR.getInfo()); } catch(e) { return {apk:'?', content:WEB_VERSION, configured:false}; }
+}
+const UPD_TEXT = {
+  idle:'', webapp:'ওয়েব সংস্করণ সবসময় নিজে থেকেই সর্বশেষ থাকে।',
+  checking:'আপডেট খোঁজা হচ্ছে…', uptodate:'অ্যাপ সর্বশেষ সংস্করণে আছে।',
+  web:'নতুন আপডেট নামানো হয়েছে, চালু করার অপেক্ষায়।', apk:'অ্যাপের নতুন সংস্করণ এসেছে, ডাউনলোড করতে হবে।',
+  error:'আপডেট খোঁজা যায়নি। ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন।',
+  noconfig:'এই APK-তে আপডেটের ঠিকানা নেই। GitHub থেকে বানানো APK ব্যবহার করুন।'
+};
+window.onUpdateStatus = function(raw){
+  try { UPD = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch(e) { return; }
+  if (UPD.manual) {
+    if (UPD.state === 'uptodate') toast('অ্যাপ সর্বশেষ সংস্করণে আছে');
+    if (UPD.state === 'error') toast('আপডেট খোঁজা যায়নি');
+  }
+  if (UPD.state === 'web' || UPD.state === 'apk') updDismissed = false;
+  drawUpdBar();
+  const line = document.getElementById('updLine');
+  if (line) line.textContent = UPD_TEXT[UPD.state] || '';
+};
+function drawUpdBar(){
+  const bar = document.getElementById('updbar');
+  if (updDismissed || !(UPD.state === 'web' || UPD.state === 'apk')) { bar.innerHTML = ''; return; }
+  const v = bn(UPD.version || '');
+  const web = UPD.state === 'web';
+  bar.innerHTML = `<div class="upd ${web?'web':''}">
+    <span style="display:flex;padding-top:2px">${ic('refresh',22)}</span>
+    <span class="grow"><b style="font-size:14px;display:block">${web?`নতুন আপডেট (সংস্করণ ${v}) প্রস্তুত`:`অ্যাপের নতুন সংস্করণ ${v} এসেছে`}</b>
+    <span style="font-size:12px;opacity:.92;display:block">${esc(UPD.notes || (web?'চালু করলে নতুন সুবিধা যুক্ত হবে। আপনার তথ্য ঠিক থাকবে।':'নতুন APK ডাউনলোড করে ইনস্টল করুন।'))}</span></span>
+    ${web?'<button class="btn" data-upd-apply>চালু করুন</button>':'<button class="btn" data-upd-apk>ডাউনলোড</button>'}
+    <button class="x" data-upd-dismiss aria-label="পরে">${ic('x',18)}</button>
+  </div>`;
+}
+function checkUpdate(manual){ if (BR) try { BR.checkUpdate(!!manual); } catch(e) {} }
+
+/* ---------- helpers ---------- */
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const bn = n => String(n).replace(/\d/g, d => '০১২৩৪৫৬৭৮৯'[d]);
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const SKIP = ['মোঃ','মোহাম্মদ','মুহাম্মদ','মো.','মোছাঃ','মোসাঃ','মিসেস','md','md.','mst','mst.'];
+function initials(name){
+  const w = String(name||'').trim().split(/\s+/).filter(x => x && !SKIP.includes(x.toLowerCase()));
+  if (!w.length) return '?';
+  return w.slice(0,2).map(x => Array.from(x)[0]).join('');
+}
+function fmtDate(iso){
+  if (!iso) return '';
+  try { return new Date(iso + 'T00:00:00').toLocaleDateString('bn-BD',{day:'numeric',month:'short',year:'numeric'}); } catch(e){ return iso; }
+}
+function dayMon(iso){
+  try { const d = new Date(iso + 'T00:00:00'); return [d.toLocaleDateString('bn-BD',{day:'numeric'}), d.toLocaleDateString('bn-BD',{month:'short'})]; }
+  catch(e){ return [iso||'', '']; }
+}
+const todayISO = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset()*60000).toISOString().slice(0,10); };
+
+/* ---------- data ---------- */
+const CLASSES = [
+  ['pre','প্রাক-প্রাথমিক'],['1','১ম শ্রেণি'],['2','২য় শ্রেণি'],['3','৩য় শ্রেণি'],['4','৪র্থ শ্রেণি'],['5','৫ম শ্রেণি']
+];
+const CLASS_NAME = Object.fromEntries(CLASSES);
+const CORE12 = [['bangla','বাংলা','আমার বাংলা বই'],['english','ইংরেজি','English for Today'],['math','গণিত','প্রাথমিক গণিত']];
+const CORE35 = [...CORE12,['science','প্রাথমিক বিজ্ঞান','প্রাথমিক বিজ্ঞান'],['bgs','বাংলাদেশ ও বিশ্বপরিচয়','বাংলাদেশ ও বিশ্বপরিচয়'],
+  ['islam','ইসলাম ও নৈতিক শিক্ষা','ধর্ম শিক্ষা'],['hindu','হিন্দুধর্ম ও নৈতিক শিক্ষা','ধর্ম শিক্ষা'],['buddha','বৌদ্ধধর্ম ও নৈতিক শিক্ষা','ধর্ম শিক্ষা'],['christ','খ্রিষ্টধর্ম ও নৈতিক শিক্ষা','ধর্ম শিক্ষা']];
+const CO = [['pe','শারীরিক শিক্ষা ও স্বাস্থ্য','সহশিক্ষা'],['art','চারু ও কারুকলা','সহশিক্ষা'],['music','সংগীত','সহশিক্ষা']];
+const SUBJECTS = {
+  pre:[['pre-lang','ভাষা ও যোগাযোগ','প্রাক-প্রাথমিক'],['pre-math','গণিত','প্রাক-প্রাথমিক'],['pre-env','পরিবেশ পরিচিতি','প্রাক-প্রাথমিক'],['art','চারু ও কারুকলা','সহশিক্ষা'],['pe','শারীরিক কার্যক্রম','সহশিক্ষা']],
+  '1':[...CORE12,...CO], '2':[...CORE12,...CO],
+  '3':[...CORE35,...CO], '4':[...CORE35,...CO], '5':[...CORE35,...CO]
+};
+const SUBJ_COLORS = ['#1E8A55','#2563C9','#7C4DCC','#0E8C82','#D23F74','#E0701A','#4F46E5','#C27C0E','#1F4E8C','#B4235A','#0F766E','#6D3FB8'];
+
+const COMMITTEE_META = {
+  smc:{label:'এসএমসি', full:'বিদ্যালয় ব্যবস্থাপনা কমিটি (এসএমসি)', about:'বিদ্যালয়ের সার্বিক ব্যবস্থাপনা ও উন্নয়ন তদারকি', formed:'জানু ২০২৫', expires:'ডিসে ২০২৭', next:'১০ ডিসেম্বর, সকাল ১১টা',
+    meetings:[['১০','নভে','মাসিক সভা: বার্ষিক পরীক্ষার প্রস্তুতি','done'],['১২','অক্টো','মাসিক সভা: উপবৃত্তি ও ঝরে পড়া রোধ','done'],['০৮','সেপ্টে','বিশেষ সভা: শ্রেণিকক্ষ মেরামত','wait']]},
+  pta:{label:'পিটিএ', full:'শিক্ষক-অভিভাবক সমিতি (পিটিএ)', about:'শিক্ষার্থীর উপস্থিতি, পড়াশোনা ও অভিভাবক সংযোগ', formed:'মার্চ ২০২৫', expires:'ফেব্রু ২০২৭', next:'২২ নভেম্বর, দুপুর ১২টা',
+    meetings:[['২৫','অক্টো','অভিভাবক সমাবেশ: মা সমাবেশ','done'],['১৮','আগ','নিয়মিত উপস্থিতি নিশ্চিতকরণ','draft']]},
+  slip:{label:'স্লিপ', full:'স্লিপ কমিটি', about:'বিদ্যালয় পর্যায়ের উন্নয়ন পরিকল্পনা ও বরাদ্দ ব্যবস্থাপনা', formed:'জুলাই ২০২৬', expires:'জুন ২০২৭', next:'৫ ডিসেম্বর, সকাল ১০টা', budget:true,
+    meetings:[['০৩','নভে','ব্যয় পর্যালোচনা ও ক্রয় অনুমোদন','wait'],['১৫','জুলাই','বার্ষিক স্লিপ পরিকল্পনা অনুমোদন','done']]},
+};
+const STATUS = {done:['রেজুলেশন সম্পন্ন','#E3F4EA','#17663F'], wait:['স্বাক্ষর বাকি','#FFF1D6','#7A4A00'], draft:['খসড়া','#EEF1F6','#3E5070']};
+const PAL = ['#1E8A55','#2563C9','#D23F74','#7C4DCC','#0E8C82','#E0701A'];
+const m = (name, role) => ({id:uid(), name, role, phone:''});
+const DEFAULTS = () => ({
+  teacher:{name:'ফারজানা আক্তার', designation:'সহকারী শিক্ষক', school:'রূপনগর সরকারি প্রাথমিক বিদ্যালয়', mobile:''},
+  committees:{
+    smc:[m('মোঃ আব্দুল করিম','সভাপতি'),m('রাশেদা বেগম','সহ-সভাপতি'),m('নাসরিন সুলতানা','সদস্য সচিব (প্রধান শিক্ষক)'),m('ফারজানা আক্তার','শিক্ষক প্রতিনিধি'),m('মোঃ জসিম উদ্দিন','অভিভাবক প্রতিনিধি')],
+    pta:[m('সেলিনা আক্তার','সভাপতি (অভিভাবক)'),m('নাসরিন সুলতানা','সদস্য সচিব (প্রধান শিক্ষক)'),m('ফারজানা আক্তার','শিক্ষক সদস্য'),m('মোঃ মিজানুর হোসেন','অভিভাবক সদস্য')],
+    slip:[m('নাসরিন সুলতানা','আহ্বায়ক (প্রধান শিক্ষক)'),m('মোঃ আব্দুল করিম','এসএমসি প্রতিনিধি'),m('ফারজানা আক্তার','শিক্ষক প্রতিনিধি'),m('তানিয়া ইসলাম','অভিভাবক প্রতিনিধি')]
+  },
+  students:[], plans:[], customSubjects:{}
+});
+
+const KEY = 'shikkhok_app_v1';
+let canStore = true;
+let DB = (() => {
+  const d = DEFAULTS();
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) {
+      const s = JSON.parse(raw);
+      return {...d, ...s, teacher:{...d.teacher, ...(s.teacher||{})}, committees:{...d.committees, ...(s.committees||{})}};
+    }
+  } catch(e) { canStore = false; }
+  return d;
+})();
+function save(){
+  try { localStorage.setItem(KEY, JSON.stringify(DB)); return true; }
+  catch(e){ canStore = false; toast('এই ব্রাউজারে তথ্য সংরক্ষণ করা যাচ্ছে না'); return false; }
+}
+
+/* ---------- ui state ---------- */
+const UI = {committeeTab:'smc', showAllMembers:false, stuClass:'all', stuQuery:'', lpClass:'1', lpSubject:null};
+try { UI.committeeTab = localStorage.getItem('committeeTab') || 'smc'; } catch(e) {}
+
+const FEATURES_A = [
+  ['teacher-att','teacher','#1E8A55','শিক্ষক উপস্থিতি','হাজিরা ও আগমন-প্রস্থান'],
+  ['student-att','students','#2563C9','শিক্ষার্থী উপস্থিতি','শ্রেণিভিত্তিক হাজিরা'],
+  ['leave','leave','#E0701A','ছুটি ও আবেদন','আবেদন ও ছুটির হিসাব'],
+  ['lesson-plan','plan','#7C4DCC','পাঠ পরিকল্পনা','সকল শ্রেণি ও বিষয়'],
+  ['textbooks','book','#0E8C82','পাঠ্যবই','বই ও শিক্ষক সহায়িকা'],
+  ['student-profile','profile','#D23F74','শিক্ষার্থী প্রোফাইল','প্রোফাইল তৈরি ও সংরক্ষণ'],
+  ['assessment','tools','#4F46E5','মূল্যায়ন টুলস','নম্বর, ফলাফল ও অগ্রগতি'],
+  ['certificates','cert','#C27C0E','সনদ ও কাগজপত্র','প্রত্যয়নপত্র, ছাড়পত্র ও ফরম'],
+];
+const FEATURES_B = [
+  ['salary','salary','#1F4E8C','শিক্ষকের বেতন হিসাব ও ইনক্রিমেন্ট','বার্ষিক ইনক্রিমেন্ট: ১ জুলাই'],
+  ['gpf','gpf','#0E7C74','জিপিএফ (GPF) ও ল্যাম্প গ্রান্ট হিসাব','জমা, সুদ ও অগ্রিম উত্তোলন'],
+  ['pension','pension','#6D3FB8','পেনশন ও গ্রাচুইটি ক্যালকুলেটর','অবসরকালীন সুবিধার প্রাক্কলন'],
+];
+const ALL = Object.fromEntries([...FEATURES_A, ...FEATURES_B, ['committee','committee','#C0392B','কমিটি','']].map(f => [f[0], f]));
+
+const NOTIFS = [
+  {t:'এসএমসি সভা ১০ ডিসেম্বর সকাল ১১টায়', d:'আজ', read:false},
+  {t:'বার্ষিক পরীক্ষার সময়সূচি প্রকাশিত হয়েছে', d:'গতকাল', read:false},
+  {t:'স্লিপ ব্যয়ের রেজুলেশনে স্বাক্ষর বাকি', d:'৩ দিন আগে', read:false},
+  {t:'অক্টোবর মাসের বেতন বিবরণী প্রস্তুত', d:'১ সপ্তাহ আগে', read:true},
+];
+const unread = () => NOTIFS.filter(n => !n.read).length;
+
+const $app = document.getElementById('app');
+const $nav = document.getElementById('nav');
+
+function today(){ try { return new Date().toLocaleDateString('bn-BD',{weekday:'long',day:'numeric',month:'long',year:'numeric'}); } catch(e){ return ''; } }
+function greet(){ const h = new Date().getHours(); return h < 12 ? 'শুভ সকাল' : h < 16 ? 'শুভ দুপুর' : h < 19 ? 'শুভ বিকাল' : 'শুভ সন্ধ্যা'; }
+
+/* ---------- shared pieces ---------- */
+function innerHeader(title, iconKey, color, extra=''){
+  return `<header class="hdr slim">
+    <div class="top" style="justify-content:flex-start;gap:12px">
+      <button class="iconbtn" data-back aria-label="ফিরে যান">${ic('back')}</button>
+      <div style="flex:1;min-width:0"><h1 style="font-size:20px;line-height:1.3">${title}</h1><small style="font-size:12px;opacity:.92">${esc(DB.teacher.school)}</small></div>
+      ${iconKey?`<span aria-hidden="true" class="ib sm" style="background:${color}">${S(P[iconKey])}</span>`:''}
+    </div>${extra}
+  </header>`;
+}
+function topHeader(title, key){
+  return `<header class="hdr slim"><div class="top"><div class="sch"><span class="ic">${ic(key,24)}</span><div><b style="font-size:20px">${title}</b><small>${esc(DB.teacher.school)}</small></div></div></div></header>`;
+}
+const field = (id, label, input, req=false, hint='') => `<div class="field"><label for="${id}">${label}${req?' <em>*</em>':''}</label>${input}${hint?`<span class="hint">${hint}</span>`:''}</div>`;
+const inp = (id, val='', attrs='') => `<input id="${id}" name="${id}" value="${esc(val)}" ${attrs}>`;
+const ta = (id, val='', rows=3, attrs='') => `<textarea id="${id}" name="${id}" rows="${rows}" ${attrs}>${esc(val)}</textarea>`;
+const sel = (id, opts, val) => `<select id="${id}" name="${id}">${opts.map(o => { const [v,l] = Array.isArray(o)?o:[o,o]; return `<option value="${esc(v)}" ${v===val?'selected':''}>${esc(l)}</option>`; }).join('')}</select>`;
+const formData = f => Object.fromEntries(new FormData(f).entries());
+
+/* ---------- home ---------- */
+function tileA(f){
+  return `<button class="tile" data-go="${f[0]}"><span class="ib" style="background:${f[2]};box-shadow:0 6px 14px ${f[2]}40">${S(P[f[1]])}</span><span><span class="t1">${f[3]}</span><span class="t2">${f[4]}</span></span></button>`;
+}
+function rowB(f){
+  return `<button class="lrow" data-go="${f[0]}"><span class="ib" style="background:${f[2]};box-shadow:0 6px 14px ${f[2]}40">${S(P[f[1]])}</span><span class="grow"><span class="t1">${f[3]}</span><span class="t2">${f[4]}</span></span><span style="color:var(--mute)">${ic('chev',20)}</span></button>`;
+}
+function home(){
+  const t = DB.teacher;
+  return `
+  <header class="hdr">
+    <div class="top">
+      <div class="sch"><span class="ic">${ic('school',24)}</span><div style="min-width:0"><b>${esc(t.school)}</b><small>${today()}</small></div></div>
+      <button class="iconbtn" id="bell" aria-label="নোটিফিকেশন, ${bn(unread())}টি নতুন">${ic('bell')}${unread()?`<span class="badge">${bn(unread())}</span>`:''}</button>
+    </div>
+    <button class="me" data-go="profile" aria-label="প্রোফাইল সম্পাদনা">
+      <div class="av" aria-hidden="true">${esc(initials(t.name))}</div>
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <span style="font-size:13px;opacity:.92">${greet()},</span>
+        <span style="font-size:20px;font-weight:700;line-height:1.3">${esc(t.name)}</span>
+        <span><span class="chip">${esc(t.designation)}</span><span class="editpen">${ic('edit',14)} সম্পাদনা</span></span>
+      </div>
+    </button>
+  </header>
+  <section class="card overlap" aria-label="আজকের সারসংক্ষেপ">
+    <div class="top"><h2 style="font-size:16px">আজকের উপস্থিতি</h2><span class="pill"><span style="color:#C77700;display:flex">${ic('cloud',16)}</span>২৬° আংশিক মেঘলা</span></div>
+    <div class="row2">
+      <div class="stat" style="background:#E8F5EE"><span style="font-size:13px;color:#2F4A3B">শিক্ষক</span><span class="n">৫<span> / ৬ জন</span></span><div class="bar" style="background:#CFE6D9"><i style="width:83%;background:#1E7F4F"></i></div><span style="font-size:12px;color:#2F4A3B">১ জন ছুটিতে</span></div>
+      <div class="stat" style="background:#E9EFF8"><span style="font-size:13px;color:#2C3F5E">শিক্ষার্থী</span><span class="n">২১৪<span> / ২৩৮ জন</span></span><div class="bar" style="background:#CBD8EC"><i style="width:90%;background:#1F3A68"></i></div><span style="font-size:12px;color:#2C3F5E">উপস্থিতি ৯০%</span></div>
+    </div>
+    <div class="ticker"><b>${ic('mega',16)} নোটিশ</b><div class="tkw"><div class="tk">
+      <span>বার্ষিক পরীক্ষার সময়সূচি প্রকাশিত হয়েছে</span><span>১৬ ডিসেম্বর বিজয় দিবস — বিদ্যালয় বন্ধ থাকবে</span><span>উপবৃত্তির তথ্য হালনাগাদের শেষ তারিখ শীঘ্রই</span>
+      <span aria-hidden="true">বার্ষিক পরীক্ষার সময়সূচি প্রকাশিত হয়েছে</span><span aria-hidden="true">১৬ ডিসেম্বর বিজয় দিবস — বিদ্যালয় বন্ধ থাকবে</span><span aria-hidden="true">উপবৃত্তির তথ্য হালনাগাদের শেষ তারিখ শীঘ্রই</span>
+    </div></div></div>
+  </section>
+  <section class="sec" aria-label="দাপ্তরিক ও পাঠদান">
+    <div class="sech"><i style="background:#1E7F4F"></i>দাপ্তরিক ও পাঠদান</div>
+    <div class="row2">
+      ${FEATURES_A.map(tileA).join('')}
+      <button class="tile wide" data-go="committee"><span class="ib" style="background:#C0392B;box-shadow:0 6px 14px #C0392B40">${S(P.committee)}</span><span class="grow"><span class="t1">কমিটি</span><span class="t2">এসএমসি, পিটিএ, স্লিপ কমিটি ও সভার রেজুলেশন</span></span><span style="color:var(--mute)">${ic('chev',20)}</span></button>
+    </div>
+  </section>
+  <section class="sec" style="padding-bottom:20px" aria-label="আর্থিক ও অবসর সেবা">
+    <div class="sech"><i style="background:#1F3A68"></i>আর্থিক ও অবসর সেবা</div>
+    <div style="display:flex;flex-direction:column;gap:10px">${FEATURES_B.map(rowB).join('')}</div>
+  </section>`;
+}
+
+/* ---------- profile (teacher + school) ---------- */
+const DESIGNATIONS = ['সহকারী শিক্ষক','প্রধান শিক্ষক','ভারপ্রাপ্ত প্রধান শিক্ষক','চলতি দায়িত্বপ্রাপ্ত প্রধান শিক্ষক'];
+function profile(){
+  const t = DB.teacher;
+  return topHeader('প্রোফাইল','user') + `
+  <div class="card" style="margin:16px">
+    <div style="display:flex;align-items:center;gap:14px">
+      <div class="av" style="border-color:var(--gt)" aria-hidden="true">${esc(initials(t.name))}</div>
+      <div><span class="t1" style="font-size:18px">${esc(t.name)}</span><span class="t2">${esc(t.designation)}</span></div>
+    </div>
+    <form class="f" id="profileForm">
+      ${field('school','বিদ্যালয়ের নাম', inp('school', t.school, 'required maxlength="120"'), true)}
+      ${field('name','শিক্ষকের নাম', inp('name', t.name, 'required maxlength="80"'), true)}
+      ${field('designation','পদবি', sel('designation', DESIGNATIONS.includes(t.designation)?DESIGNATIONS:[t.designation,...DESIGNATIONS], t.designation))}
+      ${field('mobile','মোবাইল নম্বর', inp('mobile', t.mobile, 'type="tel" inputmode="tel" maxlength="20" placeholder="০১XXXXXXXXX"'))}
+      <button type="submit" class="btn solid big">সংরক্ষণ করুন</button>
+    </form>
+  </div>`;
+}
+
+/* ---------- committee ---------- */
+function committee(){
+  const k = UI.committeeTab, c = COMMITTEE_META[k], mem = DB.committees[k] || [];
+  const shown = UI.showAllMembers ? mem : mem.slice(0, 5);
+  const seg = `<div class="seg" role="tablist" aria-label="কমিটির ধরন">${Object.entries(COMMITTEE_META).map(([kk,v]) => `<button role="tab" aria-selected="${kk===k}" class="${kk===k?'on':''}" data-ctab="${kk}">${v.label}</button>`).join('')}</div>`;
+  return innerHeader('কমিটি','committee','#C0392B',seg) + `
+  <section class="card" style="margin:16px 16px 0">
+    <div><h2 style="font-size:17px">${c.full}</h2><span class="t2" style="font-size:13px">${c.about}</span></div>
+    <div class="mini"><div><small>সদস্য</small><b style="font-size:17px">${bn(mem.length)} জন</b></div><div><small>গঠন</small><b>${c.formed}</b></div><div><small>মেয়াদ শেষ</small><b>${c.expires}</b></div></div>
+    <div class="next"><span class="ib sm" style="background:#1E8A55">${S(P.cal)}</span><span class="grow"><span class="t2" style="color:#2F4A3B">পরবর্তী সভা</span><span class="t1">${c.next}</span></span></div>
+    ${c.budget?`<div style="display:flex;flex-direction:column;gap:8px;border-top:1px solid #E8EEF5;padding-top:12px">
+      <div class="top"><b style="font-size:14px">স্লিপ বরাদ্দ ও ব্যয়</b><span class="t2">অর্থবছর ২০২৬–২৭</span></div>
+      <div class="bar" style="height:10px;background:#E9EFF8"><i style="width:61%;background:#1F4E8C"></i></div>
+      <div class="top" style="font-size:13px"><span>ব্যয়: <b>৳৪২,৫০০</b></span><span>বরাদ্দ: <b>৳৭০,০০০</b></span></div></div>`:''}
+  </section>
+  <section class="sec">
+    <div class="top"><h2 style="font-size:17px">সদস্য তালিকা</h2><button class="btn" data-member-new>${ic('plus',18)} সদস্য যোগ</button></div>
+    ${mem.length ? `<div class="list">${shown.map((p,i) => `
+      <div class="mem">
+        <span class="ma" style="background:${PAL[i%PAL.length]}" aria-hidden="true">${esc(initials(p.name))}</span>
+        <span class="grow"><span class="t1" style="font-weight:600">${esc(p.name)}</span><span class="t2">${esc(p.role)}${p.phone?' · '+esc(p.phone):''}</span></span>
+        ${p.phone?`<a class="sq" href="tel:${esc(p.phone.replace(/[^\d+]/g,''))}" aria-label="${esc(p.name)}-কে ফোন করুন">${ic('phone',20)}</a>`:''}
+        <button class="sq blue" data-member="${p.id}" aria-label="${esc(p.name)} সম্পাদনা">${ic('edit',20)}</button>
+      </div>`).join('')}</div>
+      ${mem.length > 5 ? `<button class="btn ghost" data-toggle-members>${UI.showAllMembers?'কম দেখুন':`সবাই দেখুন (${bn(mem.length)} জন)`}</button>`:''}`
+    : `<div class="card empty"><p class="t2" style="font-size:14px">এখনও কোনো সদস্য যোগ করা হয়নি।</p></div>`}
+  </section>
+  <section class="sec">
+    <h2 style="font-size:17px">সভা ও রেজুলেশন</h2>
+    ${c.meetings.map(g => { const s = STATUS[g[3]]; return `<div class="lrow"><span class="date"><b>${g[0]}</b><small>${g[1]}</small></span><span class="grow"><span class="t1" style="font-size:14px;font-weight:600">${g[2]}</span><span class="st" style="background:${s[1]};color:${s[2]}">${s[0]}</span></span></div>`; }).join('')}
+    <p class="hint">সভা ও রেজুলেশনের তালিকাটি নমুনা; সংরক্ষণের সুবিধা পরের সংস্করণে আসবে।</p>
+  </section>`;
+}
+function memberSheet(id){
+  const k = UI.committeeTab, list = DB.committees[k];
+  const p = id ? list.find(x => x.id === id) : {name:'', role:'', phone:''};
+  if (!p) return;
+  openSheet(`<form class="f" id="memberForm">
+    <h2 style="font-size:18px">${id?'সদস্যের তথ্য সম্পাদনা':'নতুন সদস্য'} — ${COMMITTEE_META[k].label}</h2>
+    ${field('mname','নাম', inp('mname', p.name, 'required maxlength="80"'), true)}
+    ${field('mrole','পদ', inp('mrole', p.role, 'required maxlength="60" list="roles" placeholder="যেমন: সভাপতি, সদস্য"'), true)}
+    <datalist id="roles"><option value="সভাপতি"><option value="সহ-সভাপতি"><option value="সদস্য সচিব (প্রধান শিক্ষক)"><option value="শিক্ষক প্রতিনিধি"><option value="অভিভাবক প্রতিনিধি"><option value="দাতা সদস্য"><option value="সদস্য"></datalist>
+    ${field('mphone','মোবাইল নম্বর', inp('mphone', p.phone, 'type="tel" inputmode="tel" maxlength="20"'))}
+    <div class="row2"><button type="button" class="btn big" data-close>বাতিল</button><button type="submit" class="btn big solid">সংরক্ষণ</button></div>
+    ${id?`<button type="button" class="btn danger full" data-member-del="${id}">${ic('trash',18)} সদস্য মুছুন</button>`:''}
+  </form>`);
+  document.getElementById('memberForm').addEventListener('submit', e => {
+    e.preventDefault();
+    const d = formData(e.target);
+    const rec = {name:d.mname.trim(), role:d.mrole.trim(), phone:d.mphone.trim()};
+    if (!rec.name || !rec.role) return;
+    if (id) Object.assign(p, rec); else list.push({id:uid(), ...rec});
+    if (save()) toast(id?'সদস্যের তথ্য হালনাগাদ হয়েছে':'নতুন সদস্য যোগ হয়েছে');
+    closeSheet(); render();
+  });
+}
+
+/* ---------- students ---------- */
+const GENDERS = ['ছেলে','মেয়ে','অন্যান্য'];
+function students(){
+  const q = UI.stuQuery.trim().toLowerCase();
+  const all = DB.students;
+  const list = all.filter(s => (UI.stuClass==='all' || s.cls===UI.stuClass) && (!q || [s.name,s.roll,s.father,s.mother,s.phone].join(' ').toLowerCase().includes(q)))
+    .sort((a,b) => (a.cls+'').localeCompare(b.cls+'') || (parseInt(a.roll)||999) - (parseInt(b.roll)||999));
+  const cnt = c => all.filter(s => s.cls===c).length;
+  return innerHeader('শিক্ষার্থী প্রোফাইল','profile','#D23F74') + `
+  <div class="sec" style="padding-top:16px">
+    <button class="btn solid big full" data-stu-new>${ic('plus',20)} নতুন শিক্ষার্থী যোগ করুন</button>
+    <label class="search">${ic('search',20)}<input id="stuSearch" type="search" placeholder="নাম, রোল বা অভিভাবকের নাম খুঁজুন" value="${esc(UI.stuQuery)}" aria-label="শিক্ষার্থী খুঁজুন"></label>
+    <div class="chips" role="tablist" aria-label="শ্রেণি অনুযায়ী">
+      <button class="${UI.stuClass==='all'?'on':''}" data-stu-class="all">সব (${bn(all.length)})</button>
+      ${CLASSES.map(([k,l]) => `<button class="${UI.stuClass===k?'on':''}" data-stu-class="${k}">${l} (${bn(cnt(k))})</button>`).join('')}
+    </div>
+    <div id="stuList">${stuListHtml(list)}</div>
+  </div>`;
+}
+function stuListHtml(list){
+  if (!DB.students.length) return `<div class="card empty"><span class="ib" style="background:#D23F74">${S(P.profile)}</span><h2 style="font-size:17px">এখনও কোনো শিক্ষার্থী নেই</h2><p class="t2" style="font-size:14px;line-height:1.6">উপরের বোতাম চেপে প্রথম শিক্ষার্থীর প্রোফাইল তৈরি করুন। সব তথ্য এই ফোনেই সংরক্ষিত থাকবে।</p></div>`;
+  if (!list.length) return `<div class="card empty"><p class="t2" style="font-size:14px">এই খোঁজে কোনো শিক্ষার্থী পাওয়া যায়নি।</p></div>`;
+  return `<div class="list">${list.map((s,i) => `<button class="mem tap" data-stu="${s.id}">
+    <span class="ma" style="background:${s.gender==='মেয়ে'?'#D23F74':s.gender==='ছেলে'?'#2563C9':'#7C4DCC'}" aria-hidden="true">${esc(initials(s.name))}</span>
+    <span class="grow"><span class="t1" style="font-weight:600">${esc(s.name)}</span><span class="t2">${CLASS_NAME[s.cls]||''}${s.section?' ('+esc(s.section)+')':''}${s.roll?' · রোল '+esc(bn(s.roll)):''}${s.phone?' · '+esc(s.phone):''}</span></span>
+    <span style="color:var(--mute)">${ic('chev',20)}</span></button>`).join('')}</div>`;
+}
+function studentSheet(id){
+  const s = id ? DB.students.find(x => x.id === id) : {cls: UI.stuClass==='all' ? '1' : UI.stuClass, gender:'ছেলে'};
+  if (!s) return;
+  openSheet(`<form class="f" id="stuForm" novalidate>
+    <h2 style="font-size:18px">${id?'শিক্ষার্থীর প্রোফাইল':'নতুন শিক্ষার্থী'}</h2>
+    <h3 style="font-size:14px;color:var(--g)">মৌলিক তথ্য</h3>
+    ${field('s_name','শিক্ষার্থীর নাম', inp('s_name', s.name, 'required maxlength="80"'), true)}
+    <div class="row2">
+      ${field('s_cls','শ্রেণি', sel('s_cls', CLASSES, s.cls), true)}
+      ${field('s_section','শাখা', inp('s_section', s.section, 'maxlength="10" placeholder="যেমন: ক"'))}
+    </div>
+    <div class="row2">
+      ${field('s_roll','রোল', inp('s_roll', s.roll, 'inputmode="numeric" maxlength="5"'))}
+      ${field('s_gender','লিঙ্গ', sel('s_gender', GENDERS, s.gender))}
+    </div>
+    <div class="row2">
+      ${field('s_dob','জন্ম তারিখ', inp('s_dob', s.dob, 'type="date"'))}
+      ${field('s_blood','রক্তের গ্রুপ', sel('s_blood', ['','A+','A-','B+','B-','AB+','AB-','O+','O-'].map(v=>[v,v||'জানা নেই']), s.blood||''))}
+    </div>
+    ${field('s_birthreg','জন্ম নিবন্ধন নম্বর', inp('s_birthreg', s.birthreg, 'inputmode="numeric" maxlength="20"'), false, '১৭ সংখ্যার নম্বর')}
+    <h3 style="font-size:14px;color:var(--g);margin-top:4px">অভিভাবকের তথ্য</h3>
+    ${field('s_father','পিতার নাম', inp('s_father', s.father, 'maxlength="80"'))}
+    ${field('s_mother','মাতার নাম', inp('s_mother', s.mother, 'maxlength="80"'))}
+    ${field('s_phone','অভিভাবকের মোবাইল', inp('s_phone', s.phone, 'type="tel" inputmode="tel" maxlength="20" placeholder="০১XXXXXXXXX"'))}
+    ${field('s_address','ঠিকানা', ta('s_address', s.address, 2, 'maxlength="200"'))}
+    <h3 style="font-size:14px;color:var(--g);margin-top:4px">অন্যান্য</h3>
+    ${field('s_stipend','উপবৃত্তি', sel('s_stipend', [['','নির্বাচন করুন'],['হ্যাঁ','পায়'],['না','পায় না']], s.stipend||''))}
+    ${field('s_notes','বিশেষ মন্তব্য', ta('s_notes', s.notes, 2, 'maxlength="300" placeholder="স্বাস্থ্য, বিশেষ চাহিদা ইত্যাদি"'))}
+    <p class="hint" id="stuErr" style="color:var(--red);display:none"></p>
+    <div class="row2"><button type="button" class="btn big" data-close>বাতিল</button><button type="submit" class="btn big solid">সংরক্ষণ</button></div>
+    ${id?`<button type="button" class="btn danger full" data-stu-del="${id}">${ic('trash',18)} প্রোফাইল মুছুন</button>`:''}
+  </form>`);
+  document.getElementById('stuForm').addEventListener('submit', e => {
+    e.preventDefault();
+    const d = formData(e.target);
+    const err = document.getElementById('stuErr');
+    if (!d.s_name.trim()) { err.textContent = 'শিক্ষার্থীর নাম লিখুন।'; err.style.display='block'; document.getElementById('s_name').focus(); return; }
+    const rec = {name:d.s_name.trim(), cls:d.s_cls, section:d.s_section.trim(), roll:d.s_roll.trim(), gender:d.s_gender, dob:d.s_dob, blood:d.s_blood,
+      birthreg:d.s_birthreg.trim(), father:d.s_father.trim(), mother:d.s_mother.trim(), phone:d.s_phone.trim(), address:d.s_address.trim(), stipend:d.s_stipend, notes:d.s_notes.trim(), updated:Date.now()};
+    if (rec.roll && DB.students.some(x => x.id !== id && x.cls === rec.cls && (x.section||'') === rec.section && x.roll === rec.roll)) {
+      err.textContent = `${CLASS_NAME[rec.cls]}-এ রোল ${bn(rec.roll)} আগে থেকেই আছে।`; err.style.display='block'; return;
+    }
+    if (id) Object.assign(s, rec); else DB.students.push({id:uid(), created:Date.now(), ...rec});
+    if (save()) toast(id?'প্রোফাইল হালনাগাদ হয়েছে':'শিক্ষার্থীর প্রোফাইল সংরক্ষিত হয়েছে');
+    closeSheet(); render();
+  });
+}
+
+/* ---------- lesson plans ---------- */
+function subjectsFor(cls){
+  return [...SUBJECTS[cls], ...((DB.customSubjects||{})[cls]||[]).map(s => [s.id, s.name, 'নিজের যোগ করা', true])];
+}
+function lessonPlan(){
+  const cls = UI.lpClass, subs = subjectsFor(cls);
+  const plansOf = sid => DB.plans.filter(p => p.cls===cls && p.subject===sid);
+  const chips = `<div class="chips" role="tablist" aria-label="শ্রেণি">${CLASSES.map(([k,l]) => `<button class="${k===cls?'on':''}" data-lp-class="${k}">${l}</button>`).join('')}</div>`;
+  let body;
+  if (!UI.lpSubject) {
+    body = `
+      <div class="top"><h2 style="font-size:17px">${CLASS_NAME[cls]} — বিষয়সমূহ</h2><span class="count">${bn(subs.length)}টি বিষয়</span></div>
+      <div class="row2">
+        ${subs.map((s,i) => { const n = plansOf(s[0]).length; const col = SUBJ_COLORS[i % SUBJ_COLORS.length];
+          return `<button class="subj" data-lp-subject="${esc(s[0])}"><span class="ib sm" style="background:${col}">${S(P.book)}</span><span><span class="t1" style="font-size:14px">${esc(s[1])}</span><span class="t2">${esc(s[2])}</span></span><span class="count">${n?bn(n)+'টি পরিকল্পনা':'কোনো পরিকল্পনা নেই'}</span></button>`; }).join('')}
+        <button class="subj add" data-lp-addsub>${ic('plus',26)}বিষয় যোগ করুন</button>
+      </div>`;
+  } else {
+    const s = subs.find(x => x[0]===UI.lpSubject) || subs[0];
+    const plans = plansOf(s[0]).sort((a,b) => (b.date||'').localeCompare(a.date||''));
+    body = `
+      <button class="crumb" data-lp-subject="">${ic('back',18)} সব বিষয়</button>
+      <div class="top"><div><h2 style="font-size:18px">${esc(s[1])}</h2><span class="t2">${CLASS_NAME[cls]} · ${esc(s[2])}</span></div>
+        ${s[3]?`<button class="btn danger ghost" data-lp-delsub="${esc(s[0])}" aria-label="বিষয় মুছুন">${ic('trash',18)}</button>`:''}</div>
+      <button class="btn solid big full" data-plan-new>${ic('plus',20)} নতুন পাঠ পরিকল্পনা</button>
+      ${plans.length ? plans.map(p => { const [d,mo] = dayMon(p.date); return `<button class="plan" data-plan="${p.id}"><span class="date"><b>${esc(d)}</b><small>${esc(mo)}</small></span><span class="grow"><span class="t1" style="font-size:14px">${esc(p.title)}</span><span class="t2 clamp">${esc(p.outcomes || p.activities || '')}</span>${p.period?`<span class="st" style="background:#F1EAFA;color:#5B2F99">${esc(p.period)}</span>`:''}</span><span style="color:var(--mute);align-self:center">${ic('chev',20)}</span></button>`; }).join('')
+        : `<div class="card empty"><span class="ib" style="background:#7C4DCC">${S(P.plan)}</span><p class="t2" style="font-size:14px;line-height:1.6">এই বিষয়ে এখনও কোনো পাঠ পরিকল্পনা নেই। উপরের বোতাম চেপে প্রথমটি তৈরি করুন।</p></div>`}`;
+  }
+  return innerHeader('পাঠ পরিকল্পনা','plan','#7C4DCC') + `<div class="sec" style="padding-top:16px">${chips}${body}</div>`;
+}
+function planSheet(id){
+  const cls = UI.lpClass, s = subjectsFor(cls).find(x => x[0]===UI.lpSubject);
+  const p = id ? DB.plans.find(x => x.id===id) : {date: todayISO()};
+  if (!p || !s) return;
+  openSheet(`<form class="f" id="planForm">
+    <h2 style="font-size:18px">${id?'পাঠ পরিকল্পনা':'নতুন পাঠ পরিকল্পনা'}</h2>
+    <p class="t2" style="font-size:13px">${CLASS_NAME[cls]} · ${esc(s[1])}</p>
+    <div class="row2">
+      ${field('p_date','তারিখ', inp('p_date', p.date, 'type="date" required'), true)}
+      ${field('p_period','পিরিয়ড / সময়', inp('p_period', p.period, 'maxlength="30" placeholder="যেমন: ২য় পিরিয়ড"'))}
+    </div>
+    ${field('p_title','পাঠ শিরোনাম / অধ্যায়', inp('p_title', p.title, 'required maxlength="120" placeholder="যেমন: অধ্যায় ৩ — ভগ্নাংশ"'), true)}
+    ${field('p_pages','পাঠ্যবইয়ের পৃষ্ঠা', inp('p_pages', p.pages, 'maxlength="30" placeholder="যেমন: ২৪–২৬"'))}
+    ${field('p_outcomes','শিখনফল', ta('p_outcomes', p.outcomes, 3, 'maxlength="800" placeholder="পাঠ শেষে শিক্ষার্থীরা..."'))}
+    ${field('p_materials','শিক্ষণ উপকরণ', ta('p_materials', p.materials, 2, 'maxlength="400" placeholder="চার্ট, ছবি, বাস্তব উপকরণ..."'))}
+    ${field('p_activities','শিক্ষণ-শিখন কার্যাবলি', ta('p_activities', p.activities, 5, 'maxlength="2000" placeholder="১. শুভেচ্ছা ও পূর্বজ্ঞান যাচাই&#10;২. পাঠ উপস্থাপন&#10;৩. দলীয়/জোড়ায় কাজ"'))}
+    ${field('p_assessment','মূল্যায়ন', ta('p_assessment', p.assessment, 2, 'maxlength="600" placeholder="প্রশ্নোত্তর, পর্যবেক্ষণ..."'))}
+    ${field('p_homework','বাড়ির কাজ', ta('p_homework', p.homework, 2, 'maxlength="400"'))}
+    <div class="row2"><button type="button" class="btn big" data-close>বাতিল</button><button type="submit" class="btn big solid">সংরক্ষণ</button></div>
+    ${id?`<button type="button" class="btn danger full" data-plan-del="${id}">${ic('trash',18)} পরিকল্পনা মুছুন</button>`:''}
+  </form>`);
+  document.getElementById('planForm').addEventListener('submit', e => {
+    e.preventDefault();
+    const d = formData(e.target);
+    if (!d.p_title.trim() || !d.p_date) return;
+    const rec = {cls, subject:s[0], date:d.p_date, period:d.p_period.trim(), title:d.p_title.trim(), pages:d.p_pages.trim(), outcomes:d.p_outcomes.trim(),
+      materials:d.p_materials.trim(), activities:d.p_activities.trim(), assessment:d.p_assessment.trim(), homework:d.p_homework.trim(), updated:Date.now()};
+    if (id) Object.assign(p, rec); else DB.plans.push({id:uid(), created:Date.now(), ...rec});
+    if (save()) toast(id?'পাঠ পরিকল্পনা হালনাগাদ হয়েছে':'পাঠ পরিকল্পনা সংরক্ষিত হয়েছে');
+    closeSheet(); render();
+  });
+}
+function addSubjectSheet(){
+  openSheet(`<form class="f" id="subForm">
+    <h2 style="font-size:18px">নতুন বিষয় — ${CLASS_NAME[UI.lpClass]}</h2>
+    ${field('sub_name','বিষয়ের নাম', inp('sub_name','', 'required maxlength="60" placeholder="যেমন: বাংলাদেশের সংস্কৃতি"'), true)}
+    <div class="row2"><button type="button" class="btn big" data-close>বাতিল</button><button type="submit" class="btn big solid">যোগ করুন</button></div>
+  </form>`);
+  document.getElementById('subForm').addEventListener('submit', e => {
+    e.preventDefault();
+    const name = formData(e.target).sub_name.trim();
+    if (!name) return;
+    DB.customSubjects = DB.customSubjects || {};
+    (DB.customSubjects[UI.lpClass] = DB.customSubjects[UI.lpClass] || []).push({id:'c-'+uid(), name});
+    if (save()) toast('বিষয় যোগ হয়েছে');
+    closeSheet(); render();
+  });
+}
+
+/* ---------- settings ---------- */
+function settings(){
+  return topHeader('সেটিংস','gear') + `
+  <div class="sec" style="padding-top:16px">
+    <div class="card">
+      <h2 style="font-size:16px">তথ্য সংরক্ষণ</h2>
+      <p class="t2" style="font-size:14px;line-height:1.6">সব তথ্য শুধু এই ফোনে সংরক্ষিত থাকে। অ্যাপ মুছে ফেললে বা ফোন বদলালে তথ্য হারিয়ে যাবে, তাই মাঝে মাঝে ব্যাকআপ নিন।</p>
+      <dl class="kv"><dt>শিক্ষার্থী</dt><dd>${bn(DB.students.length)} জন</dd><dt>পাঠ পরিকল্পনা</dt><dd>${bn(DB.plans.length)}টি</dd><dt>কমিটি সদস্য</dt><dd>${bn(Object.values(DB.committees).reduce((a,b)=>a+b.length,0))} জন</dd></dl>
+      ${canStore?'':'<p class="hint" style="color:var(--red)">এই ব্রাউজারে সংরক্ষণ বন্ধ আছে; তথ্য পেজ বন্ধ করলে হারিয়ে যাবে।</p>'}
+      <button class="btn big full" data-backup>${ic('copy',20)} ব্যাকআপ কপি করুন</button>
+      <button class="btn big full" data-restore>${ic('upload',20)} ব্যাকআপ থেকে ফেরত আনুন</button>
+    </div>
+    <div class="card">
+      <h2 style="font-size:16px">অ্যাপ আপডেট</h2>
+      ${(() => { const i = appInfo(); return BR
+        ? `<dl class="kv"><dt>অ্যাপ (APK)</dt><dd>সংস্করণ ${bn(i.apk||'')}</dd><dt>বিষয়বস্তু</dt><dd>সংস্করণ ${bn(i.content||'')}</dd></dl>
+           <p class="t2" style="font-size:14px;line-height:1.6">অ্যাপ খুললেই নিজে থেকে আপডেট খোঁজে। ছোট আপডেট নিজে থেকেই নেমে আসে; বড় আপডেটে নতুন APK ডাউনলোড করতে বলবে। আপনার তথ্য কখনো মুছবে না।</p>
+           <p class="updline" id="updLine" role="status">${UPD_TEXT[UPD.state]||''}</p>
+           ${UPD.state==='web'?'<button class="btn solid big full" data-upd-apply>আপডেট চালু করুন</button>':UPD.state==='apk'?'<button class="btn solid big full" data-upd-apk>নতুন APK ডাউনলোড করুন</button>':''}
+           <button class="btn big full" data-upd-check>${ic('refresh',20)} এখনই আপডেট খুঁজুন</button>`
+        : `<dl class="kv"><dt>সংস্করণ</dt><dd>${bn(WEB_VERSION)}</dd></dl><p class="t2" style="font-size:14px;line-height:1.6">${UPD_TEXT.webapp}</p>`; })()}
+    </div>
+    <div class="card">
+      <h2 style="font-size:16px">সব তথ্য মুছুন</h2>
+      <p class="t2" style="font-size:14px;line-height:1.6">শিক্ষার্থী, পাঠ পরিকল্পনা, কমিটি ও প্রোফাইলের সব তথ্য মুছে অ্যাপ শুরুর অবস্থায় ফিরবে।</p>
+      <button class="btn danger big full" data-reset>${ic('trash',20)} সব তথ্য মুছুন</button>
+    </div>
+    <p class="hint" style="text-align:center">প্রাথমিক শিক্ষক অ্যাপ · সংস্করণ ${bn(appInfo().content || WEB_VERSION)}</p>
+  </div>`;
+}
+function backupSheet(){
+  const json = JSON.stringify(DB);
+  openSheet(`<h2 style="font-size:18px;margin-bottom:8px">ব্যাকআপ</h2>
+    <p class="t2" style="font-size:14px;line-height:1.6;margin-bottom:10px">নিচের লেখাটি কপি করে নিজের ইমেইল, WhatsApp বা Google Drive-এ রেখে দিন। পরে "ব্যাকআপ থেকে ফেরত আনুন"-এ বসালে সব তথ্য ফিরে আসবে।</p>
+    <div class="field"><textarea id="bk" rows="6" readonly aria-label="ব্যাকআপ লেখা">${esc(json)}</textarea></div>
+    <div class="row2" style="margin-top:12px"><button class="btn big" data-close>বন্ধ করুন</button><button class="btn big solid" data-copy-bk>${ic('copy',18)} কপি</button></div>`);
+}
+function restoreSheet(){
+  openSheet(`<form class="f" id="rsForm">
+    <h2 style="font-size:18px">ব্যাকআপ থেকে ফেরত আনুন</h2>
+    <p class="t2" style="font-size:14px;line-height:1.6">আগে কপি করা ব্যাকআপ লেখাটি এখানে পেস্ট করুন। বর্তমান সব তথ্য এর দ্বারা বদলে যাবে।</p>
+    ${field('rs','ব্যাকআপ লেখা', ta('rs','',6,'required'), true)}
+    <p class="hint" id="rsErr" style="color:var(--red);display:none">লেখাটি সঠিক ব্যাকআপ নয়।</p>
+    <div class="row2"><button type="button" class="btn big" data-close>বাতিল</button><button type="submit" class="btn big solid">ফেরত আনুন</button></div>
+  </form>`);
+  document.getElementById('rsForm').addEventListener('submit', e => {
+    e.preventDefault();
+    try {
+      const s = JSON.parse(formData(e.target).rs);
+      if (!s || !s.teacher || !s.committees || !Array.isArray(s.students)) throw 0;
+      const d = DEFAULTS();
+      DB = {...d, ...s, teacher:{...d.teacher, ...s.teacher}, plans:Array.isArray(s.plans)?s.plans:[]};
+      if (save()) toast('ব্যাকআপ থেকে তথ্য ফেরত এসেছে');
+      closeSheet(); render();
+    } catch(_) { document.getElementById('rsErr').style.display='block'; }
+  });
+}
+function confirmSheet(title, msg, okLabel, onOk){
+  openSheet(`<h2 style="font-size:18px;margin-bottom:8px">${title}</h2><p class="t2" style="font-size:14px;line-height:1.6;margin-bottom:16px">${msg}</p>
+    <div class="row2"><button class="btn big" data-close>বাতিল</button><button class="btn big danger solid" id="okBtn">${okLabel}</button></div>`);
+  document.getElementById('okBtn').addEventListener('click', () => { onOk(); closeSheet(); render(); });
+}
+
+/* ---------- placeholders ---------- */
+function placeholder(id){
+  const f = ALL[id];
+  const nav = {routine:['রুটিন','clock'],reports:['রিপোর্ট','report']}[id];
+  const title = f ? f[3] : nav[0], key = f ? f[1] : nav[1], color = f ? f[2] : '#1E7F4F';
+  return (f ? innerHeader(title, key, color) : topHeader(title, key)) + `
+  <div class="card empty">
+    <span class="ib" style="background:${color};box-shadow:0 6px 14px ${color}40">${S(P[key])}</span>
+    <h2 style="font-size:18px">${title}</h2>
+    <p style="color:var(--mute);font-size:14px;line-height:1.6">এই অংশটি তৈরির কাজ চলছে। শীঘ্রই এখানে পূর্ণাঙ্গ সুবিধা যুক্ত হবে।</p>
+    ${f ? '<button class="btn solid" data-back>হোমে ফিরে যান</button>' : ''}
+  </div>`;
+}
+
+/* ---------- router ---------- */
+const NAV = [['home','হোম','home'],['routine','রুটিন','clock'],['reports','রিপোর্ট','report'],['profile','প্রোফাইল','user'],['settings','সেটিংস','gear']];
+const TOP = NAV.map(n => n[0]);
+const ROUTE_ALIAS = {'student-profile':'students'};
+function render(){
+  let r = (location.hash || '#home').slice(1) || 'home';
+  r = ROUTE_ALIAS[r] || r;
+  if (!(TOP.includes(r) || r==='committee' || r==='students' || r==='lesson-plan' || ALL[r])) r = 'home';
+  const inner = !TOP.includes(r);
+  $app.classList.toggle('inner', inner);
+  $nav.style.display = inner ? 'none' : 'grid';
+  const views = {home, profile, settings, committee, students, 'lesson-plan':lessonPlan};
+  $app.innerHTML = (views[r] || (() => placeholder(r)))();
+  $nav.innerHTML = NAV.map(n => `<button class="${n[0]===r?'on':''}" data-go="${n[0]}" aria-label="${n[1]}" ${n[0]===r?'aria-current="page"':''}><span class="p">${ic(n[2])}</span>${n[1]}</button>`).join('');
+  bindView(r);
+}
+function bindView(r){
+  if (r === 'profile') {
+    document.getElementById('profileForm').addEventListener('submit', e => {
+      e.preventDefault();
+      const d = formData(e.target);
+      if (!d.school.trim() || !d.name.trim()) return;
+      DB.teacher = {name:d.name.trim(), designation:d.designation, school:d.school.trim(), mobile:d.mobile.trim()};
+      if (save()) toast('প্রোফাইল সংরক্ষিত হয়েছে');
+      render();
+    });
+  }
+  if (r === 'students') {
+    const s = document.getElementById('stuSearch');
+    s.addEventListener('input', () => {
+      UI.stuQuery = s.value;
+      const q = s.value.trim().toLowerCase();
+      const list = DB.students.filter(x => (UI.stuClass==='all' || x.cls===UI.stuClass) && (!q || [x.name,x.roll,x.father,x.mother,x.phone].join(' ').toLowerCase().includes(q)));
+      document.getElementById('stuList').innerHTML = stuListHtml(list);
+    });
+  }
+}
+function go(id){ if (location.hash.slice(1) === id) render(); else location.hash = id; }
+
+/* ---------- toast & sheet ---------- */
+let tt;
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(tt); tt = setTimeout(() => t.classList.remove('show'), 2400);
+}
+const $sheet = document.getElementById('sheet'), $sbg = document.getElementById('sbg');
+let lastFocus = null;
+function openSheet(html){
+  lastFocus = document.activeElement;
+  $sheet.innerHTML = '<div class="grab" aria-hidden="true"></div>' + html;
+  $sheet.classList.add('open'); $sbg.classList.add('open');
+  $sheet.scrollTop = 0;
+  setTimeout(() => $sheet.focus({preventScroll:true}), 50);
+}
+function closeSheet(){ $sheet.classList.remove('open'); $sbg.classList.remove('open'); if (lastFocus && lastFocus.focus) try { lastFocus.focus({preventScroll:true}); } catch(_){} }
+$sbg.addEventListener('click', closeSheet);
+
+function notifSheet(){
+  openSheet(`<div class="top" style="margin-bottom:8px"><h2 style="font-size:18px">নোটিফিকেশন</h2><button class="btn ghost" data-readall>সব পড়া হয়েছে</button></div>
+  ${NOTIFS.map(n => `<div class="note"><span class="dot ${n.read?'read':''}"></span><span class="grow"><span class="t1" style="font-weight:${n.read?500:700};font-size:14px">${n.t}</span><span class="t2">${n.d}</span></span></div>`).join('')}
+  <button class="btn solid big full" style="margin-top:12px" data-close>বন্ধ করুন</button>`);
+}
+
+/* ---------- events ---------- */
+document.addEventListener('click', e => {
+  const el = e.target.closest('button,a[data-go]');
+  if (!el) return;
+  const ds = el.dataset;
+  if (el.id === 'bell') return notifSheet();
+  if ('close' in ds) return closeSheet();
+  if ('readall' in ds) { NOTIFS.forEach(n => n.read = true); closeSheet(); render(); return toast('সব নোটিফিকেশন পড়া হয়েছে'); }
+  if (ds.go) { window.scrollTo(0,0); return go(ds.go); }
+  if ('back' in ds) { if (history.length > 1) history.back(); else go('home'); return; }
+  // committee
+  if (ds.ctab) { UI.committeeTab = ds.ctab; UI.showAllMembers = false; try { localStorage.setItem('committeeTab', ds.ctab); } catch(_) {} return render(); }
+  if ('memberNew' in ds) return memberSheet(null);
+  if (ds.member) return memberSheet(ds.member);
+  if ('toggleMembers' in ds) { UI.showAllMembers = !UI.showAllMembers; return render(); }
+  if (ds.memberDel) { const id = ds.memberDel; const k = UI.committeeTab;
+    return confirmSheet('সদস্য মুছবেন?', 'এই সদস্যের তথ্য কমিটি থেকে মুছে যাবে।', 'মুছুন', () => { DB.committees[k] = DB.committees[k].filter(x => x.id !== id); if (save()) toast('সদস্য মুছে ফেলা হয়েছে'); }); }
+  // students
+  if ('stuNew' in ds) return studentSheet(null);
+  if (ds.stu) return studentSheet(ds.stu);
+  if (ds.stuClass) { UI.stuClass = ds.stuClass; return render(); }
+  if (ds.stuDel) { const id = ds.stuDel;
+    return confirmSheet('প্রোফাইল মুছবেন?', 'এই শিক্ষার্থীর সব তথ্য স্থায়ীভাবে মুছে যাবে।', 'মুছুন', () => { DB.students = DB.students.filter(x => x.id !== id); if (save()) toast('প্রোফাইল মুছে ফেলা হয়েছে'); }); }
+  // lesson plans
+  if (ds.lpClass) { UI.lpClass = ds.lpClass; UI.lpSubject = null; return render(); }
+  if ('lpSubject' in ds) { UI.lpSubject = ds.lpSubject || null; window.scrollTo(0,0); return render(); }
+  if ('lpAddsub' in ds) return addSubjectSheet();
+  if (ds.lpDelsub) { const sid = ds.lpDelsub, cls = UI.lpClass;
+    return confirmSheet('বিষয় মুছবেন?', 'এই বিষয় এবং এর সব পাঠ পরিকল্পনা মুছে যাবে।', 'মুছুন', () => {
+      DB.customSubjects[cls] = (DB.customSubjects[cls]||[]).filter(x => x.id !== sid);
+      DB.plans = DB.plans.filter(p => !(p.cls===cls && p.subject===sid)); UI.lpSubject = null; if (save()) toast('বিষয় মুছে ফেলা হয়েছে'); }); }
+  if ('planNew' in ds) return planSheet(null);
+  if (ds.plan) return planSheet(ds.plan);
+  if (ds.planDel) { const id = ds.planDel;
+    return confirmSheet('পাঠ পরিকল্পনা মুছবেন?', 'এই পাঠ পরিকল্পনাটি স্থায়ীভাবে মুছে যাবে।', 'মুছুন', () => { DB.plans = DB.plans.filter(x => x.id !== id); if (save()) toast('পাঠ পরিকল্পনা মুছে ফেলা হয়েছে'); }); }
+  // updates
+  if ('updApply' in ds) { if (BR) { toast('আপডেট চালু হচ্ছে…'); BR.applyUpdate(); } return; }
+  if ('updApk' in ds) { if (BR && UPD.url) BR.openUrl(UPD.url); return; }
+  if ('updDismiss' in ds) { updDismissed = true; return drawUpdBar(); }
+  if ('updCheck' in ds) { UPD = {state:'checking'}; const l = document.getElementById('updLine'); if (l) l.textContent = UPD_TEXT.checking; return checkUpdate(true); }
+  // settings
+  if ('backup' in ds) return backupSheet();
+  if ('copyBk' in ds) {
+    const t = document.getElementById('bk');
+    const done = () => toast('ব্যাকআপ কপি হয়েছে');
+    try { navigator.clipboard.writeText(t.value).then(done, () => { t.select(); document.execCommand('copy'); done(); }); }
+    catch(_) { t.select(); try { document.execCommand('copy'); done(); } catch(__) { toast('লেখাটি চেপে ধরে নিজে কপি করুন'); } }
+    return;
+  }
+  if ('restore' in ds) return restoreSheet();
+  if ('reset' in ds) return confirmSheet('সব তথ্য মুছবেন?', 'শিক্ষার্থী, পাঠ পরিকল্পনা, কমিটি ও প্রোফাইলের সব তথ্য স্থায়ীভাবে মুছে যাবে। আগে ব্যাকআপ নিয়ে রাখুন।', 'সব মুছুন', () => { DB = DEFAULTS(); DB.committees = {smc:[],pta:[],slip:[]}; if (save()) toast('সব তথ্য মুছে ফেলা হয়েছে'); });
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheet(); });
+window.addEventListener('hashchange', () => { closeSheet(); render(); window.scrollTo(0,0); });
+render();
+if (BR) setTimeout(() => checkUpdate(false), 1500);
+</script>
+</body>
+</html>
