@@ -246,7 +246,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '2.3';
+const WEB_VERSION = '2.4';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -1728,12 +1728,16 @@ function ps9Steps(g){
 const ps9Approx = g => !PS9_LAST[g];  // only the top step is uncertain
 // Pay fixation (para 5): new start + (basic on 30 June 2026 − old start), at that step or the next higher one.
 // Then para 9(2): one annual increment on 1 July 2026 (if due).
-function fix9(grade, oldBasic, inc = true){
+// method 'B' (as many popular calculators do): first add the 1 July 2026 increment on the old scale, fix pay from that,
+// then add the 1 July 2026 increment on the new scale as well. Method 'A' follows the order's text literally (one increment).
+function fix9(grade, oldBasic, inc = true, method = 'A'){
   const s8 = ps8Steps(grade), s9 = ps9Steps(grade);
-  const diff = oldBasic - s8[0], target = s9[0] + diff;
+  let base = oldBasic, oldInc = null;
+  if (inc && method === 'B') { const i8 = s8.indexOf(oldBasic); if (i8 >= 0 && i8 < s8.length - 1) { base = s8[i8 + 1]; oldInc = base; } }
+  const diff = base - s8[0], target = s9[0] + diff;
   let fixIdx = s9.findIndex(v => v >= target); if (fixIdx < 0) fixIdx = s9.length - 1;
   const idx = inc ? Math.min(s9.length - 1, fixIdx + 1) : fixIdx;
-  return {diff, target, fixIdx, fixBasic: s9[fixIdx], idx, basic: s9[idx], inc, s9, start8: s8[0], start9: s9[0]};
+  return {diff, base, oldInc, method, target, fixIdx, fixBasic: s9[fixIdx], idx, basic: s9[idx], inc, s9, start8: s8[0], start9: s9[0]};
 }
 // Grades 10–20 get the rise in three parts: 50% from 1 Jul 2026, 75% from 1 Jan 2027, all of it from 1 Jul 2027.
 function phases(oldBasic, newBasic, s9, idx){
@@ -1748,11 +1752,11 @@ function phases(oldBasic, newBasic, s9, idx){
 function salaryDefaults(){
   const S = DB.salary, me = DB.teachers.find(x => x.me) || {};
   const grade = S.grade || (/প্রধান শিক্ষক/.test(me.designation || DB.teacher.designation || '') ? 10 : 13);
-  return {grade, step8: S.step8 || 1, inc: S.inc !== false};
+  return {grade, step8: S.step8 || 1, inc: S.inc !== false, method: S.method || 'B'};
 }
 function salary(){
   const S = salaryDefaults(), s8 = ps8Steps(S.grade), step8 = Math.min(S.step8, s8.length), old = s8[step8 - 1];
-  const F = fix9(S.grade, old, S.inc), P = phases(old, F.basic, F.s9, F.idx);
+  const F = fix9(S.grade, old, S.inc, S.method), P = phases(old, F.basic, F.s9, F.idx);
   return innerHeader('বেতন নির্ধারণ','salary','#1F4E8C') + `<div class="sec" style="padding-top:16px">
     <div class="card" style="gap:4px;text-align:center;padding:18px 16px"><h2 style="font-size:20px">৯ম পে স্কেল অনুযায়ী মূল বেতন</h2><span class="t2" style="font-size:14px">জাতীয় বেতন স্কেল ২০২৬ (১ জুলাই ২০২৬ থেকে কার্যকর)</span></div>
     <div class="card" style="gap:14px;padding:18px 16px">
@@ -1760,6 +1764,9 @@ function salary(){
       ${field('sl_step','৩০ জুন ২০২৬ তারিখের মূল বেতন (৮ম স্কেল)', sel('sl_step', s8.map((v, i) => [String(i + 1), `${bn(v.toLocaleString('en-IN'))} (ধাপ ${bn(i + 1)})`]), String(step8)), false, 'বেতন বিবরণী বা স্লিপে যে মূল বেতন ছিল')}
       <div class="field"><span style="font-size:14px;font-weight:600">১ জুলাই ২০২৬ তারিখে বার্ষিক ইনক্রিমেন্ট প্রাপ্য কি?</span>
         <div class="tabs2" role="radiogroup"><button type="button" role="radio" aria-checked="${S.inc}" class="${S.inc?'on':''}" data-sl-inc="1">হ্যাঁ (চাকরিকাল ≥ ৬ মাস)</button><button type="button" role="radio" aria-checked="${!S.inc}" class="${S.inc?'':'on'}" data-sl-inc="0">না</button></div></div>
+      ${S.inc ? `<div class="field"><span style="font-size:14px;font-weight:600">হিসাবের পদ্ধতি</span>
+        <div class="tabs2" role="radiogroup"><button type="button" role="radio" aria-checked="${S.method==='B'}" class="${S.method==='B'?'on':''}" data-sl-method="B">পুরোনো স্কেলের ইনক্রিমেন্টসহ</button><button type="button" role="radio" aria-checked="${S.method==='A'}" class="${S.method==='A'?'on':''}" data-sl-method="A">শুধু নতুন স্কেলে ইনক্রিমেন্ট</button></div>
+        <span class="hint">${S.method === 'B' ? 'আগে ৮ম স্কেলে ১ জুলাই ২০২৬-এর ইনক্রিমেন্ট যোগ করে বেতন নির্ধারণ, তারপর নতুন স্কেলেও ইনক্রিমেন্ট (প্রচলিত বেতন ক্যালকুলেটরের নিয়ম)।' : '৩০ জুনের মূল বেতন থেকে নির্ধারণ, তারপর নতুন স্কেলে একটি ইনক্রিমেন্ট (আদেশের অনুচ্ছেদ ৯(২)-এর লেখা অনুযায়ী)।'} আপনার অফিসের পে-ফিক্সেশনের সঙ্গে যেটা মেলে, সেটা রাখুন।</span></div>` : ''}
     </div>
     <div class="card" style="gap:12px;padding:18px 16px">
       <h2 style="font-size:17px;text-align:center;padding-bottom:10px;border-bottom:1px solid #E1E7EF">নির্ধারিত নতুন মূল বেতন</h2>
@@ -1770,10 +1777,11 @@ function salary(){
       <div class="card" style="gap:6px;padding:12px;background:#F7FAF8;box-shadow:none">
         <b style="font-size:14px">যেভাবে নির্ধারণ হলো</b>
         <dl class="kv">
-          <dt>আগের মূল বেতন − আগের প্রারম্ভিক</dt><dd>${tk(old)} − ${tk(F.start8)} = ${tk(F.diff)}</dd>
+          ${F.oldInc ? `<dt>৮ম স্কেলে ১ জুলাই ২০২৬ ইনক্রিমেন্ট</dt><dd>${tk(old)} → ${tk(F.oldInc)}</dd>` : ''}
+          <dt>মূল বেতন − আগের প্রারম্ভিক</dt><dd>${tk(F.base)} − ${tk(F.start8)} = ${tk(F.diff)}</dd>
           <dt>নতুন প্রারম্ভিক + পার্থক্য</dt><dd>${tk(F.start9)} + ${tk(F.diff)} = ${tk(F.target)}</dd>
           <dt>${F.fixBasic === F.target ? 'মিলে যাওয়া ধাপ' : 'পরের উচ্চতর ধাপ'}</dt><dd>${tk(F.fixBasic)} (ধাপ ${bn(F.fixIdx + 1)})</dd>
-          ${F.inc ? `<dt>১ জুলাই ২০২৬ বার্ষিক ইনক্রিমেন্ট</dt><dd style="color:#1F4E8C">${tk(F.fixBasic)} → ${tk(F.basic)} (ধাপ ${bn(F.idx + 1)})</dd>` : ''}
+          ${F.inc ? `<dt>১ জুলাই ২০২৬ ইনক্রিমেন্ট (নতুন স্কেলে)</dt><dd style="color:#1F4E8C">${tk(F.fixBasic)} → ${tk(F.basic)} (ধাপ ${bn(F.idx + 1)})</dd>` : ''}
         </dl>
       </div>
       <b style="font-size:15px">কবে কত মূল বেতন পাবেন</b>
@@ -1789,8 +1797,8 @@ function salary(){
   </div>`;
 }
 function salaryText(){
-  const S = salaryDefaults(), s8 = ps8Steps(S.grade), old = s8[Math.min(S.step8, s8.length) - 1], F = fix9(S.grade, old, S.inc), P = phases(old, F.basic, F.s9, F.idx);
-  return `বেতন নির্ধারণ (৯ম জাতীয় বেতন স্কেল ২০২৬) — ${DB.teacher.name}\n${gradeOrd(S.grade)} গ্রেড\nআগের মূল বেতন (৩০ জুন ২০২৬): ${tk(old)}\nপার্থক্য: ${tk(old)} − ${tk(F.start8)} = ${tk(F.diff)}\n${tk(F.start9)} + ${tk(F.diff)} = ${tk(F.target)} → ধাপ ${bn(F.fixIdx + 1)}: ${tk(F.fixBasic)}${F.inc ? `\n১ জুলাই ২০২৬ ইনক্রিমেন্টসহ: ${tk(F.basic)} (ধাপ ${bn(F.idx + 1)})` : ''}\n\n` +
+  const S = salaryDefaults(), s8 = ps8Steps(S.grade), old = s8[Math.min(S.step8, s8.length) - 1], F = fix9(S.grade, old, S.inc, S.method), P = phases(old, F.basic, F.s9, F.idx);
+  return `বেতন নির্ধারণ (৯ম জাতীয় বেতন স্কেল ২০২৬) — ${DB.teacher.name}\n${gradeOrd(S.grade)} গ্রেড\nআগের মূল বেতন (৩০ জুন ২০২৬): ${tk(old)}${F.oldInc ? `\n৮ম স্কেলে ১ জুলাই ২০২৬ ইনক্রিমেন্ট: ${tk(F.oldInc)}` : ''}\nপার্থক্য: ${tk(F.base)} − ${tk(F.start8)} = ${tk(F.diff)}\n${tk(F.start9)} + ${tk(F.diff)} = ${tk(F.target)} → ধাপ ${bn(F.fixIdx + 1)}: ${tk(F.fixBasic)}${F.inc ? `\n১ জুলাই ২০২৬ ইনক্রিমেন্টসহ: ${tk(F.basic)} (ধাপ ${bn(F.idx + 1)})` : ''}\n\n` +
     P.map(x => `${x.when}: ${tk(x.basic)}`).join('\n') + '\n(আনুমানিক; অফিসের বেতন নির্ধারণী আদেশ দেখে মিলিয়ে নিন)';
 }
 
@@ -2138,13 +2146,14 @@ document.addEventListener('click', e => {
   if (ds.penMode) { UI.penMode = ds.penMode; return render(); }
   if (ds.paPs) { const A = penAutoDefaults(); let grade = A.grade; if (ds.paPs === '9' && !PS9_GRADES.includes(grade)) grade = 13;
     let step = A.step;
-    if (ds.paPs === '9' && A.ps === '8') { const s8 = ps8Steps(grade); step = fix9(grade, s8[Math.min(A.step, s8.length) - 1]).idx + 1; } // carry the present pay over by the fixation rule
+    if (ds.paPs === '9' && A.ps === '8') { const s8 = ps8Steps(grade); step = fix9(grade, s8[Math.min(A.step, s8.length) - 1], true, salaryDefaults().method).idx + 1; } // carry the present pay over by the fixation rule
     if (ds.paPs === '8' && A.ps === '9') step = 1;
     const steps = ds.paPs === '9' ? ps9Steps(grade) : ps8Steps(grade);
     DB.pension.auto = {...(DB.pension.auto || {}), ...A, ps: ds.paPs, grade, step: Math.min(step, steps.length)}; save(); return render(); }
   if (ds.slInc) { DB.salary.inc = ds.slInc === '1'; save(); return render(); }
+  if (ds.slMethod) { DB.salary.method = ds.slMethod; save(); return render(); }
   if ('slCopy' in ds) return copyText(salaryText(), 'বেতন নির্ধারণের হিসাব কপি হয়েছে');
-  if ('slPension' in ds) { const S = salaryDefaults(), old = ps8Steps(S.grade)[Math.min(S.step8, ps8Steps(S.grade).length) - 1], F = fix9(S.grade, old, S.inc);
+  if ('slPension' in ds) { const S = salaryDefaults(), old = ps8Steps(S.grade)[Math.min(S.step8, ps8Steps(S.grade).length) - 1], F = fix9(S.grade, old, S.inc, S.method);
     DB.pension.auto = {...(DB.pension.auto || {}), ...penAutoDefaults(), ps:'9', grade:S.grade, step:F.idx + 1}; save(); UI.penMode = 'auto'; toast('নতুন মূল বেতন পেনশন হিসাবে বসানো হয়েছে'); return go('pension'); }
   if ('paCopy' in ds) return copyText(penAutoText(), 'পেনশন হিসাব কপি হয়েছে');
   if ('penCopy' in ds) return copyText(penText(), 'পেনশন হিসাব কপি হয়েছে');
