@@ -128,6 +128,27 @@ form.f{display:flex;flex-direction:column;gap:14px}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:14px}
 .kv dt{color:var(--mute)}
 .kv dd{margin:0;font-weight:600}
+.datebar{display:flex;align-items:center;gap:8px}
+.datebox{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;background:#fff;border:1px solid #B8C6D6;border-radius:14px;padding:4px 8px}
+.datebox input{border:0;font:inherit;font-size:14px;color:var(--mute);background:transparent;text-align:center;min-height:28px}
+.sq:disabled{opacity:.35}
+.tabs2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;background:#E8EEF5;padding:4px;border-radius:14px}
+.tabs2 button{border:0;min-height:42px;border-radius:11px;font-size:14px;font-weight:700;background:transparent;color:var(--mute)}
+.tabs2 button.on{background:#fff;color:var(--ink);box-shadow:0 1px 4px rgba(18,40,74,.12)}
+.sumrow{display:flex;gap:6px;flex-wrap:wrap}
+.sumrow span{font-size:13px;font-weight:600;padding:4px 10px;border-radius:999px}
+.attrow{background:#fff;border:1px solid var(--line);border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.attbtns{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.attbtns button,.sbtns button{min-height:40px;border-radius:10px;border:1px solid #CBD6E2;background:#fff;font-size:13px;font-weight:700;color:var(--mute);padding:0 4px}
+.srow{display:flex;align-items:center;gap:10px;padding:10px 12px;border-top:1px solid #EDF2EF}
+.srow:first-child{border-top:0}
+.rollb{min-width:40px;height:40px;flex-shrink:0;border-radius:10px;background:#F1F5FA;color:var(--blue);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px}
+.sbtns{display:flex;gap:6px;flex-shrink:0}
+.sbtns button{width:44px;min-height:44px;font-size:14px}
+.times{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.times label{font-size:12px;color:var(--mute);display:flex;flex-direction:column;gap:4px}
+.times input{font:inherit;font-size:14px;border:1px solid #B8C6D6;border-radius:10px;padding:6px 8px;min-height:40px;color:var(--ink);background:#fff}
+.pct{font-size:13px;font-weight:700;flex-shrink:0;text-align:right;min-width:52px}
 #updbar{max-width:480px;margin:0 auto;position:sticky;top:0;z-index:6}
 #updbar:empty{display:none}
 .upd{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;color:#fff;background:#12284A}
@@ -188,7 +209,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '1.3';
+const WEB_VERSION = '1.4';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -291,6 +312,9 @@ const KEY = 'shikkhok_app_v1';
 // First time: start the teacher list with the user's own profile.
 function withTeachers(db){
   if (!Array.isArray(db.teachers)) db.teachers = [];
+  if (!db.attendance || typeof db.attendance !== 'object') db.attendance = {};
+  db.attendance.teachers = db.attendance.teachers || {};
+  db.attendance.students = db.attendance.students || {};
   if (!db.teachersSeeded) {
     if (!db.teachers.length && db.teacher && db.teacher.name) db.teachers.push({id:uid(), name:db.teacher.name, designation:db.teacher.designation||'সহকারী শিক্ষক', mobile:db.teacher.mobile||'', me:true});
     db.teachersSeeded = true;
@@ -315,14 +339,14 @@ function save(){
 }
 
 /* ---------- ui state ---------- */
-const UI = {committeeTab:'smc', showAllMembers:false, stuClass:'all', stuQuery:'', lpClass:'1', lpSubject:null};
+const UI = {attDate:null, attView:'day', attMonth:null, attClass:null, committeeTab:'smc', showAllMembers:false, stuClass:'all', stuQuery:'', lpClass:'1', lpSubject:null};
 try { UI.committeeTab = localStorage.getItem('committeeTab') || 'smc'; } catch(e) {}
 
 const FEATURES_A = [
   ['teachers','users','#0E7490','শিক্ষক তালিকা','শিক্ষকদের নাম ও তথ্য'],
   ['student-profile','profile','#D23F74','শিক্ষার্থী তালিকা','নাম ও প্রোফাইল যোগ'],
-  ['teacher-att','teacher','#1E8A55','শিক্ষক উপস্থিতি','হাজিরা ও আগমন-প্রস্থান'],
-  ['student-att','students','#2563C9','শিক্ষার্থী উপস্থিতি','শ্রেণিভিত্তিক হাজিরা'],
+  ['teacher-att','teacher','#1E8A55','শিক্ষক উপস্থিতি','দৈনিক হাজিরা ও আগমন-প্রস্থান'],
+  ['student-att','students','#2563C9','শিক্ষার্থী উপস্থিতি','শ্রেণিভিত্তিক দৈনিক হাজিরা'],
   ['leave','leave','#E0701A','ছুটি ও আবেদন','আবেদন ও ছুটির হিসাব'],
   ['lesson-plan','plan','#7C4DCC','পাঠ পরিকল্পনা','সকল শ্রেণি ও বিষয়'],
   ['textbooks','book','#0E8C82','পাঠ্যবই','বই ও শিক্ষক সহায়িকা'],
@@ -399,8 +423,11 @@ function home(){
     <div class="row2">
       ${(() => { const T = DB.teachers.length, St = DB.students.length;
         const boys = DB.students.filter(x => x.gender==='ছেলে').length, girls = DB.students.filter(x => x.gender==='মেয়ে').length;
-        return `<button class="stat" data-go="teachers" style="background:#E8F5EE;border:0;text-align:left"><span style="font-size:13px;color:#2F4A3B">শিক্ষক</span><span class="n">${bn(T)}<span> জন</span></span><span style="font-size:12px;color:#17663F;font-weight:600">${T?'তালিকা দেখুন ›':'+ নাম যোগ করুন'}</span></button>
-        <button class="stat" data-go="students" style="background:#E9EFF8;border:0;text-align:left"><span style="font-size:13px;color:#2C3F5E">শিক্ষার্থী</span><span class="n">${bn(St)}<span> জন</span></span><span style="font-size:12px;color:#1F3A68;font-weight:600">${St?`ছেলে ${bn(boys)} · মেয়ে ${bn(girls)}`:'+ নাম যোগ করুন'}</span></button>`; })()}
+        const td = DB.attendance.teachers[todayISO()] || {}, sd = DB.attendance.students[todayISO()] || {};
+        const tToday = {n: DB.teachers.filter(t => td[t.id] && td[t.id].s).length, p: DB.teachers.filter(t => td[t.id] && (td[t.id].s==='p' || td[t.id].s==='late')).length};
+        const sToday = {n: DB.students.filter(x => sd[x.id]).length, p: DB.students.filter(x => sd[x.id]==='p').length};
+        return `<button class="stat" data-go="teachers" style="background:#E8F5EE;border:0;text-align:left"><span style="font-size:13px;color:#2F4A3B">শিক্ষক</span><span class="n">${bn(T)}<span> জন</span></span><span style="font-size:12px;color:#17663F;font-weight:600">${!T?'+ নাম যোগ করুন':tToday.n?`আজ উপস্থিত ${bn(tToday.p)}/${bn(T)}`:'আজ হাজিরা নেওয়া হয়নি'}</span></button>
+        <button class="stat" data-go="students" style="background:#E9EFF8;border:0;text-align:left"><span style="font-size:13px;color:#2C3F5E">শিক্ষার্থী</span><span class="n">${bn(St)}<span> জন</span></span><span style="font-size:12px;color:#1F3A68;font-weight:600">${!St?'+ নাম যোগ করুন':sToday.n?`আজ উপস্থিত ${bn(sToday.p)}/${bn(sToday.n)}`:`ছেলে ${bn(boys)} · মেয়ে ${bn(girls)}`}</span></button>`; })()}
     </div>
     <div class="ticker"><b>${ic('mega',16)} নোটিশ</b><div class="tkw"><div class="tk">
       <span>বার্ষিক পরীক্ষার সময়সূচি প্রকাশিত হয়েছে</span><span>১৬ ডিসেম্বর বিজয় দিবস — বিদ্যালয় বন্ধ থাকবে</span><span>উপবৃত্তির তথ্য হালনাগাদের শেষ তারিখ শীঘ্রই</span>
@@ -747,6 +774,160 @@ function addSubjectSheet(){
   });
 }
 
+/* ---------- attendance ---------- */
+const ATT_T = {p:['উপস্থিত','#17663F','#E3F4EA'], late:['দেরি','#7A4A00','#FFF1D6'], l:['ছুটি','#1F4E8C','#E6EFFA'], a:['অনুপস্থিত','#B42318','#FDE8E6']};
+const ATT_S = {p:['উ','উপস্থিত','#17663F','#E3F4EA'], a:['অ','অনুপস্থিত','#B42318','#FDE8E6'], l:['ছু','ছুটি','#1F4E8C','#E6EFFA']};
+const attDay = (kind, date, create) => { const k = DB.attendance[kind]; if (!k[date] && create) k[date] = {}; return k[date] || {}; };
+const curDate = () => UI.attDate || (UI.attDate = todayISO());
+const curMonth = () => UI.attMonth || (UI.attMonth = curDate().slice(0,7));
+function nowHM(){ const d = new Date(); return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'); }
+function shiftDate(iso, n){ const d = new Date(iso + 'T00:00:00'); d.setDate(d.getDate() + n); return new Date(d - d.getTimezoneOffset()*60000).toISOString().slice(0,10); }
+function longDate(iso){ try { return new Date(iso + 'T00:00:00').toLocaleDateString('bn-BD',{weekday:'long',day:'numeric',month:'long',year:'numeric'}); } catch(e){ return iso; } }
+function monthName(ym){ try { return new Date(ym + '-01T00:00:00').toLocaleDateString('bn-BD',{month:'long',year:'numeric'}); } catch(e){ return ym; } }
+const isFriday = iso => new Date(iso + 'T00:00:00').getDay() === 5;
+const pill = (txt, fg, bg) => `<span style="color:${fg};background:${bg}">${txt}</span>`;
+function sortedStudents(cls){ return DB.students.filter(x => x.cls === cls).sort((a,b) => (a.section||'').localeCompare(b.section||'') || (parseInt(toEn(a.roll))||999) - (parseInt(toEn(b.roll))||999)); }
+function classesWithStudents(){ return CLASSES.filter(([k]) => DB.students.some(x => x.cls === k)); }
+
+function dateBar(){
+  const d = curDate(), t = todayISO();
+  return `<div class="datebar">
+    <button class="sq blue" data-att-shift="-1" aria-label="আগের দিন">${ic('back',20)}</button>
+    <label class="datebox"><span class="t1" style="font-size:14px;text-align:center">${d === t ? 'আজ, ' : ''}${longDate(d)}</span><input type="date" id="attDate" value="${d}" max="${t}" aria-label="তারিখ বাছাই"></label>
+    <button class="sq blue" data-att-shift="1" ${d >= t ? 'disabled' : ''} aria-label="পরের দিন">${ic('chev',20)}</button>
+  </div>${isFriday(d) ? '<p class="hint" style="text-align:center">শুক্রবার — সাপ্তাহিক ছুটির দিন</p>' : ''}`;
+}
+function attTabs(){
+  return `<div class="tabs2" role="tablist"><button role="tab" class="${UI.attView==='day'?'on':''}" data-att-view="day">দৈনিক হাজিরা</button><button role="tab" class="${UI.attView==='month'?'on':''}" data-att-view="month">মাসিক প্রতিবেদন</button></div>`;
+}
+function monthBar(){
+  return `<div class="field"><label for="attMonth">মাস</label><input type="month" id="attMonth" value="${curMonth()}" max="${todayISO().slice(0,7)}"></div>`;
+}
+
+/* teachers */
+function teacherAtt(){
+  const head = innerHeader('শিক্ষক উপস্থিতি','teacher','#1E8A55');
+  if (!DB.teachers.length) return head + `<div class="card empty"><span class="ib" style="background:#0E7490">${S(P.users)}</span><p class="t2" style="font-size:14px;line-height:1.6">হাজিরা নিতে আগে শিক্ষক তালিকায় শিক্ষকদের নাম যোগ করুন।</p><button class="btn solid" data-go="teachers">শিক্ষক তালিকা খুলুন</button></div>`;
+  return head + `<div class="sec" style="padding-top:16px">${attTabs()}${UI.attView === 'day' ? teacherDay() : teacherMonth()}</div>`;
+}
+function teacherDay(){
+  const d = curDate(), day = attDay('teachers', d);
+  const list = [...DB.teachers].sort((a,b) => { const r = t => { const i = T_DESIG.indexOf(t.designation); return i < 0 ? 99 : i; }; return r(a) - r(b); });
+  const cnt = k => list.filter(t => (day[t.id]||{}).s === k).length;
+  const marked = list.filter(t => day[t.id] && day[t.id].s).length;
+  return dateBar() + `
+    <div class="sumrow">${Object.entries(ATT_T).map(([k,v]) => pill(`${v[0]} ${bn(cnt(k))}`, v[1], v[2])).join('')}${pill(`বাকি ${bn(list.length - marked)}`, '#3E5070', '#EEF1F6')}</div>
+    ${marked < list.length ? `<button class="btn big full" data-tatt-all>${ic('teacher',20)} বাকি সবাইকে উপস্থিত করুন</button>` : ''}
+    ${list.map(t => { const r = day[t.id] || {}; const present = r.s === 'p' || r.s === 'late';
+      return `<div class="attrow">
+        <div style="display:flex;align-items:center;gap:10px"><span class="ma" style="background:${r.s ? ATT_T[r.s][1] : '#9AA8B8'};width:40px;height:40px;font-size:14px" aria-hidden="true">${esc(initials(t.name))}</span>
+          <span class="grow"><span class="t1" style="font-weight:600">${esc(t.name)}</span><span class="t2">${esc(t.designation)}${r.s ? ' · ' + ATT_T[r.s][0] : ''}</span></span></div>
+        <div class="attbtns" role="group" aria-label="${esc(t.name)}-এর হাজিরা">${Object.entries(ATT_T).map(([k,v]) => `<button data-tatt="${t.id}" data-st="${k}" aria-pressed="${r.s===k}" style="${r.s===k?`background:${v[2]};color:${v[1]};border-color:${v[1]}`:''}">${v[0]}</button>`).join('')}</div>
+        ${present ? `<div class="times"><label>আগমন<input type="time" data-tin="${t.id}" value="${esc(r.in||'')}"></label><label>প্রস্থান<input type="time" data-tout="${t.id}" value="${esc(r.out||'')}"></label></div>` : ''}
+      </div>`; }).join('')}
+    <p class="hint" style="text-align:center">প্রতিটি পরিবর্তন সাথে সাথে সংরক্ষিত হয়।</p>`;
+}
+function teacherMonth(){
+  const ym = curMonth();
+  const days = Object.keys(DB.attendance.teachers).filter(d => d.startsWith(ym) && Object.keys(DB.attendance.teachers[d]).length).sort();
+  const rows = DB.teachers.map(t => { const c = {p:0,late:0,l:0,a:0}; days.forEach(d => { const r = DB.attendance.teachers[d][t.id]; if (r && c[r.s] !== undefined) c[r.s]++; }); return {t, c}; });
+  return monthBar() + `
+    <div class="card" style="gap:10px"><h2 style="font-size:16px">${monthName(ym)}</h2><span class="t2" style="font-size:13px">হাজিরা নেওয়া হয়েছে ${bn(days.length)} দিন</span></div>
+    ${days.length ? `<div class="list">${rows.map(({t,c}) => `<div class="mem"><span class="grow"><span class="t1" style="font-weight:600">${esc(t.name)}</span><span class="sumrow" style="margin-top:4px">${pill('উপ '+bn(c.p),'#17663F','#E3F4EA')}${pill('দেরি '+bn(c.late),'#7A4A00','#FFF1D6')}${pill('ছুটি '+bn(c.l),'#1F4E8C','#E6EFFA')}${pill('অনু '+bn(c.a),'#B42318','#FDE8E6')}</span></span></div>`).join('')}</div>
+      <button class="btn big full" data-copy-tmonth>${ic('copy',20)} প্রতিবেদন কপি করুন</button>`
+    : '<div class="card empty"><p class="t2" style="font-size:14px">এই মাসে কোনো হাজিরা নেওয়া হয়নি।</p></div>'}`;
+}
+function setTeacherStatus(id, st){
+  const d = curDate(), day = attDay('teachers', d, true);
+  const r = day[id] || {};
+  if (r.s === st) { delete day[id]; }
+  else { r.s = st; if ((st === 'p' || st === 'late') && !r.in && d === todayISO()) r.in = nowHM(); if (st === 'l' || st === 'a') { delete r.in; delete r.out; } day[id] = r; }
+  save(); render();
+}
+
+/* students */
+function studentAtt(){
+  const head = innerHeader('শিক্ষার্থী উপস্থিতি','students','#2563C9');
+  const cl = classesWithStudents();
+  if (!cl.length) return head + `<div class="card empty"><span class="ib" style="background:#D23F74">${S(P.profile)}</span><p class="t2" style="font-size:14px;line-height:1.6">হাজিরা নিতে আগে শিক্ষার্থী তালিকায় নাম যোগ করুন।</p><button class="btn solid" data-go="students">শিক্ষার্থী তালিকা খুলুন</button></div>`;
+  if (!UI.attClass || !cl.some(([k]) => k === UI.attClass)) UI.attClass = cl[0][0];
+  const chips = `<div class="chips" role="tablist" aria-label="শ্রেণি">${cl.map(([k,l]) => `<button class="${k===UI.attClass?'on':''}" data-att-class="${k}">${l}</button>`).join('')}</div>`;
+  return head + `<div class="sec" style="padding-top:16px">${attTabs()}${chips}${UI.attView === 'day' ? studentDay() : studentMonth()}</div>`;
+}
+function studentDay(){
+  const d = curDate(), day = attDay('students', d), list = sortedStudents(UI.attClass);
+  const c = {p:0,a:0,l:0}; list.forEach(s => { const v = day[s.id]; if (c[v] !== undefined) c[v]++; });
+  const left = list.length - c.p - c.a - c.l;
+  const rate = (c.p + c.a) ? Math.round(c.p * 100 / (c.p + c.a)) : 0;
+  const hasSec = list.some(s => s.section);
+  return dateBar() + `
+    <div class="card" style="gap:10px">
+      <div class="top"><b style="font-size:15px">${CLASS_NAME[UI.attClass]} · মোট ${bn(list.length)} জন</b>${(c.p+c.a) ? `<b style="font-size:15px;color:${rate < 75 ? '#B42318' : '#17663F'}">উপস্থিতি ${bn(rate)}%</b>` : ''}</div>
+      <div class="sumrow">${pill('উপস্থিত '+bn(c.p),'#17663F','#E3F4EA')}${pill('অনুপস্থিত '+bn(c.a),'#B42318','#FDE8E6')}${pill('ছুটি '+bn(c.l),'#1F4E8C','#E6EFFA')}${pill('বাকি '+bn(left),'#3E5070','#EEF1F6')}</div>
+      <div class="row2">
+        <button class="btn" data-satt-all ${left ? '' : 'disabled'}>বাকি সবাই উপস্থিত</button>
+        <button class="btn" data-copy-sday>${ic('copy',18)} রিপোর্ট কপি</button>
+      </div>
+    </div>
+    <div class="list">${list.map(s => { const v = day[s.id];
+      return `<div class="srow"><span class="rollb" aria-label="রোল">${s.roll ? esc(bn(s.roll)) : '–'}</span>
+        <span class="grow"><span class="t1" style="font-weight:600;font-size:14px">${esc(s.name)}</span>${hasSec && s.section ? `<span class="t2">শাখা ${esc(s.section)}</span>` : ''}</span>
+        <span class="sbtns" role="group" aria-label="${esc(s.name)}-এর হাজিরা">${Object.entries(ATT_S).map(([k,x]) => `<button data-satt="${s.id}" data-st="${k}" aria-label="${x[1]}" aria-pressed="${v===k}" style="${v===k?`background:${x[3]};color:${x[2]};border-color:${x[2]}`:''}">${x[0]}</button>`).join('')}</span></div>`; }).join('')}</div>
+    <p class="hint" style="text-align:center">উ = উপস্থিত · অ = অনুপস্থিত · ছু = ছুটি। আবার চাপলে বাতিল হয়। প্রতিটি পরিবর্তন সাথে সাথে সংরক্ষিত হয়।</p>`;
+}
+function studentMonthData(){
+  const ym = curMonth(), list = sortedStudents(UI.attClass), ids = new Set(list.map(s => s.id));
+  const days = Object.keys(DB.attendance.students).filter(d => d.startsWith(ym) && Object.entries(DB.attendance.students[d]).some(([id]) => ids.has(id))).sort();
+  const rows = list.map(s => { const c = {p:0,a:0,l:0}; days.forEach(d => { const v = DB.attendance.students[d][s.id]; if (c[v] !== undefined) c[v]++; }); const tot = c.p + c.a; return {s, c, pct: tot ? Math.round(c.p*100/tot) : null}; });
+  return {ym, days, rows};
+}
+function studentMonth(){
+  const {ym, days, rows} = studentMonthData();
+  return monthBar() + `
+    <div class="card" style="gap:6px"><h2 style="font-size:16px">${CLASS_NAME[UI.attClass]} · ${monthName(ym)}</h2><span class="t2" style="font-size:13px">হাজিরা নেওয়া হয়েছে ${bn(days.length)} দিন। উপস্থিতির হার ছুটির দিন বাদে হিসাব করা; ৭৫%-এর কম লাল রঙে।</span></div>
+    ${days.length ? `<div class="list">${rows.map(({s,c,pct}) => `<div class="srow"><span class="rollb">${s.roll ? esc(bn(s.roll)) : '–'}</span><span class="grow"><span class="t1" style="font-weight:600;font-size:14px">${esc(s.name)}</span><span class="t2">উপ ${bn(c.p)} · অনু ${bn(c.a)} · ছুটি ${bn(c.l)}</span></span><span class="pct" style="color:${pct === null ? '#4A5B73' : pct < 75 ? '#B42318' : '#17663F'}">${pct === null ? '–' : bn(pct) + '%'}</span></div>`).join('')}</div>
+      <button class="btn big full" data-copy-smonth>${ic('copy',20)} প্রতিবেদন কপি করুন</button>`
+    : '<div class="card empty"><p class="t2" style="font-size:14px">এই মাসে এই শ্রেণির কোনো হাজিরা নেওয়া হয়নি।</p></div>'}`;
+}
+function setStudentStatus(id, st){
+  const day = attDay('students', curDate(), true);
+  if (day[id] === st) delete day[id]; else day[id] = st;
+  save(); render();
+}
+
+/* reports as text, for WhatsApp etc. */
+function copyText(text, okMsg){
+  const done = () => toast(okMsg || 'কপি হয়েছে');
+  const fallback = () => {
+    const ta = document.createElement('textarea'); ta.value = text; ta.setAttribute('readonly',''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    let ok = false; try { ok = document.execCommand('copy'); } catch(_) {}
+    document.body.removeChild(ta);
+    if (ok) done(); else openSheet(`<h2 style="font-size:18px;margin-bottom:8px">রিপোর্ট</h2><p class="t2" style="font-size:13px;margin-bottom:8px">লেখাটি চেপে ধরে কপি করুন।</p><div class="field"><textarea rows="10" readonly>${esc(text)}</textarea></div><button class="btn big full" style="margin-top:12px" data-close>বন্ধ করুন</button>`);
+  };
+  try { if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done, fallback); else fallback(); } catch(_) { fallback(); }
+}
+function studentDayText(){
+  const d = curDate(), day = attDay('students', d), list = sortedStudents(UI.attClass);
+  const by = k => list.filter(s => day[s.id] === k);
+  const fmt = arr => arr.map(s => (s.roll ? 'রোল ' + bn(s.roll) + ' - ' : '') + s.name).join('\n');
+  const a = by('a'), l = by('l'), p = by('p');
+  return `${DB.teacher.school}\nশিক্ষার্থী উপস্থিতি — ${longDate(d)}\n${CLASS_NAME[UI.attClass]}: মোট ${bn(list.length)} জন\nউপস্থিত ${bn(p.length)}, অনুপস্থিত ${bn(a.length)}, ছুটি ${bn(l.length)}` +
+    (a.length ? `\n\nঅনুপস্থিত:\n${fmt(a)}` : '') + (l.length ? `\n\nছুটি:\n${fmt(l)}` : '');
+}
+function studentMonthText(){
+  const {ym, days, rows} = studentMonthData();
+  return `${DB.teacher.school}\n${CLASS_NAME[UI.attClass]} — ${monthName(ym)} মাসের উপস্থিতি\nহাজিরার দিন: ${bn(days.length)}\n\n` +
+    rows.map(({s,c,pct}) => `${s.roll ? 'রোল ' + bn(s.roll) + ' - ' : ''}${s.name}: উপস্থিত ${bn(c.p)}, অনুপস্থিত ${bn(c.a)}, ছুটি ${bn(c.l)}${pct === null ? '' : ' (' + bn(pct) + '%)'}`).join('\n');
+}
+function teacherMonthText(){
+  const ym = curMonth();
+  const days = Object.keys(DB.attendance.teachers).filter(d => d.startsWith(ym) && Object.keys(DB.attendance.teachers[d]).length);
+  return `${DB.teacher.school}\nশিক্ষক উপস্থিতি — ${monthName(ym)}\nহাজিরার দিন: ${bn(days.length)}\n\n` +
+    DB.teachers.map(t => { const c = {p:0,late:0,l:0,a:0}; days.forEach(d => { const r = DB.attendance.teachers[d][t.id]; if (r && c[r.s] !== undefined) c[r.s]++; });
+      return `${t.name} (${t.designation}): উপস্থিত ${bn(c.p)}, দেরি ${bn(c.late)}, ছুটি ${bn(c.l)}, অনুপস্থিত ${bn(c.a)}`; }).join('\n');
+}
+
 /* ---------- settings ---------- */
 function settings(){
   return topHeader('সেটিংস','gear') + `
@@ -771,7 +952,7 @@ function settings(){
     </div>
     <div class="card">
       <h2 style="font-size:16px">সব তথ্য মুছুন</h2>
-      <p class="t2" style="font-size:14px;line-height:1.6">শিক্ষক, শিক্ষার্থী, পাঠ পরিকল্পনা, কমিটি ও প্রোফাইলের সব তথ্য মুছে অ্যাপ শুরুর অবস্থায় ফিরবে।</p>
+      <p class="t2" style="font-size:14px;line-height:1.6">শিক্ষক, শিক্ষার্থী, হাজিরা, পাঠ পরিকল্পনা, কমিটি ও প্রোফাইলের সব তথ্য মুছে অ্যাপ শুরুর অবস্থায় ফিরবে।</p>
       <button class="btn danger big full" data-reset>${ic('trash',20)} সব তথ্য মুছুন</button>
     </div>
     <p class="hint" style="text-align:center">প্রাথমিক শিক্ষক অ্যাপ · সংস্করণ ${bn(appInfo().content || WEB_VERSION)}</p>
@@ -831,11 +1012,12 @@ const ROUTE_ALIAS = {'student-profile':'students'};
 function render(){
   let r = (location.hash || '#home').slice(1) || 'home';
   r = ROUTE_ALIAS[r] || r;
-  if (!(TOP.includes(r) || r==='committee' || r==='students' || r==='teachers' || r==='lesson-plan' || ALL[r])) r = 'home';
+  if (!(TOP.includes(r) || r==='committee' || r==='students' || r==='teachers' || r==='lesson-plan' || r==='teacher-att' || r==='student-att' || ALL[r])) r = 'home';
+  if (r !== UI.lastRoute) { if (r === 'teacher-att' || r === 'student-att') UI.attView = 'day'; UI.lastRoute = r; }
   const inner = !TOP.includes(r);
   $app.classList.toggle('inner', inner);
   $nav.style.display = inner ? 'none' : 'grid';
-  const views = {home, profile, settings, committee, students, teachers, 'lesson-plan':lessonPlan};
+  const views = {home, profile, settings, committee, students, teachers, 'lesson-plan':lessonPlan, 'teacher-att':teacherAtt, 'student-att':studentAtt};
   $app.innerHTML = (views[r] || (() => placeholder(r)))();
   $nav.innerHTML = NAV.map(n => `<button class="${n[0]===r?'on':''}" data-go="${n[0]}" aria-label="${n[1]}" ${n[0]===r?'aria-current="page"':''}><span class="p">${ic(n[2])}</span>${n[1]}</button>`).join('');
   bindView(r);
@@ -907,6 +1089,17 @@ document.addEventListener('click', e => {
   if ('toggleMembers' in ds) { UI.showAllMembers = !UI.showAllMembers; return render(); }
   if (ds.memberDel) { const id = ds.memberDel; const k = UI.committeeTab;
     return confirmSheet('সদস্য মুছবেন?', 'এই সদস্যের তথ্য কমিটি থেকে মুছে যাবে।', 'মুছুন', () => { DB.committees[k] = DB.committees[k].filter(x => x.id !== id); if (save()) toast('সদস্য মুছে ফেলা হয়েছে'); }); }
+  // attendance
+  if (ds.attShift) { const n = parseInt(ds.attShift), nd = shiftDate(curDate(), n); if (nd <= todayISO()) { UI.attDate = nd; render(); } return; }
+  if (ds.attView) { UI.attView = ds.attView; return render(); }
+  if (ds.attClass) { UI.attClass = ds.attClass; return render(); }
+  if (ds.tatt) return setTeacherStatus(ds.tatt, ds.st);
+  if (ds.satt) return setStudentStatus(ds.satt, ds.st);
+  if ('tattAll' in ds) { const d = curDate(), day = attDay('teachers', d, true); DB.teachers.forEach(t => { if (!day[t.id] || !day[t.id].s) day[t.id] = {s:'p', ...(d === todayISO() ? {in:nowHM()} : {})}; }); save(); render(); return toast('বাকি সবাই উপস্থিত'); }
+  if ('sattAll' in ds) { const day = attDay('students', curDate(), true); sortedStudents(UI.attClass).forEach(s => { if (!day[s.id]) day[s.id] = 'p'; }); save(); render(); return toast('বাকি সবাই উপস্থিত'); }
+  if ('copySday' in ds) return copyText(studentDayText(), 'রিপোর্ট কপি হয়েছে — WhatsApp-এ পেস্ট করুন');
+  if ('copySmonth' in ds) return copyText(studentMonthText(), 'মাসিক প্রতিবেদন কপি হয়েছে');
+  if ('copyTmonth' in ds) return copyText(teacherMonthText(), 'মাসিক প্রতিবেদন কপি হয়েছে');
   // teachers
   if ('teacherNew' in ds) return teacherSheet(null);
   if (ds.teacher) return teacherSheet(ds.teacher);
@@ -946,9 +1139,18 @@ document.addEventListener('click', e => {
     return;
   }
   if ('restore' in ds) return restoreSheet();
-  if ('reset' in ds) return confirmSheet('সব তথ্য মুছবেন?', 'শিক্ষার্থী, পাঠ পরিকল্পনা, কমিটি ও প্রোফাইলের সব তথ্য স্থায়ীভাবে মুছে যাবে। আগে ব্যাকআপ নিয়ে রাখুন।', 'সব মুছুন', () => { DB = DEFAULTS(); DB.committees = {smc:[],pta:[],slip:[]}; DB.teachersSeeded = true; if (save()) toast('সব তথ্য মুছে ফেলা হয়েছে'); });
+  if ('reset' in ds) return confirmSheet('সব তথ্য মুছবেন?', 'শিক্ষার্থী, পাঠ পরিকল্পনা, কমিটি ও প্রোফাইলের সব তথ্য স্থায়ীভাবে মুছে যাবে। আগে ব্যাকআপ নিয়ে রাখুন।', 'সব মুছুন', () => { DB = DEFAULTS(); DB.committees = {smc:[],pta:[],slip:[]}; DB.teachersSeeded = true; DB = withTeachers(DB); if (save()) toast('সব তথ্য মুছে ফেলা হয়েছে'); });
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheet(); });
+document.addEventListener('change', e => {
+  const el = e.target;
+  if (el.id === 'attDate' && el.value) { UI.attDate = el.value > todayISO() ? todayISO() : el.value; return render(); }
+  if (el.id === 'attMonth' && el.value) { UI.attMonth = el.value; return render(); }
+  if (el.dataset && (el.dataset.tin || el.dataset.tout)) {
+    const id = el.dataset.tin || el.dataset.tout, r = attDay('teachers', curDate(), true)[id];
+    if (r) { r[el.dataset.tin ? 'in' : 'out'] = el.value; if (save()) toast('সময় সংরক্ষিত হয়েছে'); }
+  }
+});
 window.addEventListener('hashchange', () => { closeSheet(); render(); window.scrollTo(0,0); });
 render();
 if (BR) setTimeout(() => checkUpdate(false), 1500);
