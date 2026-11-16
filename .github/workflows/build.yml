@@ -2,13 +2,21 @@ name: Build APK
 
 on:
   push:
+    paths:
+      - '*.zip'
+      - '.github/workflows/build.yml'
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-java@v4
         with:
@@ -17,13 +25,37 @@ jobs:
 
       - name: Unzip and build
         run: |
-          f=$(ls *.zip | head -1)
-          unzip -q "$f" -d src
-          cd "$(dirname "$(find src -name gradlew | head -1)")"
+          f=$(git log --name-only --pretty=format: -- '*.zip' | grep '\.zip$' | while IFS= read -r z; do [ -f "$z" ] && echo "$z" && break; done)
+          echo "Using: $f"
+          rm -rf src && unzip -q "$f" -d src
+          P="$(dirname "$(find src -name gradlew | head -1)")"
+          echo "P=$P" >> "$GITHUB_ENV"
+          printf '{"updateBase":"https://raw.githubusercontent.com/%s/%s/update/","repo":"%s"}' \
+            "$GITHUB_REPOSITORY" "$GITHUB_REF_NAME" "$GITHUB_REPOSITORY" > "$P/app/src/main/assets/config.json"
+          cd "$P"
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
+
+      - name: Publish release and update files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          APK="$P/app/build/outputs/apk/debug/app-debug.apk"
+          V=$(jq -r .version "$P/version.json")
+          jq -r .notes "$P/version.json" > notes.txt
+          gh release create "v$V" "$APK" --title "সংস্করণ $V" --notes-file notes.txt --latest \
+            || gh release upload "v$V" "$APK" --clobber
+          mkdir -p update
+          cp "$P/app/src/main/assets/index.html" update/index.html
+          cp "$P/version.json" update/version.json
+          rm -f notes.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898333+github-actions[bot]@users.noreply.github.com"
+          git add update
+          git commit -m "Update files for v$V" || echo "No changes"
+          git push
 
       - uses: actions/upload-artifact@v4
         with:
           name: ShikkhokApp-APK
-          path: src/**/app-debug.apk
+          path: ${{ env.P }}/app/build/outputs/apk/debug/app-debug.apk
