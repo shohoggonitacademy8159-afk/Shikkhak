@@ -149,6 +149,8 @@ form.f{display:flex;flex-direction:column;gap:14px}
 .times label{font-size:12px;color:var(--mute);display:flex;flex-direction:column;gap:4px}
 .times input{font:inherit;font-size:14px;border:1px solid #B8C6D6;border-radius:10px;padding:6px 8px;min-height:40px;color:var(--ink);background:#fff}
 .pct{font-size:13px;font-weight:700;flex-shrink:0;text-align:right;min-width:52px}
+.certwrap{background:#fff;border:1px solid var(--line);border-radius:16px;padding:10px;overflow:hidden}
+.warnbox{background:#FFF6E5;border:1px solid #F2D49B;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px;font-size:13px;color:#5C3B00}
 #updbar{max-width:480px;margin:0 auto;position:sticky;top:0;z-index:6}
 #updbar:empty{display:none}
 .upd{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;color:#fff;background:#12284A}
@@ -209,7 +211,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '1.4';
+const WEB_VERSION = '1.5';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -244,7 +246,7 @@ function drawUpdBar(){
     <span style="display:flex;padding-top:2px">${ic('refresh',22)}</span>
     <span class="grow"><b style="font-size:14px;display:block">${web?`নতুন আপডেট (সংস্করণ ${v}) প্রস্তুত`:`অ্যাপের নতুন সংস্করণ ${v} এসেছে`}</b>
     <span style="font-size:12px;opacity:.92;display:block">${esc(UPD.notes || (web?'চালু করলে নতুন সুবিধা যুক্ত হবে। আপনার তথ্য ঠিক থাকবে।':'নতুন APK ডাউনলোড করে ইনস্টল করুন।'))}</span></span>
-    ${web?'<button class="btn" data-upd-apply>চালু করুন</button>':'<button class="btn" data-upd-apk>ডাউনলোড</button>'}
+    ${web?'<button class="btn" data-upd-apply>চালু করুন</button>':`${UPD.webSaved?'<button class="btn" data-upd-apply>চালু করুন</button>':''}<button class="btn" data-upd-apk>ডাউনলোড</button>`}
     <button class="x" data-upd-dismiss aria-label="পরে">${ic('x',18)}</button>
   </div>`;
 }
@@ -299,24 +301,32 @@ const STATUS = {done:['রেজুলেশন সম্পন্ন','#E3F4EA'
 const PAL = ['#1E8A55','#2563C9','#D23F74','#7C4DCC','#0E8C82','#E0701A'];
 const m = (name, role) => ({id:uid(), name, role, phone:''});
 const DEFAULTS = () => ({
-  teacher:{name:'ফারজানা আক্তার', designation:'সহকারী শিক্ষক', school:'রূপনগর সরকারি প্রাথমিক বিদ্যালয়', mobile:''},
+  teacher:{name:'ফারজানা আক্তার', designation:'সহকারী শিক্ষক', school:'রূপনগর সরকারি প্রাথমিক বিদ্যালয়', mobile:'', upazila:'', district:'', emis:''},
   committees:{
     smc:[m('মোঃ আব্দুল করিম','সভাপতি'),m('রাশেদা বেগম','সহ-সভাপতি'),m('নাসরিন সুলতানা','সদস্য সচিব (প্রধান শিক্ষক)'),m('ফারজানা আক্তার','শিক্ষক প্রতিনিধি'),m('মোঃ জসিম উদ্দিন','অভিভাবক প্রতিনিধি')],
     pta:[m('সেলিনা আক্তার','সভাপতি (অভিভাবক)'),m('নাসরিন সুলতানা','সদস্য সচিব (প্রধান শিক্ষক)'),m('ফারজানা আক্তার','শিক্ষক সদস্য'),m('মোঃ মিজানুর হোসেন','অভিভাবক সদস্য')],
     slip:[m('নাসরিন সুলতানা','আহ্বায়ক (প্রধান শিক্ষক)'),m('মোঃ আব্দুল করিম','এসএমসি প্রতিনিধি'),m('ফারজানা আক্তার','শিক্ষক প্রতিনিধি'),m('তানিয়া ইসলাম','অভিভাবক প্রতিনিধি')]
   },
-  teachers:[], students:[], plans:[], customSubjects:{}
+  teachers:[], students:[], plans:[], certs:[], customSubjects:{}
 });
 
 const KEY = 'shikkhok_app_v1';
 // First time: start the teacher list with the user's own profile.
 function withTeachers(db){
   if (!Array.isArray(db.teachers)) db.teachers = [];
+  if (!Array.isArray(db.certs)) db.certs = [];
   if (!db.attendance || typeof db.attendance !== 'object') db.attendance = {};
   db.attendance.teachers = db.attendance.teachers || {};
   db.attendance.students = db.attendance.students || {};
+  // Give every teacher a serial number (ক্রমিক নং) once, in the old designation order.
+  const noSerial = db.teachers.filter(t => !(parseInt(t.serial) > 0));
+  if (noSerial.length) {
+    const rank = t => { const i = ['প্রধান শিক্ষক','ভারপ্রাপ্ত প্রধান শিক্ষক','চলতি দায়িত্বপ্রাপ্ত প্রধান শিক্ষক','সহকারী শিক্ষক','সহকারী শিক্ষক (প্রাক-প্রাথমিক)','দপ্তরি কাম প্রহরী'].indexOf(t.designation); return i < 0 ? 99 : i; };
+    let next = Math.max(0, ...db.teachers.map(t => parseInt(t.serial) || 0)) + 1;
+    noSerial.sort((a,b) => rank(a) - rank(b)).forEach(t => { t.serial = next++; });
+  }
   if (!db.teachersSeeded) {
-    if (!db.teachers.length && db.teacher && db.teacher.name) db.teachers.push({id:uid(), name:db.teacher.name, designation:db.teacher.designation||'সহকারী শিক্ষক', mobile:db.teacher.mobile||'', me:true});
+    if (!db.teachers.length && db.teacher && db.teacher.name) db.teachers.push({id:uid(), serial:1, name:db.teacher.name, designation:db.teacher.designation||'সহকারী শিক্ষক', mobile:db.teacher.mobile||'', me:true});
     db.teachersSeeded = true;
   }
   return db;
@@ -339,7 +349,7 @@ function save(){
 }
 
 /* ---------- ui state ---------- */
-const UI = {attDate:null, attView:'day', attMonth:null, attClass:null, committeeTab:'smc', showAllMembers:false, stuClass:'all', stuQuery:'', lpClass:'1', lpSubject:null};
+const UI = {cert:{type:'study', cls:null, sid:null, q:'', memo:'', date:null, reason:'অভিভাবকের অনুরোধে', passed:''}, attDate:null, attView:'day', attMonth:null, attClass:null, committeeTab:'smc', showAllMembers:false, stuClass:'all', stuQuery:'', lpClass:'1', lpSubject:null};
 try { UI.committeeTab = localStorage.getItem('committeeTab') || 'smc'; } catch(e) {}
 
 const FEATURES_A = [
@@ -351,7 +361,7 @@ const FEATURES_A = [
   ['lesson-plan','plan','#7C4DCC','পাঠ পরিকল্পনা','সকল শ্রেণি ও বিষয়'],
   ['textbooks','book','#0E8C82','পাঠ্যবই','বই ও শিক্ষক সহায়িকা'],
   ['assessment','tools','#4F46E5','মূল্যায়ন টুলস','নম্বর, ফলাফল ও অগ্রগতি'],
-  ['certificates','cert','#C27C0E','সনদ ও কাগজপত্র','প্রত্যয়নপত্র, ছাড়পত্র ও ফরম'],
+  ['certificates','cert','#C27C0E','সনদ ও কাগজপত্র','প্রত্যয়নপত্র ও ছাড়পত্র'],
   ['committee','committee','#C0392B','কমিটি','এসএমসি, পিটিএ ও স্লিপ'],
 ];
 const FEATURES_B = [
@@ -461,6 +471,12 @@ function profile(){
       ${field('name','শিক্ষকের নাম', inp('name', t.name, 'required maxlength="80"'), true)}
       ${field('designation','পদবি', sel('designation', DESIGNATIONS.includes(t.designation)?DESIGNATIONS:[t.designation,...DESIGNATIONS], t.designation))}
       ${field('mobile','মোবাইল নম্বর', inp('mobile', t.mobile, 'type="tel" inputmode="tel" maxlength="20" placeholder="০১XXXXXXXXX"'))}
+      <h3 style="font-size:14px;color:var(--g);margin-top:4px">বিদ্যালয়ের ঠিকানা (সনদে ছাপা হবে)</h3>
+      <div class="row2">
+        ${field('upazila','উপজেলা', inp('upazila', t.upazila, 'maxlength="40"'))}
+        ${field('district','জেলা', inp('district', t.district, 'maxlength="40"'))}
+      </div>
+      ${field('emis','ইআইআইএন / ইএমআইএস কোড', inp('emis', t.emis, 'inputmode="numeric" maxlength="20"'))}
       <button type="submit" class="btn solid big">সংরক্ষণ করুন</button>
     </form>
   </div>`;
@@ -524,17 +540,18 @@ function memberSheet(id){
 }
 
 /* ---------- teachers ---------- */
+const bySerial = list => [...list].sort((a,b) => (parseInt(a.serial)||9999) - (parseInt(b.serial)||9999) || a.name.localeCompare(b.name, 'bn'));
+const nextSerial = () => Math.max(0, ...DB.teachers.map(t => parseInt(t.serial) || 0)) + 1;
 const T_DESIG = ['প্রধান শিক্ষক','ভারপ্রাপ্ত প্রধান শিক্ষক','চলতি দায়িত্বপ্রাপ্ত প্রধান শিক্ষক','সহকারী শিক্ষক','সহকারী শিক্ষক (প্রাক-প্রাথমিক)','দপ্তরি কাম প্রহরী','অন্যান্য'];
 function teachers(){
-  const rank = t => { const i = T_DESIG.indexOf(t.designation); return i < 0 ? 99 : i; };
-  const list = [...DB.teachers].sort((a,b) => rank(a) - rank(b) || a.name.localeCompare(b.name, 'bn'));
+  const list = bySerial(DB.teachers);
   return innerHeader('শিক্ষক তালিকা','users','#0E7490') + `
   <div class="sec" style="padding-top:16px">
     <button class="btn solid big full" data-teacher-new>${ic('plus',20)} নতুন শিক্ষক যোগ করুন</button>
     <div class="top"><h2 style="font-size:17px">মোট ${bn(list.length)} জন</h2></div>
     ${list.length ? `<div class="list">${list.map((t,i) => `
       <div class="mem">
-        <span class="ma" style="background:${PAL[i%PAL.length]}" aria-hidden="true">${esc(initials(t.name))}</span>
+        <span class="rollb" title="ক্রমিক নং" aria-label="ক্রমিক ${esc(bn(t.serial||''))}">${esc(bn(t.serial||'–'))}</span>
         <span class="grow"><span class="t1" style="font-weight:600">${esc(t.name)}${t.me?' <span class="st" style="background:#E3F4EA;color:#17663F;margin:0">আমি</span>':''}</span><span class="t2">${esc(t.designation)}${t.mobile?' · '+esc(t.mobile):''}</span></span>
         ${t.mobile?`<a class="sq" href="tel:${esc(toEn(t.mobile).replace(/[^\d+]/g,''))}" aria-label="${esc(t.name)}-কে ফোন করুন">${ic('phone',20)}</a>`:''}
         <button class="sq blue" data-teacher="${t.id}" aria-label="${esc(t.name)} সম্পাদনা">${ic('edit',20)}</button>
@@ -547,7 +564,10 @@ function teacherSheet(id){
   if (!t) return;
   openSheet(`<form class="f" id="teacherForm">
     <h2 style="font-size:18px">${id?'শিক্ষকের তথ্য':'নতুন শিক্ষক'}</h2>
-    ${field('t_name','নাম', inp('t_name', t.name, 'required maxlength="80"'), true)}
+    <div style="display:grid;grid-template-columns:96px minmax(0,1fr);gap:12px">
+      ${field('t_serial','ক্রমিক নং', inp('t_serial', bn(t.serial || nextSerial()), 'inputmode="numeric" maxlength="4" required'), true)}
+      ${field('t_name','নাম', inp('t_name', t.name, 'required maxlength="80"'), true)}
+    </div>
     ${field('t_desig','পদবি', sel('t_desig', T_DESIG.includes(t.designation)?T_DESIG:[t.designation,...T_DESIG], t.designation))}
     ${field('t_mobile','মোবাইল নম্বর', inp('t_mobile', t.mobile, 'type="tel" inputmode="tel" maxlength="20" placeholder="০১XXXXXXXXX"'))}
     <div class="row2">
@@ -563,8 +583,10 @@ function teacherSheet(id){
   document.getElementById('teacherForm').addEventListener('submit', e => {
     e.preventDefault();
     const d = formData(e.target);
-    const rec = {name:d.t_name.trim(), designation:d.t_desig, mobile:d.t_mobile.trim(), join:d.t_join, dob:d.t_dob, pds:toEn(d.t_pds.trim()), edu:d.t_edu.trim(), notes:d.t_notes.trim()};
+    const rec = {serial:parseInt(toEn(d.t_serial)) || nextSerial(), name:d.t_name.trim(), designation:d.t_desig, mobile:d.t_mobile.trim(), join:d.t_join, dob:d.t_dob, pds:toEn(d.t_pds.trim()), edu:d.t_edu.trim(), notes:d.t_notes.trim()};
     if (!rec.name) return;
+    // A serial already in use: move that teacher and everyone after them down by one.
+    if (DB.teachers.some(x => x !== t && parseInt(x.serial) === rec.serial)) DB.teachers.forEach(x => { if (x !== t && parseInt(x.serial) >= rec.serial) x.serial = parseInt(x.serial) + 1; });
     if (id) Object.assign(t, rec); else DB.teachers.push({id:uid(), ...rec});
     if (save()) toast(id?'শিক্ষকের তথ্য হালনাগাদ হয়েছে':'নতুন শিক্ষক যোগ হয়েছে');
     closeSheet(); render();
@@ -786,7 +808,7 @@ function longDate(iso){ try { return new Date(iso + 'T00:00:00').toLocaleDateStr
 function monthName(ym){ try { return new Date(ym + '-01T00:00:00').toLocaleDateString('bn-BD',{month:'long',year:'numeric'}); } catch(e){ return ym; } }
 const isFriday = iso => new Date(iso + 'T00:00:00').getDay() === 5;
 const pill = (txt, fg, bg) => `<span style="color:${fg};background:${bg}">${txt}</span>`;
-function sortedStudents(cls){ return DB.students.filter(x => x.cls === cls).sort((a,b) => (a.section||'').localeCompare(b.section||'') || (parseInt(toEn(a.roll))||999) - (parseInt(toEn(b.roll))||999)); }
+function sortedStudents(cls){ return DB.students.filter(x => x.cls === cls).sort((a,b) => (parseInt(toEn(a.roll))||9999) - (parseInt(toEn(b.roll))||9999) || (a.section||'').localeCompare(b.section||'') || a.name.localeCompare(b.name,'bn')); }
 function classesWithStudents(){ return CLASSES.filter(([k]) => DB.students.some(x => x.cls === k)); }
 
 function dateBar(){
@@ -812,7 +834,7 @@ function teacherAtt(){
 }
 function teacherDay(){
   const d = curDate(), day = attDay('teachers', d);
-  const list = [...DB.teachers].sort((a,b) => { const r = t => { const i = T_DESIG.indexOf(t.designation); return i < 0 ? 99 : i; }; return r(a) - r(b); });
+  const list = bySerial(DB.teachers);
   const cnt = k => list.filter(t => (day[t.id]||{}).s === k).length;
   const marked = list.filter(t => day[t.id] && day[t.id].s).length;
   return dateBar() + `
@@ -820,7 +842,7 @@ function teacherDay(){
     ${marked < list.length ? `<button class="btn big full" data-tatt-all>${ic('teacher',20)} বাকি সবাইকে উপস্থিত করুন</button>` : ''}
     ${list.map(t => { const r = day[t.id] || {}; const present = r.s === 'p' || r.s === 'late';
       return `<div class="attrow">
-        <div style="display:flex;align-items:center;gap:10px"><span class="ma" style="background:${r.s ? ATT_T[r.s][1] : '#9AA8B8'};width:40px;height:40px;font-size:14px" aria-hidden="true">${esc(initials(t.name))}</span>
+        <div style="display:flex;align-items:center;gap:10px"><span class="rollb" style="${r.s ? `background:${ATT_T[r.s][2]};color:${ATT_T[r.s][1]}` : ''}" aria-label="ক্রমিক ${esc(bn(t.serial||''))}">${esc(bn(t.serial||'–'))}</span>
           <span class="grow"><span class="t1" style="font-weight:600">${esc(t.name)}</span><span class="t2">${esc(t.designation)}${r.s ? ' · ' + ATT_T[r.s][0] : ''}</span></span></div>
         <div class="attbtns" role="group" aria-label="${esc(t.name)}-এর হাজিরা">${Object.entries(ATT_T).map(([k,v]) => `<button data-tatt="${t.id}" data-st="${k}" aria-pressed="${r.s===k}" style="${r.s===k?`background:${v[2]};color:${v[1]};border-color:${v[1]}`:''}">${v[0]}</button>`).join('')}</div>
         ${present ? `<div class="times"><label>আগমন<input type="time" data-tin="${t.id}" value="${esc(r.in||'')}"></label><label>প্রস্থান<input type="time" data-tout="${t.id}" value="${esc(r.out||'')}"></label></div>` : ''}
@@ -830,10 +852,10 @@ function teacherDay(){
 function teacherMonth(){
   const ym = curMonth();
   const days = Object.keys(DB.attendance.teachers).filter(d => d.startsWith(ym) && Object.keys(DB.attendance.teachers[d]).length).sort();
-  const rows = DB.teachers.map(t => { const c = {p:0,late:0,l:0,a:0}; days.forEach(d => { const r = DB.attendance.teachers[d][t.id]; if (r && c[r.s] !== undefined) c[r.s]++; }); return {t, c}; });
+  const rows = bySerial(DB.teachers).map(t => { const c = {p:0,late:0,l:0,a:0}; days.forEach(d => { const r = DB.attendance.teachers[d][t.id]; if (r && c[r.s] !== undefined) c[r.s]++; }); return {t, c}; });
   return monthBar() + `
     <div class="card" style="gap:10px"><h2 style="font-size:16px">${monthName(ym)}</h2><span class="t2" style="font-size:13px">হাজিরা নেওয়া হয়েছে ${bn(days.length)} দিন</span></div>
-    ${days.length ? `<div class="list">${rows.map(({t,c}) => `<div class="mem"><span class="grow"><span class="t1" style="font-weight:600">${esc(t.name)}</span><span class="sumrow" style="margin-top:4px">${pill('উপ '+bn(c.p),'#17663F','#E3F4EA')}${pill('দেরি '+bn(c.late),'#7A4A00','#FFF1D6')}${pill('ছুটি '+bn(c.l),'#1F4E8C','#E6EFFA')}${pill('অনু '+bn(c.a),'#B42318','#FDE8E6')}</span></span></div>`).join('')}</div>
+    ${days.length ? `<div class="list">${rows.map(({t,c}) => `<div class="mem"><span class="rollb">${esc(bn(t.serial||'–'))}</span><span class="grow"><span class="t1" style="font-weight:600">${esc(t.name)}</span><span class="sumrow" style="margin-top:4px">${pill('উপ '+bn(c.p),'#17663F','#E3F4EA')}${pill('দেরি '+bn(c.late),'#7A4A00','#FFF1D6')}${pill('ছুটি '+bn(c.l),'#1F4E8C','#E6EFFA')}${pill('অনু '+bn(c.a),'#B42318','#FDE8E6')}</span></span></div>`).join('')}</div>
       <button class="btn big full" data-copy-tmonth>${ic('copy',20)} প্রতিবেদন কপি করুন</button>`
     : '<div class="card empty"><p class="t2" style="font-size:14px">এই মাসে কোনো হাজিরা নেওয়া হয়নি।</p></div>'}`;
 }
@@ -924,8 +946,139 @@ function teacherMonthText(){
   const ym = curMonth();
   const days = Object.keys(DB.attendance.teachers).filter(d => d.startsWith(ym) && Object.keys(DB.attendance.teachers[d]).length);
   return `${DB.teacher.school}\nশিক্ষক উপস্থিতি — ${monthName(ym)}\nহাজিরার দিন: ${bn(days.length)}\n\n` +
-    DB.teachers.map(t => { const c = {p:0,late:0,l:0,a:0}; days.forEach(d => { const r = DB.attendance.teachers[d][t.id]; if (r && c[r.s] !== undefined) c[r.s]++; });
-      return `${t.name} (${t.designation}): উপস্থিত ${bn(c.p)}, দেরি ${bn(c.late)}, ছুটি ${bn(c.l)}, অনুপস্থিত ${bn(c.a)}`; }).join('\n');
+    bySerial(DB.teachers).map(t => { const c = {p:0,late:0,l:0,a:0}; days.forEach(d => { const r = DB.attendance.teachers[d][t.id]; if (r && c[r.s] !== undefined) c[r.s]++; });
+      return `${bn(t.serial||'')}. ${t.name} (${t.designation}): উপস্থিত ${bn(c.p)}, দেরি ${bn(c.late)}, ছুটি ${bn(c.l)}, অনুপস্থিত ${bn(c.a)}`; }).join('\n');
+}
+
+/* ---------- certificates ---------- */
+const CERT_TYPES = {study:'প্রত্যয়নপত্র', tc:'ছাড়পত্র'};
+const CLASS_OF = {pre:'প্রাক-প্রাথমিক শ্রেণির','1':'১ম শ্রেণির','2':'২য় শ্রেণির','3':'৩য় শ্রেণির','4':'৪র্থ শ্রেণির','5':'৫ম শ্রেণির'};
+const CLASS_IN = {pre:'প্রাক-প্রাথমিক শ্রেণিতে','1':'১ম শ্রেণিতে','2':'২য় শ্রেণিতে','3':'৩য় শ্রেণিতে','4':'৪র্থ শ্রেণিতে','5':'৫ম শ্রেণিতে'};
+const TC_REASONS = ['অভিভাবকের অনুরোধে','অভিভাবকের বদলিজনিত কারণে','বাসস্থান পরিবর্তনের কারণে','অন্য বিদ্যালয়ে ভর্তির জন্য'];
+const CERT_CSS = `
+.cert{font-family:'Hind Siliguri','SolaimanLipi','Nikosh','Noto Sans Bengali',sans-serif;color:#111;background:#fff;border:3px double #1E7F4F;padding:28px 30px;box-sizing:border-box;line-height:1.75;font-size:15px}
+.cert .c-head{text-align:center;border-bottom:2px solid #1E7F4F;padding-bottom:10px;margin-bottom:12px}
+.cert .c-school{font-size:22px;font-weight:700;color:#12284A;line-height:1.4}
+.cert .c-sub{font-size:13px;color:#333}
+.cert .c-meta{display:flex;justify-content:space-between;gap:12px;font-size:13px;margin-bottom:14px}
+.cert .c-title{text-align:center;margin:6px 0 16px}
+.cert .c-title span{display:inline-block;font-size:20px;font-weight:700;border:1.5px solid #12284A;border-radius:6px;padding:2px 22px}
+.cert p{margin:0 0 12px;text-align:justify}
+.cert b{font-weight:700}
+.cert .blank{color:#888}
+.cert .c-sign{margin-top:56px;margin-left:auto;width:220px;text-align:center;font-size:13px;line-height:1.5}
+.cert .c-sign .line{border-top:1px solid #111;margin-bottom:6px}
+`;
+function headTeacher(){
+  const h = bySerial(DB.teachers).find(t => /প্রধান শিক্ষক/.test(t.designation));
+  return h ? h.name : '';
+}
+function certFields(st){
+  return [['father','পিতার নাম'],['mother','মাতার নাম'],['roll','রোল'],['dob','জন্ম তারিখ'],['address','ঠিকানা']].filter(([k]) => !st[k]);
+}
+function certInner(c, st){
+  const v = (x) => x ? `<b>${esc(x)}</b>` : '<span class="blank">.............................</span>';
+  const T = DB.teacher;
+  const sub = [T.upazila && 'উপজেলা: ' + T.upazila, T.district && 'জেলা: ' + T.district].filter(Boolean).join(', ');
+  const who = `${v(st.name)}, পিতা: ${v(st.father)}, মাতা: ${v(st.mother)}, ঠিকানা: ${v(st.address)}`;
+  const dob = st.dob ? longDate(st.dob).replace(/^[^,]+,\s*/, '') : '';
+  const body = c.type === 'tc'
+    ? `<p>এই মর্মে প্রত্যয়ন করা যাচ্ছে যে, ${who}, অত্র বিদ্যালয়ে ${CLASS_IN[st.cls] || ''} অধ্যয়নরত ছিল। তার রোল নম্বর ${v(st.roll && bn(st.roll))}। বিদ্যালয়ের ভর্তি রেজিস্টার অনুযায়ী তার জন্ম তারিখ ${v(dob && bn(dob))}${st.birthreg ? `, জন্ম নিবন্ধন নম্বর ${v(bn(st.birthreg))}` : ''}।</p>
+       ${c.passed ? `<p>সে ${v(c.passed)} উত্তীর্ণ হয়েছে।</p>` : ''}
+       <p>${esc(c.reason || 'অভিভাবকের অনুরোধে')} তাকে এই ছাড়পত্র প্রদান করা হলো। বিদ্যালয়ে তার নিকট কোনো পাওনা নেই। অধ্যয়নকালে তার আচরণ সন্তোষজনক ছিল।</p>
+       <p>আমি তার উজ্জ্বল ভবিষ্যৎ কামনা করি।</p>`
+    : `<p>এই মর্মে প্রত্যয়ন করা যাচ্ছে যে, ${who}, অত্র বিদ্যালয়ের ${CLASS_OF[st.cls] || ''} একজন নিয়মিত শিক্ষার্থী। তার রোল নম্বর ${v(st.roll && bn(st.roll))}। বিদ্যালয়ের ভর্তি রেজিস্টার অনুযায়ী তার জন্ম তারিখ ${v(dob && bn(dob))}${st.birthreg ? `, জন্ম নিবন্ধন নম্বর ${v(bn(st.birthreg))}` : ''}।</p>
+       <p>আমার জানামতে তার স্বভাব-চরিত্র ভালো। সে রাষ্ট্র বা সমাজবিরোধী কোনো কাজে জড়িত নয়।</p>
+       <p>আমি তার সর্বাঙ্গীণ মঙ্গল কামনা করি।</p>`;
+  const date = c.date || todayISO();
+  return `<div class="cert">
+    <div class="c-head"><div class="c-school">${esc(T.school)}</div>${sub ? `<div class="c-sub">${esc(sub)}</div>` : ''}${T.emis ? `<div class="c-sub">ইআইআইএন/ইএমআইএস কোড: ${esc(bn(T.emis))}</div>` : ''}</div>
+    <div class="c-meta"><span>স্মারক নং: ${c.memo ? esc(c.memo) : '..................'}</span><span>তারিখ: ${esc(bn(longDate(date).replace(/^[^,]+,\s*/, '')))}</span></div>
+    <div class="c-title"><span>${CERT_TYPES[c.type]}</span></div>
+    ${body}
+    <div class="c-sign"><div class="line"></div><div>প্রধান শিক্ষক</div>${headTeacher() ? `<div>${esc(headTeacher())}</div>` : ''}<div>${esc(T.school)}</div></div>
+  </div>`;
+}
+function certDoc(c, st){
+  return `<!DOCTYPE html><html lang="bn"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${CERT_TYPES[c.type]} - ${esc(st.name)}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>@page{size:A4;margin:16mm}html,body{margin:0;background:#fff}${CERT_CSS}.cert{min-height:240mm}</style></head><body>${certInner(c, st)}</body></html>`;
+}
+function certStudent(){ return DB.students.find(x => x.id === UI.cert.sid) || null; }
+function certificates(){
+  const c = UI.cert; if (!c.date) c.date = todayISO();
+  const head = innerHeader('সনদ ও কাগজপত্র','cert','#C27C0E');
+  if (!DB.students.length) return head + `<div class="card empty"><span class="ib" style="background:#D23F74">${S(P.profile)}</span><p class="t2" style="font-size:14px;line-height:1.6">সনদ দিতে আগে শিক্ষার্থী তালিকায় শিক্ষার্থীর তথ্য যোগ করুন।</p><button class="btn solid" data-go="students">শিক্ষার্থী তালিকা খুলুন</button></div>`;
+  const tabs = `<div class="tabs2" role="tablist">${Object.entries(CERT_TYPES).map(([k,l]) => `<button role="tab" class="${c.type===k?'on':''}" data-cert-type="${k}">${l}</button>`).join('')}</div>`;
+  const st = certStudent();
+  if (!st) {
+    const cl = classesWithStudents();
+    if (!c.cls || !cl.some(([k]) => k === c.cls)) c.cls = cl[0][0];
+    return head + `<div class="sec" style="padding-top:16px">${tabs}
+      <h2 style="font-size:17px">কার ${CERT_TYPES[c.type]} দেবেন?</h2>
+      <label class="search">${ic('search',20)}<input id="certSearch" type="search" placeholder="নাম বা রোল দিয়ে খুঁজুন" value="${esc(c.q)}" aria-label="শিক্ষার্থী খুঁজুন"></label>
+      <div class="chips" role="tablist" aria-label="শ্রেণি">${cl.map(([k,l]) => `<button class="${k===c.cls?'on':''}" data-cert-class="${k}">${l}</button>`).join('')}</div>
+      <div id="certList">${certListHtml()}</div>
+      ${certLogHtml()}
+    </div>`;
+  }
+  const miss = certFields(st);
+  return head + `<div class="sec" style="padding-top:16px">${tabs}
+    <div class="lrow" style="cursor:default"><span class="rollb">${st.roll ? esc(bn(st.roll)) : '–'}</span><span class="grow"><span class="t1">${esc(st.name)}</span><span class="t2">${CLASS_NAME[st.cls]||''}${st.father ? ' · পিতা: ' + esc(st.father) : ''}</span></span><button class="btn" data-cert-change>বদলান</button></div>
+    ${miss.length ? `<div class="warnbox" role="note"><b>এই তথ্যগুলো প্রোফাইলে নেই: ${miss.map(m => m[1]).join(', ')}</b><span>সনদে এগুলোর জায়গা ফাঁকা থাকবে। চাইলে আগে প্রোফাইলে যোগ করে নিন।</span><button class="btn" data-stu="${st.id}" style="align-self:flex-start">${ic('edit',18)} প্রোফাইলে যোগ করুন</button></div>` : ''}
+    <div class="card" style="gap:12px">
+      <div class="row2">
+        ${field('c_memo','স্মারক নং', inp('c_memo', c.memo, 'maxlength="40" placeholder="ঐচ্ছিক" data-cert-in="memo"'))}
+        ${field('c_date','তারিখ', inp('c_date', c.date, 'type="date" data-cert-in="date"'))}
+      </div>
+      ${c.type === 'tc' ? `
+        ${field('c_reason','ছাড়পত্র দেওয়ার কারণ', inp('c_reason', c.reason, 'maxlength="80" list="tcReasons" data-cert-in="reason"'))}
+        <datalist id="tcReasons">${TC_REASONS.map(r => `<option value="${r}">`).join('')}</datalist>
+        ${field('c_passed','উত্তীর্ণ শ্রেণি / পরীক্ষা', inp('c_passed', c.passed, 'maxlength="80" placeholder="ঐচ্ছিক, যেমন: ২০২৬ সালের বার্ষিক পরীক্ষায় ৩য় শ্রেণি" data-cert-in="passed"'))}` : ''}
+      ${headTeacher() ? '' : '<p class="hint">শিক্ষক তালিকায় "প্রধান শিক্ষক" পদবির কেউ না থাকায় স্বাক্ষরের নিচে নাম থাকবে না।</p>'}
+    </div>
+    <h2 style="font-size:17px">সনদের নমুনা</h2>
+    <div class="certwrap"><style>${CERT_CSS}.certwrap .cert{padding:18px 16px;font-size:13.5px}.certwrap .c-school{font-size:18px}.certwrap .c-sign{margin-top:36px}</style><div id="certPreview">${certInner(c, st)}</div></div>
+    <button class="btn solid big full" data-cert-print>${ic('doc',20)} প্রিন্ট / PDF সংরক্ষণ</button>
+    <button class="btn big full" data-cert-copy>${ic('copy',20)} লেখা কপি করুন</button>
+  </div>`;
+}
+function certListHtml(){
+  const c = UI.cert, q = toEn(c.q.trim()).toLowerCase();
+  const list = (q ? DB.students.filter(s => (s.name + ' ' + toEn(s.roll||'')).toLowerCase().includes(q)) : sortedStudents(c.cls))
+    .sort((a,b) => (a.cls+'').localeCompare(b.cls+'') || (parseInt(toEn(a.roll))||9999) - (parseInt(toEn(b.roll))||9999));
+  if (!list.length) return '<div class="card empty"><p class="t2" style="font-size:14px">কোনো শিক্ষার্থী পাওয়া যায়নি।</p></div>';
+  return `<div class="list">${list.map(s => `<button class="mem tap" data-cert-pick="${s.id}"><span class="rollb">${s.roll ? esc(bn(s.roll)) : '–'}</span><span class="grow"><span class="t1" style="font-weight:600">${esc(s.name)}</span><span class="t2">${CLASS_NAME[s.cls]||''}${s.father ? ' · পিতা: ' + esc(s.father) : ''}</span></span><span style="color:var(--mute)">${ic('chev',20)}</span></button>`).join('')}</div>`;
+}
+function certLogHtml(){
+  const log = (DB.certs || []).slice(-8).reverse();
+  if (!log.length) return '';
+  return `<h2 style="font-size:17px;margin-top:8px">সম্প্রতি দেওয়া সনদ</h2><div class="list">${log.map(l => `<button class="mem tap" data-cert-log="${l.id}"><span class="grow"><span class="t1" style="font-weight:600">${esc(l.name)} — ${CERT_TYPES[l.type]}</span><span class="t2">${esc(fmtDate(l.date))}${l.memo ? ' · স্মারক ' + esc(l.memo) : ''}</span></span><span style="color:var(--mute)">${ic('chev',20)}</span></button>`).join('')}</div>`;
+}
+function certPlainText(c, st){
+  const div = document.createElement('div'); div.innerHTML = certInner(c, st);
+  div.querySelectorAll('p,.c-school,.c-sub,.c-meta span,.c-title,.c-sign div').forEach(el => el.insertAdjacentText('afterend', '\n'));
+  return div.textContent.replace(/[ \t]+/g, ' ').replace(/\n[ \t]+/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+function logCert(c, st){
+  const last = DB.certs[DB.certs.length - 1];
+  if (last && last.sid === st.id && last.type === c.type && last.date === c.date && last.memo === c.memo) return;
+  DB.certs.push({id:uid(), type:c.type, sid:st.id, name:st.name, date:c.date, memo:c.memo, reason:c.reason, passed:c.passed, at:Date.now()});
+  if (DB.certs.length > 200) DB.certs = DB.certs.slice(-200);
+  save();
+}
+function printCert(){
+  const c = UI.cert, st = certStudent(); if (!st) return;
+  const html = certDoc(c, st), title = `${CERT_TYPES[c.type]} - ${st.name}`;
+  logCert(c, st);
+  if (BR && typeof BR.print === 'function') { try { BR.print(title, html); return; } catch(_) {} }
+  if (BR) { toast('প্রিন্ট করতে অ্যাপের নতুন সংস্করণ লাগবে — আপডেট খোঁজা হচ্ছে'); return checkUpdate(true); }
+  try {
+    const f = document.createElement('iframe'); f.style.cssText = 'position:fixed;width:0;height:0;border:0;right:0;bottom:0';
+    document.body.appendChild(f);
+    f.contentDocument.open(); f.contentDocument.write(html); f.contentDocument.close();
+    setTimeout(() => { try { f.contentWindow.focus(); f.contentWindow.print(); } catch(_) { toast('এখানে প্রিন্ট হচ্ছে না; Android অ্যাপ থেকে প্রিন্ট করুন'); } setTimeout(() => f.remove(), 60000); }, 600);
+  } catch(_) { toast('এখানে প্রিন্ট হচ্ছে না; Android অ্যাপ থেকে প্রিন্ট করুন'); }
 }
 
 /* ---------- settings ---------- */
@@ -1012,12 +1165,12 @@ const ROUTE_ALIAS = {'student-profile':'students'};
 function render(){
   let r = (location.hash || '#home').slice(1) || 'home';
   r = ROUTE_ALIAS[r] || r;
-  if (!(TOP.includes(r) || r==='committee' || r==='students' || r==='teachers' || r==='lesson-plan' || r==='teacher-att' || r==='student-att' || ALL[r])) r = 'home';
+  if (!(TOP.includes(r) || r==='committee' || r==='students' || r==='teachers' || r==='lesson-plan' || r==='teacher-att' || r==='student-att' || r==='certificates' || ALL[r])) r = 'home';
   if (r !== UI.lastRoute) { if (r === 'teacher-att' || r === 'student-att') UI.attView = 'day'; UI.lastRoute = r; }
   const inner = !TOP.includes(r);
   $app.classList.toggle('inner', inner);
   $nav.style.display = inner ? 'none' : 'grid';
-  const views = {home, profile, settings, committee, students, teachers, 'lesson-plan':lessonPlan, 'teacher-att':teacherAtt, 'student-att':studentAtt};
+  const views = {home, profile, settings, committee, students, teachers, 'lesson-plan':lessonPlan, 'teacher-att':teacherAtt, 'student-att':studentAtt, certificates};
   $app.innerHTML = (views[r] || (() => placeholder(r)))();
   $nav.innerHTML = NAV.map(n => `<button class="${n[0]===r?'on':''}" data-go="${n[0]}" aria-label="${n[1]}" ${n[0]===r?'aria-current="page"':''}><span class="p">${ic(n[2])}</span>${n[1]}</button>`).join('');
   bindView(r);
@@ -1028,12 +1181,21 @@ function bindView(r){
       e.preventDefault();
       const d = formData(e.target);
       if (!d.school.trim() || !d.name.trim()) return;
-      DB.teacher = {name:d.name.trim(), designation:d.designation, school:d.school.trim(), mobile:d.mobile.trim()};
+      DB.teacher = {name:d.name.trim(), designation:d.designation, school:d.school.trim(), mobile:d.mobile.trim(), upazila:d.upazila.trim(), district:d.district.trim(), emis:toEn(d.emis.trim())};
       const me = DB.teachers.find(x => x.me);
       if (me) Object.assign(me, {name:DB.teacher.name, designation:DB.teacher.designation, mobile:DB.teacher.mobile});
       if (save()) toast('প্রোফাইল সংরক্ষিত হয়েছে');
       render();
     });
+  }
+  if (r === 'certificates') {
+    const s = document.getElementById('certSearch');
+    if (s) s.addEventListener('input', () => { UI.cert.q = s.value; document.getElementById('certList').innerHTML = certListHtml(); });
+    document.querySelectorAll('[data-cert-in]').forEach(el => el.addEventListener('input', () => {
+      UI.cert[el.dataset.certIn] = el.value;
+      const st = certStudent(), pv = document.getElementById('certPreview');
+      if (st && pv) pv.innerHTML = certInner(UI.cert, st);
+    }));
   }
   if (r === 'students') {
     const s = document.getElementById('stuSearch');
@@ -1089,6 +1251,14 @@ document.addEventListener('click', e => {
   if ('toggleMembers' in ds) { UI.showAllMembers = !UI.showAllMembers; return render(); }
   if (ds.memberDel) { const id = ds.memberDel; const k = UI.committeeTab;
     return confirmSheet('সদস্য মুছবেন?', 'এই সদস্যের তথ্য কমিটি থেকে মুছে যাবে।', 'মুছুন', () => { DB.committees[k] = DB.committees[k].filter(x => x.id !== id); if (save()) toast('সদস্য মুছে ফেলা হয়েছে'); }); }
+  // certificates
+  if (ds.certType) { UI.cert.type = ds.certType; return render(); }
+  if (ds.certClass) { UI.cert.cls = ds.certClass; UI.cert.q = ''; return render(); }
+  if (ds.certPick) { UI.cert.sid = ds.certPick; window.scrollTo(0,0); return render(); }
+  if ('certChange' in ds) { UI.cert.sid = null; UI.cert.q = ''; return render(); }
+  if ('certPrint' in ds) return printCert();
+  if ('certCopy' in ds) { const st = certStudent(); if (st) { logCert(UI.cert, st); copyText(certPlainText(UI.cert, st), 'সনদের লেখা কপি হয়েছে'); } return; }
+  if (ds.certLog) { const l = DB.certs.find(x => x.id === ds.certLog); if (l && DB.students.some(x => x.id === l.sid)) { Object.assign(UI.cert, {type:l.type, sid:l.sid, memo:l.memo||'', date:l.date, reason:l.reason||UI.cert.reason, passed:l.passed||''}); window.scrollTo(0,0); render(); } else toast('এই শিক্ষার্থীর প্রোফাইল আর নেই'); return; }
   // attendance
   if (ds.attShift) { const n = parseInt(ds.attShift), nd = shiftDate(curDate(), n); if (nd <= todayISO()) { UI.attDate = nd; render(); } return; }
   if (ds.attView) { UI.attView = ds.attView; return render(); }
