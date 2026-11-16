@@ -171,6 +171,13 @@ img.ma{object-fit:cover;background:#E8EEF5}
 .stat2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .stat2 div{border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:2px}
 .stat2 b{font-size:20px;line-height:1.25}
+.mkrow{display:flex;align-items:center;gap:8px;padding:8px 10px;border-top:1px solid #EDF2EF}
+.mkrow:first-child{border-top:0}
+.mk{width:54px;min-height:42px;border:1px solid #B8C6D6;border-radius:10px;text-align:center;font:inherit;font-size:15px;color:var(--ink);background:#fff;padding:0 2px}
+.mk.bad{border-color:#B42318;background:#FDE8E6}
+.mktot{width:42px;text-align:right;font-weight:700;font-size:14px;flex-shrink:0}
+.mkhead{display:flex;gap:8px;padding:6px 10px;font-size:11px;color:var(--mute);font-weight:600}
+.gr{display:inline-block;min-width:30px;text-align:center;font-size:12px;font-weight:700;padding:1px 6px;border-radius:999px}
 #updbar{max-width:480px;margin:0 auto;position:sticky;top:0;z-index:6}
 #updbar:empty{display:none}
 .upd{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;color:#fff;background:#12284A}
@@ -231,7 +238,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '1.7';
+const WEB_VERSION = '1.8';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -390,6 +397,8 @@ function withTeachers(db){
   if (!Array.isArray(db.teachers)) db.teachers = [];
   if (!Array.isArray(db.certs)) db.certs = [];
   if (!db.gpf || typeof db.gpf !== 'object') db.gpf = {};
+  if (!db.marks || typeof db.marks !== 'object') db.marks = {};
+  if (!db.remarks || typeof db.remarks !== 'object') db.remarks = {};
   if (!db.attendance || typeof db.attendance !== 'object') db.attendance = {};
   db.attendance.teachers = db.attendance.teachers || {};
   db.attendance.students = db.attendance.students || {};
@@ -424,7 +433,7 @@ function save(){
 }
 
 /* ---------- ui state ---------- */
-const UI = {gpfView:'year', cert:{type:'study', cls:null, sid:null, q:'', memo:'', date:null, reason:'অভিভাবকের অনুরোধে', passed:''}, attDate:null, attView:'day', attMonth:null, attClass:null, committeeTab:'smc', showAllMembers:false, stuClass:'all', stuQuery:'', lpClass:'1', lpSubject:null};
+const UI = {as:{view:'entry', year:String(new Date().getFullYear()), term:'t1', cls:null, subj:null, sid:null}, gpfView:'year', cert:{type:'study', cls:null, sid:null, q:'', memo:'', date:null, reason:'অভিভাবকের অনুরোধে', passed:''}, attDate:null, attView:'day', attMonth:null, attClass:null, committeeTab:'smc', showAllMembers:false, stuClass:'all', stuQuery:'', lpClass:'1', lpSubject:null};
 try { UI.committeeTab = localStorage.getItem('committeeTab') || 'smc'; } catch(e) {}
 
 const FEATURES_A = [
@@ -435,7 +444,7 @@ const FEATURES_A = [
   ['leave','leave','#E0701A','ছুটি ও আবেদন','আবেদন ও ছুটির হিসাব'],
   ['lesson-plan','plan','#7C4DCC','পাঠ পরিকল্পনা','সকল শ্রেণি ও বিষয়'],
   ['textbooks','book','#0E8C82','পাঠ্যবই','বই ও শিক্ষক সহায়িকা'],
-  ['assessment','tools','#4F46E5','মূল্যায়ন টুলস','নম্বর, ফলাফল ও অগ্রগতি'],
+  ['assessment','tools','#4F46E5','মূল্যায়ন ও অগ্রগতি','নম্বর, ফলাফল ও রিপোর্ট কার্ড'],
   ['certificates','cert','#C27C0E','সনদ ও কাগজপত্র','প্রত্যয়নপত্র ও ছাড়পত্র'],
   ['committee','committee','#C0392B','কমিটি','এসএমসি, পিটিএ ও স্লিপ'],
 ];
@@ -776,6 +785,7 @@ function studentSheet(id){
     ${field('s_phone','অভিভাবকের মোবাইল', inp('s_phone', s.phone, 'type="tel" inputmode="tel" maxlength="20" placeholder="০১XXXXXXXXX"'))}
     ${field('s_address','ঠিকানা', ta('s_address', s.address, 2, 'maxlength="200"'))}
     <h3 style="font-size:14px;color:var(--g);margin-top:4px">অন্যান্য</h3>
+    ${field('s_religion','ধর্ম (ধর্ম শিক্ষা বিষয়ের জন্য)', sel('s_religion', [['','নির্বাচন করুন'],['islam','ইসলাম'],['hindu','হিন্দু'],['buddha','বৌদ্ধ'],['christ','খ্রিষ্ট']], s.religion||''))}
     ${field('s_stipend','উপবৃত্তি', sel('s_stipend', [['','নির্বাচন করুন'],['হ্যাঁ','পায়'],['না','পায় না']], s.stipend||''))}
     ${field('s_notes','বিশেষ মন্তব্য', ta('s_notes', s.notes, 2, 'maxlength="300" placeholder="স্বাস্থ্য, বিশেষ চাহিদা ইত্যাদি"'))}
     <p class="hint" id="stuErr" style="color:var(--red);display:none"></p>
@@ -789,7 +799,7 @@ function studentSheet(id){
     const err = document.getElementById('stuErr');
     if (!d.s_name.trim()) { err.textContent = 'শিক্ষার্থীর নাম লিখুন।'; err.style.display='block'; document.getElementById('s_name').focus(); return; }
     const rec = {name:d.s_name.trim(), cls:d.s_cls, section:d.s_section.trim(), roll:toEn(d.s_roll.trim()), gender:d.s_gender, dob:d.s_dob, blood:d.s_blood,
-      birthreg:d.s_birthreg.trim(), father:d.s_father.trim(), mother:d.s_mother.trim(), phone:d.s_phone.trim(), address:d.s_address.trim(), stipend:d.s_stipend, notes:d.s_notes.trim(), updated:Date.now()};
+      birthreg:d.s_birthreg.trim(), father:d.s_father.trim(), mother:d.s_mother.trim(), phone:d.s_phone.trim(), address:d.s_address.trim(), stipend:d.s_stipend, religion:d.s_religion, notes:d.s_notes.trim(), updated:Date.now()};
     if (rec.roll && DB.students.some(x => x.id !== id && x.cls === rec.cls && (x.section||'') === rec.section && toEn(x.roll) === rec.roll)) {
       err.textContent = `${CLASS_NAME[rec.cls]}-এ রোল ${bn(rec.roll)} আগে থেকেই আছে।`; err.style.display='block'; return;
     }
@@ -1155,6 +1165,9 @@ function printCert(){
   const c = UI.cert, st = certStudent(); if (!st) return;
   const html = certDoc(c, st), title = `${CERT_TYPES[c.type]} - ${st.name}`;
   logCert(c, st);
+  printDoc(title, html);
+}
+function printDoc(title, html){
   if (BR && typeof BR.print === 'function') { try { BR.print(title, html); return; } catch(_) {} }
   if (BR) { toast('প্রিন্ট করতে অ্যাপের নতুন সংস্করণ লাগবে — আপডেট খোঁজা হচ্ছে'); return checkUpdate(true); }
   try {
@@ -1292,6 +1305,236 @@ function gpfRefresh(){
   if (out) out.innerHTML = UI.gpfView === 'year' ? gpfYearHtml(d) : gpfRetHtml(d);
 }
 
+/* ---------- assessment: marks & progress reports ---------- */
+const TERMS = [['t1','প্রথম প্রান্তিক'],['t2','দ্বিতীয় প্রান্তিক'],['t3','চূড়ান্ত প্রান্তিক']];
+const TERM_NAME = Object.fromEntries(TERMS);
+const RELIGION_SUBJ = {islam:'ইসলাম', hindu:'হিন্দু', buddha:'বৌদ্ধ', christ:'খ্রিষ্ট'};
+const CO_SUBJ = new Set(['pe','art','music']);
+// 2026 primary assessment guideline: classes 1-2 → 50 continuous + 50 summative; 3-5 → 30 + 70;
+// co-curricular subjects (and pre-primary) → 100% continuous.
+function subjMax(cls, sid){
+  if (cls === 'pre' || CO_SUBJ.has(sid)) return {c:100, s:0};
+  if (cls === '1' || cls === '2') return {c:50, s:50};
+  return {c:30, s:70};
+}
+const ordBn = n => bn(n) + ({1:'ম',2:'য়',3:'য়',4:'র্থ',5:'ম',6:'ষ্ঠ',7:'ম',8:'ম',9:'ম',10:'ম'}[n] || 'তম');
+function gradeOf(p){
+  return p >= 80 ? 'A+' : p >= 70 ? 'A' : p >= 60 ? 'A-' : p >= 50 ? 'B' : p >= 40 ? 'C' : p >= 33 ? 'D' : 'F';
+}
+const GRADE_COL = {'A+':['#17663F','#E3F4EA'], 'A':['#17663F','#E3F4EA'], 'A-':['#0E5F58','#E2F4F2'], 'B':['#1F4E8C','#E6EFFA'], 'C':['#7A4A00','#FFF1D6'], 'D':['#7A4A00','#FFF1D6'], 'F':['#B42318','#FDE8E6']};
+const gradePill = g => `<span class="gr" style="color:${GRADE_COL[g][0]};background:${GRADE_COL[g][1]}">${g}</span>`;
+function studentSubjects(st){
+  return subjectsFor(st.cls).filter(([sid]) => !RELIGION_SUBJ[sid] || !st.religion || st.religion === sid);
+}
+function markBox(year, term, cls, subj, create){
+  const M = DB.marks;
+  if (!create) return (((M[year]||{})[term]||{})[cls]||{})[subj] || {};
+  M[year] = M[year] || {}; M[year][term] = M[year][term] || {}; M[year][term][cls] = M[year][term][cls] || {};
+  return M[year][term][cls][subj] = M[year][term][cls][subj] || {};
+}
+// One student's result for a term: per-subject rows with marks, plus totals.
+function termResult(st, year, term){
+  const rows = [];
+  studentSubjects(st).forEach(([sid, name]) => {
+    const m = markBox(year, term, st.cls, sid)[st.id];
+    const mx = subjMax(st.cls, sid);
+    if (!m || (m.c === '' || m.c == null) && (m.s === '' || m.s == null)) { if (!RELIGION_SUBJ[sid] || st.religion === sid) rows.push({sid, name, mx, has:false}); return; }
+    const c = num(m.c), sm = num(m.s), tot = c + (mx.s ? sm : 0), full = mx.c + mx.s, pct = tot * 100 / full;
+    rows.push({sid, name, mx, has:true, c, s:sm, tot, full, pct, grade: gradeOf(pct)});
+  });
+  const done = rows.filter(r => r.has);
+  const tot = done.reduce((a, r) => a + r.tot, 0), full = done.reduce((a, r) => a + r.full, 0);
+  const pct = full ? tot * 100 / full : 0;
+  return {rows, done, tot, full, pct, grade: full ? gradeOf(pct) : '', failed: done.filter(r => r.pct < 33)};
+}
+function classResults(cls, year, term){
+  const list = sortedStudents(cls).map(st => ({st, r: termResult(st, year, term)}));
+  // Rank by percentage (fair when some subjects are not yet marked), then by total marks.
+  const key = x => Math.round(x.r.pct * 100) + ':' + x.r.tot;
+  const ranked = list.filter(x => x.r.done.length).sort((a, b) => b.r.pct - a.r.pct || b.r.tot - a.r.tot);
+  let pos = 0, last = null;
+  ranked.forEach((x, i) => { const k = key(x); if (k !== last) { pos = i + 1; last = k; } x.pos = pos; });
+  return {list, ranked};
+}
+function yearAttendance(st, year){
+  let p = 0, a = 0;
+  Object.keys(DB.attendance.students).forEach(d => { if (!d.startsWith(year)) return; const v = DB.attendance.students[d][st.id]; if (v === 'p') p++; else if (v === 'a') a++; });
+  return {p, a, pct: (p + a) ? Math.round(p * 100 / (p + a)) : null};
+}
+
+function assessment(){
+  const A = UI.as;
+  const head = innerHeader('মূল্যায়ন ও অগ্রগতি','tools','#4F46E5');
+  const cl = classesWithStudents();
+  if (!cl.length) return head + `<div class="card empty"><span class="ib" style="background:#D23F74">${S(P.profile)}</span><p class="t2" style="font-size:14px;line-height:1.6">নম্বর দিতে আগে শিক্ষার্থী তালিকায় নাম যোগ করুন।</p><button class="btn solid" data-go="students">শিক্ষার্থী তালিকা খুলুন</button></div>`;
+  if (!A.cls || !cl.some(([k]) => k === A.cls)) A.cls = cl[0][0];
+  const st = A.sid && DB.students.find(x => x.id === A.sid);
+  if (A.view === 'report' && st) return head + `<div class="sec" style="padding-top:16px">${reportCardView(st)}</div>`;
+  const years = [...new Set([String(new Date().getFullYear()), ...Object.keys(DB.marks)])].sort().reverse();
+  const top = `
+    <div class="tabs2" role="tablist"><button role="tab" class="${A.view==='entry'?'on':''}" data-as-view="entry">নম্বর প্রদান</button><button role="tab" class="${A.view!=='entry'?'on':''}" data-as-view="sheet">ফলাফল ও রিপোর্ট</button></div>
+    <div class="row2">
+      <div class="field"><label for="asYear">শিক্ষাবর্ষ</label>${sel('asYear', years.map(y => [y, bn(y)]), A.year)}</div>
+      <div class="field"><label for="asTerm">মূল্যায়ন</label>${sel('asTerm', TERMS, A.term)}</div>
+    </div>
+    <div class="chips" role="tablist" aria-label="শ্রেণি">${cl.map(([k,l]) => `<button class="${k===A.cls?'on':''}" data-as-class="${k}">${l}</button>`).join('')}</div>`;
+  return head + `<div class="sec" style="padding-top:16px">${top}${A.view === 'entry' ? marksEntry() : resultSheet()}</div>`;
+}
+function marksEntry(){
+  const A = UI.as, subs = subjectsFor(A.cls), list = sortedStudents(A.cls);
+  if (!A.subj || !subs.some(x => x[0] === A.subj)) A.subj = subs[0][0];
+  const studentsFor = sid => RELIGION_SUBJ[sid] ? list.filter(st => !st.religion || st.religion === sid) : list;
+  const filled = sid => { const b = markBox(A.year, A.term, A.cls, sid); return studentsFor(sid).filter(st => b[st.id] && (b[st.id].c !== '' || b[st.id].s !== '')).length; };
+  const mx = subjMax(A.cls, A.subj), box = markBox(A.year, A.term, A.cls, A.subj), rows = studentsFor(A.subj);
+  const subjName = (subs.find(x => x[0] === A.subj) || [])[1];
+  return `
+    <div class="chips" role="tablist" aria-label="বিষয়">${subs.map(([sid, name]) => { const f = filled(sid), n = studentsFor(sid).length;
+      return `<button class="${sid===A.subj?'on':''}" data-as-subj="${esc(sid)}">${esc(name)}${n && f === n ? ' ✓' : f ? ` (${bn(f)}/${bn(n)})` : ''}</button>`; }).join('')}</div>
+    <div class="card" style="gap:4px;padding:12px">
+      <b style="font-size:15px">${esc(subjName)} · ${CLASS_NAME[A.cls]} · ${TERM_NAME[A.term]}</b>
+      <span class="t2" style="font-size:13px">${mx.s ? `ধারাবাহিক ${bn(mx.c)} + সামষ্টিক ${bn(mx.s)} = মোট ১০০` : 'শুধু ধারাবাহিক মূল্যায়ন, পূর্ণমান ১০০'}। লিখলেই সংরক্ষিত হয়।</span>
+    </div>
+    ${rows.length ? `<div class="list">
+      <div class="mkhead"><span style="width:40px">রোল</span><span class="grow">নাম</span><span style="width:54px;text-align:center">${mx.s ? 'ধারা.' : 'নম্বর'}<br>${bn(mx.c)}</span>${mx.s ? `<span style="width:54px;text-align:center">সামষ্টিক<br>${bn(mx.s)}</span>` : ''}<span style="width:42px;text-align:right">মোট</span></div>
+      ${rows.map(st => { const m = box[st.id] || {}; const t = num(m.c) + (mx.s ? num(m.s) : 0); const has = (m.c ?? '') !== '' || (m.s ?? '') !== '';
+        return `<div class="mkrow"><span class="rollb">${st.roll ? esc(bn(st.roll)) : '–'}</span><span class="grow t1" style="font-weight:600;font-size:14px">${esc(st.name)}</span>
+          <input class="mk" inputmode="decimal" aria-label="${esc(st.name)} ${mx.s ? 'ধারাবাহিক' : ''} নম্বর" data-mk="${st.id}" data-part="c" data-max="${mx.c}" value="${esc(m.c != null ? bn(m.c) : '')}">
+          ${mx.s ? `<input class="mk" inputmode="decimal" aria-label="${esc(st.name)} সামষ্টিক নম্বর" data-mk="${st.id}" data-part="s" data-max="${mx.s}" value="${esc(m.s != null ? bn(m.s) : '')}">` : ''}
+          <span class="mktot" id="mt_${st.id}">${has ? bn(Math.round(t * 10) / 10) : '–'}</span></div>`; }).join('')}
+    </div>` : '<div class="card empty"><p class="t2" style="font-size:14px">এই বিষয়ের জন্য কোনো শিক্ষার্থী নেই। ধর্ম শিক্ষার ক্ষেত্রে শিক্ষার্থীর প্রোফাইলে ধর্ম ঠিক আছে কিনা দেখুন।</p></div>'}
+    <p class="hint">পূর্ণমানের বেশি নম্বর লিখলে ঘর লাল হবে এবং সংরক্ষিত হবে না।</p>`;
+}
+function resultSheet(){
+  const A = UI.as, {list, ranked} = classResults(A.cls, A.year, A.term);
+  const posOf = new Map(ranked.map(x => [x.st.id, x.pos]));
+  if (!ranked.length) return `<div class="card empty"><p class="t2" style="font-size:14px;line-height:1.6">${CLASS_NAME[A.cls]}-এর ${TERM_NAME[A.term]}-এ এখনও কোনো নম্বর দেওয়া হয়নি। "নম্বর প্রদান" ট্যাবে নম্বর দিন।</p></div>`;
+  const gc = {}; ranked.forEach(x => { gc[x.r.grade] = (gc[x.r.grade] || 0) + 1; });
+  return `
+    <div class="card" style="gap:8px">
+      <b style="font-size:15px">${CLASS_NAME[A.cls]} · ${TERM_NAME[A.term]} · ${bn(A.year)}</b>
+      <div class="sumrow">${Object.keys(GRADE_COL).filter(g => gc[g]).map(g => `<span style="color:${GRADE_COL[g][0]};background:${GRADE_COL[g][1]}">${g}: ${bn(gc[g])} জন</span>`).join('')}</div>
+      <div class="row2"><button class="btn" data-as-print-sheet>${ic('doc',18)} ফলাফল শিট প্রিন্ট</button><button class="btn" data-as-copy-sheet>${ic('copy',18)} কপি</button></div>
+    </div>
+    <p class="hint">শিক্ষার্থীর নামে চাপলে তার অগ্রগতি রিপোর্ট কার্ড খুলবে।</p>
+    <div class="list">${list.map(({st, r}) => `<button class="mem tap" data-as-report="${st.id}">
+      <span class="rollb">${st.roll ? esc(bn(st.roll)) : '–'}</span>
+      <span class="grow"><span class="t1" style="font-weight:600;font-size:14px">${esc(st.name)}</span><span class="t2">${r.done.length ? `${bn(Math.round(r.tot*10)/10)}/${bn(r.full)} · ${bn(Math.round(r.pct))}%${r.failed.length ? ` · ${bn(r.failed.length)} বিষয়ে অকৃতকার্য` : ''}` : 'নম্বর দেওয়া হয়নি'}</span></span>
+      ${r.done.length ? `${gradePill(r.grade)}<span class="pct" style="min-width:40px">${ordBn(posOf.get(st.id))}</span>` : ''}
+      <span style="color:var(--mute)">${ic('chev',20)}</span></button>`).join('')}</div>`;
+}
+const REPORT_CSS = `
+.rep{font-family:'Hind Siliguri','SolaimanLipi','Nikosh','Noto Sans Bengali',sans-serif;color:#111;background:#fff;border:3px double #4F46E5;padding:22px 24px;box-sizing:border-box;font-size:13.5px;line-height:1.55}
+.rep .h{text-align:center;border-bottom:2px solid #4F46E5;padding-bottom:8px;margin-bottom:10px}
+.rep .h .s{font-size:20px;font-weight:700;color:#12284A}
+.rep .h .sub{font-size:12px;color:#333}
+.rep .ttl{text-align:center;margin:4px 0 10px}
+.rep .ttl span{display:inline-block;font-size:17px;font-weight:700;border:1.5px solid #12284A;border-radius:6px;padding:1px 16px}
+.rep .info{display:flex;gap:12px;align-items:flex-start;margin-bottom:10px}
+.rep .info table{flex:1}
+.rep .info td{padding:2px 6px 2px 0;border:0;text-align:left}
+.rep .ph{width:78px;height:78px;border:1px solid #999;border-radius:6px;object-fit:cover}
+.rep table.m{width:100%;border-collapse:collapse;margin:6px 0 10px}
+.rep table.m th,.rep table.m td{border:1px solid #888;padding:4px 6px;text-align:center}
+.rep table.m th{background:#EEF0FB}
+.rep table.m td.l,.rep table.m th.l{text-align:left}
+.rep .sum{display:flex;flex-wrap:wrap;gap:6px 18px;margin:6px 0 10px}
+.rep .rm{border:1px dashed #999;border-radius:6px;padding:6px 8px;min-height:40px;margin-bottom:8px}
+.rep .sg{display:flex;justify-content:space-between;gap:12px;margin-top:44px;font-size:12px;text-align:center}
+.rep .sg div{flex:1;border-top:1px solid #111;padding-top:4px}
+.rep .f{color:#B42318;font-weight:700}
+`;
+function reportInner(st, year, term){
+  const T = DB.teacher, r = termResult(st, year, term);
+  const {ranked} = classResults(st.cls, year, term), me = ranked.find(x => x.st.id === st.id);
+  const att = yearAttendance(st, year);
+  const others = TERMS.filter(([t]) => termResult(st, year, t).done.length);
+  const sub = [T.upazila && 'উপজেলা: ' + T.upazila, T.district && 'জেলা: ' + T.district].filter(Boolean).join(', ');
+  const f1 = x => bn(Math.round(x * 10) / 10);
+  const remark = ((DB.remarks[year] || {})[term] || {})[st.id] || '';
+  return `<div class="rep">
+    <div class="h"><div class="s">${esc(T.school)}</div>${sub ? `<div class="sub">${esc(sub)}</div>` : ''}</div>
+    <div class="ttl"><span>শিক্ষার্থীর অগ্রগতি প্রতিবেদন</span></div>
+    <div class="info"><table><tr><td>নাম:</td><td><b>${esc(st.name)}</b></td></tr>
+      <tr><td>শ্রেণি:</td><td>${CLASS_NAME[st.cls]||''}${st.section ? ' (' + esc(st.section) + ')' : ''} · রোল: ${st.roll ? esc(bn(st.roll)) : '–'}</td></tr>
+      ${st.father || st.mother ? `<tr><td>পিতা/মাতা:</td><td>${esc(st.father||'–')} / ${esc(st.mother||'–')}</td></tr>` : ''}
+      <tr><td>মূল্যায়ন:</td><td>${TERM_NAME[term]}, শিক্ষাবর্ষ ${bn(year)}</td></tr></table>
+      ${PHOTOS[st.id] ? `<img class="ph" src="${PHOTOS[st.id]}" alt="">` : ''}</div>
+    <table class="m"><thead><tr><th class="l">বিষয়</th><th>ধারাবাহিক</th><th>সামষ্টিক</th><th>মোট (১০০)</th><th>গ্রেড</th></tr></thead><tbody>
+      ${r.rows.map(x => x.has
+        ? `<tr><td class="l">${esc(x.name)}</td><td>${f1(x.c)}/${bn(x.mx.c)}</td><td>${x.mx.s ? `${f1(x.s)}/${bn(x.mx.s)}` : '—'}</td><td>${f1(x.tot)}</td><td class="${x.grade==='F'?'f':''}">${x.grade}</td></tr>`
+        : `<tr><td class="l">${esc(x.name)}</td><td colspan="4" style="color:#777">নম্বর দেওয়া হয়নি</td></tr>`).join('')}
+    </tbody></table>
+    <div class="sum"><span>মোট প্রাপ্ত নম্বর: <b>${f1(r.tot)}/${bn(r.full)}</b></span><span>শতকরা: <b>${bn(Math.round(r.pct))}%</b></span><span>গ্রেড: <b>${r.grade || '–'}</b></span>${me ? `<span>মেধাক্রম: <b>${ordBn(me.pos)}</b> (${bn(ranked.length)} জনের মধ্যে)</span>` : ''}${att.pct !== null ? `<span>উপস্থিতি (${bn(year)}): <b>${bn(att.pct)}%</b> (${bn(att.p)} দিন)</span>` : ''}</div>
+    ${r.failed.length ? `<p class="f" style="margin:0 0 8px">উন্নতি প্রয়োজন: ${r.failed.map(x => esc(x.name)).join(', ')}</p>` : ''}
+    ${others.length > 1 ? `<b>প্রান্তিকভিত্তিক অগ্রগতি (মোট নম্বর)</b><table class="m"><thead><tr><th class="l">বিষয়</th>${others.map(([, n]) => `<th>${n}</th>`).join('')}</tr></thead><tbody>
+      ${studentSubjects(st).map(([sid, name]) => { const cells = others.map(([t]) => { const x = termResult(st, year, t).rows.find(y => y.sid === sid); return x && x.has ? f1(x.tot) : '—'; });
+        return cells.some(c => c !== '—') ? `<tr><td class="l">${esc(name)}</td>${cells.map(c => `<td>${c}</td>`).join('')}</tr>` : ''; }).join('')}
+      <tr><td class="l"><b>শতকরা</b></td>${others.map(([t]) => `<td><b>${bn(Math.round(termResult(st, year, t).pct))}%</b></td>`).join('')}</tr>
+    </tbody></table>` : ''}
+    <b>শিক্ষকের মন্তব্য</b><div class="rm">${remark ? esc(remark) : ''}</div>
+    <div class="sg"><div>শ্রেণি শিক্ষক</div><div>প্রধান শিক্ষক${headTeacher() ? '<br>' + esc(headTeacher()) : ''}</div><div>অভিভাবক</div></div>
+  </div>`;
+}
+const REMARKS = ['অত্যন্ত ভালো ফলাফল, এভাবে চালিয়ে যাও।','ভালো করেছ, আরও চেষ্টা করলে আরও ভালো হবে।','নিয়মিত পড়াশোনায় মনোযোগী হতে হবে।','নিয়মিত বিদ্যালয়ে উপস্থিত থাকতে হবে।','দুর্বল বিষয়গুলোতে বাড়িতে বাড়তি যত্ন প্রয়োজন।'];
+function reportCardView(st){
+  const A = UI.as, remark = ((DB.remarks[A.year] || {})[A.term] || {})[st.id] || '';
+  return `<button class="crumb" data-as-back>${ic('back',18)} ফলাফল তালিকায় ফিরুন</button>
+    <div class="tabs2" role="tablist" style="grid-template-columns:repeat(3,minmax(0,1fr))">${TERMS.map(([t, n]) => `<button role="tab" class="${A.term===t?'on':''}" data-as-term="${t}">${n.replace(' প্রান্তিক','')}</button>`).join('')}</div>
+    <div class="card" style="gap:10px">
+      ${field('asRemark','শিক্ষকের মন্তব্য', ta('asRemark', remark, 2, 'maxlength="200" placeholder="মন্তব্য লিখুন বা নিচ থেকে বেছে নিন"'))}
+      <div class="chips" style="flex-wrap:wrap">${REMARKS.map((x, i) => `<button data-as-remark="${i}" style="font-weight:500;font-size:13px">${x}</button>`).join('')}</div>
+    </div>
+    <div class="certwrap"><style>${REPORT_CSS}.certwrap .rep{padding:14px 12px;font-size:12.5px}</style><div id="repPreview">${reportInner(st, A.year, A.term)}</div></div>
+    <button class="btn solid big full" data-as-print>${ic('doc',20)} রিপোর্ট কার্ড প্রিন্ট / PDF</button>
+    <button class="btn big full" data-as-copy>${ic('copy',20)} লেখা কপি করুন (অভিভাবককে পাঠাতে)</button>`;
+}
+function reportDoc(st, year, term){
+  return `<!DOCTYPE html><html lang="bn"><head><meta charset="utf-8"><title>অগ্রগতি প্রতিবেদন - ${esc(st.name)}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>@page{size:A4;margin:12mm}html,body{margin:0;background:#fff}${REPORT_CSS}</style></head><body>${reportInner(st, year, term)}</body></html>`;
+}
+function reportText(st, year, term){
+  const r = termResult(st, year, term), {ranked} = classResults(st.cls, year, term), me = ranked.find(x => x.st.id === st.id);
+  const remark = ((DB.remarks[year] || {})[term] || {})[st.id] || '';
+  return `${DB.teacher.school}\nঅগ্রগতি প্রতিবেদন — ${TERM_NAME[term]}, ${bn(year)}\n${st.name}, ${CLASS_NAME[st.cls]||''}, রোল ${st.roll ? bn(st.roll) : '–'}\n\n` +
+    r.done.map(x => `${x.name}: ${bn(Math.round(x.tot*10)/10)} (${x.grade})`).join('\n') +
+    `\n\nমোট: ${bn(Math.round(r.tot*10)/10)}/${bn(r.full)} (${bn(Math.round(r.pct))}%), গ্রেড ${r.grade || '–'}${me ? `, মেধাক্রম ${ordBn(me.pos)}` : ''}` + (remark ? `\nমন্তব্য: ${remark}` : '');
+}
+function sheetDoc(cls, year, term){
+  const {list, ranked} = classResults(cls, year, term), posOf = new Map(ranked.map(x => [x.st.id, x.pos]));
+  // All religion subjects share one column: each student has only their own.
+  const used = subjectsFor(cls).filter(([sid]) => list.some(({r}) => r.done.some(x => x.sid === sid)));
+  const subs = []; let relAdded = false;
+  used.forEach(sub => { if (RELIGION_SUBJ[sub[0]]) { if (!relAdded) { subs.push(['__rel', 'ধর্ম ও নৈতিক শিক্ষা']); relAdded = true; } } else subs.push(sub); });
+  const T = DB.teacher, f1 = x => bn(Math.round(x * 10) / 10);
+  return `<!DOCTYPE html><html lang="bn"><head><meta charset="utf-8"><title>ফলাফল শিট - ${CLASS_NAME[cls]}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>@page{size:A4 landscape;margin:10mm}html,body{margin:0}${REPORT_CSS}.rep{border:0;padding:0}.rep table.m th,.rep table.m td{padding:3px 4px;font-size:12px}</style></head><body><div class="rep">
+  <div class="h"><div class="s">${esc(T.school)}</div><div class="sub">ফলাফল শিট — ${CLASS_NAME[cls]}, ${TERM_NAME[term]}, শিক্ষাবর্ষ ${bn(year)}</div></div>
+  <table class="m"><thead><tr><th>রোল</th><th class="l">নাম</th>${subs.map(([, n]) => `<th>${esc(n)}</th>`).join('')}<th>মোট</th><th>%</th><th>গ্রেড</th><th>মেধাক্রম</th></tr></thead><tbody>
+  ${list.map(({st, r}) => `<tr><td>${st.roll ? esc(bn(st.roll)) : '–'}</td><td class="l">${esc(st.name)}</td>${subs.map(([sid]) => { const x = sid === '__rel' ? r.rows.find(y => RELIGION_SUBJ[y.sid] && y.has) : r.rows.find(y => y.sid === sid); return `<td class="${x && x.has && x.grade==='F' ? 'f' : ''}">${x && x.has ? f1(x.tot) : '—'}</td>`; }).join('')}
+    <td><b>${r.done.length ? f1(r.tot) : '—'}</b></td><td>${r.done.length ? bn(Math.round(r.pct)) : '—'}</td><td>${r.grade || '—'}</td><td>${posOf.has(st.id) ? bn(posOf.get(st.id)) : '—'}</td></tr>`).join('')}
+  </tbody></table>
+  <div class="sg"><div>শ্রেণি শিক্ষক</div><div>প্রধান শিক্ষক</div></div></div></body></html>`;
+}
+function sheetText(cls, year, term){
+  const {list, ranked} = classResults(cls, year, term), posOf = new Map(ranked.map(x => [x.st.id, x.pos]));
+  return `${DB.teacher.school}\nফলাফল — ${CLASS_NAME[cls]}, ${TERM_NAME[term]}, ${bn(year)}\n\n` +
+    list.filter(x => x.r.done.length).map(({st, r}) => `রোল ${st.roll ? bn(st.roll) : '–'} ${st.name}: ${bn(Math.round(r.tot*10)/10)}/${bn(r.full)} (${bn(Math.round(r.pct))}%), ${r.grade}, মেধাক্রম ${ordBn(posOf.get(st.id))}`).join('\n');
+}
+function onMarkInput(el){
+  const A = UI.as, max = num(el.dataset.max), raw = toEn(el.value).trim();
+  const v = raw === '' ? '' : parseFloat(raw);
+  if (raw !== '' && (!isFinite(v) || v < 0 || v > max)) { el.classList.add('bad'); return; }
+  el.classList.remove('bad');
+  const box = markBox(A.year, A.term, A.cls, A.subj, true), id = el.dataset.mk;
+  const m = box[id] || {}; m[el.dataset.part] = v; box[id] = m;
+  if ((m.c === '' || m.c == null) && (m.s === '' || m.s == null)) delete box[id];
+  save();
+  const mx = subjMax(A.cls, A.subj), t = document.getElementById('mt_' + id);
+  if (t) t.textContent = box[id] ? bn(Math.round((num(m.c) + (mx.s ? num(m.s) : 0)) * 10) / 10) : '–';
+}
+
 /* ---------- settings ---------- */
 function settings(){
   return topHeader('সেটিংস','gear') + `
@@ -1377,12 +1620,12 @@ const ROUTE_ALIAS = {'student-profile':'students'};
 function render(){
   let r = (location.hash || '#home').slice(1) || 'home';
   r = ROUTE_ALIAS[r] || r;
-  if (!(TOP.includes(r) || r==='committee' || r==='students' || r==='teachers' || r==='lesson-plan' || r==='teacher-att' || r==='student-att' || r==='certificates' || r==='gpf' || ALL[r])) r = 'home';
+  if (!(TOP.includes(r) || r==='committee' || r==='students' || r==='teachers' || r==='lesson-plan' || r==='teacher-att' || r==='student-att' || r==='certificates' || r==='gpf' || r==='assessment' || ALL[r])) r = 'home';
   if (r !== UI.lastRoute) { if (r === 'teacher-att' || r === 'student-att') UI.attView = 'day'; UI.lastRoute = r; }
   const inner = !TOP.includes(r);
   $app.classList.toggle('inner', inner);
   $nav.style.display = inner ? 'none' : 'grid';
-  const views = {home, profile, settings, committee, students, teachers, 'lesson-plan':lessonPlan, 'teacher-att':teacherAtt, 'student-att':studentAtt, certificates, gpf};
+  const views = {home, profile, settings, committee, students, teachers, 'lesson-plan':lessonPlan, 'teacher-att':teacherAtt, 'student-att':studentAtt, certificates, gpf, assessment};
   $app.innerHTML = (views[r] || (() => placeholder(r)))();
   $nav.innerHTML = NAV.map(n => `<button class="${n[0]===r?'on':''}" data-go="${n[0]}" aria-label="${n[1]}" ${n[0]===r?'aria-current="page"':''}><span class="p">${ic(n[2])}</span>${n[1]}</button>`).join('');
   bindView(r);
@@ -1402,6 +1645,18 @@ function bindView(r){
       if (me) Object.assign(me, {name:DB.teacher.name, designation:DB.teacher.designation, mobile:DB.teacher.mobile});
       if (save()) toast('প্রোফাইল সংরক্ষিত হয়েছে');
       render();
+    });
+  }
+  if (r === 'assessment') {
+    const y = document.getElementById('asYear'), t = document.getElementById('asTerm');
+    if (y) y.addEventListener('change', () => { UI.as.year = y.value; render(); });
+    if (t) t.addEventListener('change', () => { UI.as.term = t.value; render(); });
+    document.querySelectorAll('[data-mk]').forEach(el => el.addEventListener('input', () => onMarkInput(el)));
+    const rm = document.getElementById('asRemark');
+    if (rm) rm.addEventListener('input', () => {
+      const A = UI.as; DB.remarks[A.year] = DB.remarks[A.year] || {}; DB.remarks[A.year][A.term] = DB.remarks[A.year][A.term] || {};
+      if (rm.value.trim()) DB.remarks[A.year][A.term][A.sid] = rm.value.trim(); else delete DB.remarks[A.year][A.term][A.sid];
+      save(); const st = DB.students.find(x => x.id === A.sid), pv = document.getElementById('repPreview'); if (st && pv) pv.innerHTML = reportInner(st, A.year, A.term);
     });
   }
   if (r === 'gpf') {
@@ -1475,6 +1730,18 @@ document.addEventListener('click', e => {
   if ('toggleMembers' in ds) { UI.showAllMembers = !UI.showAllMembers; return render(); }
   if (ds.memberDel) { const id = ds.memberDel; const k = UI.committeeTab;
     return confirmSheet('সদস্য মুছবেন?', 'এই সদস্যের তথ্য কমিটি থেকে মুছে যাবে।', 'মুছুন', () => { DB.committees[k] = DB.committees[k].filter(x => x.id !== id); if (save()) toast('সদস্য মুছে ফেলা হয়েছে'); }); }
+  // assessment
+  if (ds.asView) { UI.as.view = ds.asView; UI.as.sid = null; return render(); }
+  if (ds.asClass) { UI.as.cls = ds.asClass; return render(); }
+  if (ds.asSubj) { UI.as.subj = ds.asSubj; return render(); }
+  if (ds.asTerm) { UI.as.term = ds.asTerm; return render(); }
+  if (ds.asReport) { UI.as.sid = ds.asReport; UI.as.view = 'report'; window.scrollTo(0,0); return render(); }
+  if ('asBack' in ds) { UI.as.view = 'sheet'; UI.as.sid = null; return render(); }
+  if (ds.asRemark) { const rm = document.getElementById('asRemark'); if (rm) { rm.value = REMARKS[+ds.asRemark]; rm.dispatchEvent(new Event('input')); } return; }
+  if ('asPrint' in ds) { const st = DB.students.find(x => x.id === UI.as.sid); if (st) printDoc(`অগ্রগতি প্রতিবেদন - ${st.name}`, reportDoc(st, UI.as.year, UI.as.term)); return; }
+  if ('asCopy' in ds) { const st = DB.students.find(x => x.id === UI.as.sid); if (st) copyText(reportText(st, UI.as.year, UI.as.term), 'রিপোর্ট কপি হয়েছে — অভিভাবককে পাঠাতে পারেন'); return; }
+  if ('asPrintSheet' in ds) return printDoc(`ফলাফল শিট - ${CLASS_NAME[UI.as.cls]}`, sheetDoc(UI.as.cls, UI.as.year, UI.as.term));
+  if ('asCopySheet' in ds) return copyText(sheetText(UI.as.cls, UI.as.year, UI.as.term), 'ফলাফল কপি হয়েছে');
   // gpf
   if (ds.gpfView) { UI.gpfView = ds.gpfView; return render(); }
   if ('gpfCopy' in ds) return copyText(gpfRetText(gpfData()), 'জিপিএফ হিসাব কপি হয়েছে');
