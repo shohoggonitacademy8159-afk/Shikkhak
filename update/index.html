@@ -246,7 +246,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '2.6';
+const WEB_VERSION = '2.7';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -1756,34 +1756,43 @@ function salaryDefaults(){
   const grade = S.grade || (/প্রধান শিক্ষক/.test(me.designation || DB.teacher.designation || '') ? 10 : 13);
   return {grade, step8: S.step8 || 1, inc: S.inc !== false, method: S.method || 'B'};
 }
+const PAY_AREAS = [['dhaka','ঢাকা সিটি কর্পোরেশন এলাকা'],['city','অন্যান্য সিটি কর্পোরেশন, সাভার ও কক্সবাজার পৌর এলাকা'],['other','অন্যান্য এলাকা (জেলা সদর, পৌরসভা, উপজেলা ইত্যাদি)']];
+// House rent under the 2015 scale (continues until 31 Dec 2027): % of basic by slab, with a minimum
+const HR8 = [[9700, {dhaka:[65,5600], city:[55,5000], other:[50,4500]}], [16000, {dhaka:[60,6300], city:[50,5500], other:[45,4800]}],
+  [35500, {dhaka:[55,9600], city:[45,8000], other:[40,7000]}], [Infinity, {dhaka:[50,19500], city:[40,15000], other:[35,13800]}]];
+function hr8(basic, area){ const [pct, min] = HR8.find(r => basic <= r[0])[1][area]; return {pct, amt: Math.max(basic * pct / 100, min), min: basic * pct / 100 < min ? min : 0}; }
+// House rent under the 2026 scale (from 1 Jan 2028): % of basic by grade group
+function hr9(grade, area){ const g = grade >= 16 ? 0 : grade >= 10 ? 1 : grade >= 5 ? 2 : 3; return ({dhaka:[60,50,45,40], city:[50,40,35,30], other:[45,35,30,25]})[area][g]; }
 function payDefaults(){
   const A = DB.salary.pay || {};
-  return {hr: A.hr ?? 45, hrBase: A.hrBase || 'cur', med: A.med ?? 1500, tif: A.tif ?? 200, ded: A.ded ?? 0};
+  return {area: A.area || 'other', age50: !!A.age50, gpf: A.gpf ?? 0, kal: A.kal ?? 150, bima: A.bima ?? 100, tax: A.tax ?? 0, oth: A.oth ?? 0};
 }
-function payRows(old, P){
-  const A = payDefaults();
-  return P.map(x => { const hrBase = A.hrBase === 'old' ? old : x.basic, hr = Math.round(hrBase * A.hr / 100);
-    const gross = x.basic + hr + A.med + A.tif; return {...x, hr, gross, net: gross - A.ded}; });
+function payRows(old, P, grade){
+  const A = payDefaults(), H = hr8(old, A.area), tif8 = grade >= 11 ? 200 : 0;
+  const ded = A.gpf + A.kal + A.bima + A.tax + A.oth;
+  const rows = P.map(x => ({...x, hr: H.amt, hrNote: `৩০ জুনের মূল বেতন ${tk(old)}-এর ${bn(H.pct)}%${H.min ? ` (ন্যূনতম ${tk(H.min)})` : ''}`, med: 1500, tif: tif8}));
+  const last = P[P.length - 1], p9 = hr9(grade, A.area);
+  rows.push({when:'১ জানুয়ারি ২০২৮ থেকে (নতুন ভাতার হার)', basic: last.basic, hr: last.basic * p9 / 100, hrNote: `নতুন মূল বেতনের ${bn(p9)}%`, med: A.age50 ? 4000 : 3000, tif: grade >= 11 ? 500 : 0, newRates: true});
+  return rows.map(r => { const gross = r.basic + r.hr + r.med + r.tif; return {...r, gross, ded, net: gross - ded}; });
 }
-function payCard(old, P){
-  const A = payDefaults(), R = payRows(old, P), inp = (id, v) => `<input id="${id}" data-pay="${id}" inputmode="decimal" value="${esc(bn(v))}">`;
+function payCard(old, P, grade){
+  const A = payDefaults(), R = payRows(old, P, grade), inp = (id, v, l) => `<div class="field"><label for="${id}">${l}</label><input id="${id}" data-pay="${id}" inputmode="decimal" value="${esc(bn(v))}"></div>`;
   return `<div class="card" style="gap:12px;padding:18px 16px">
     <b style="font-size:16px">মোট মাসিক বেতন</b>
-    <div class="row2">
-      <div class="field"><label for="pay_hr">বাড়ি ভাড়া (%)</label>${inp('pay_hr', A.hr)}</div>
-      <div class="field"><label for="pay_med">চিকিৎসা ভাতা</label>${inp('pay_med', A.med)}</div>
-    </div>
-    <div class="row2">
-      <div class="field"><label for="pay_tif">টিফিন ভাতা</label>${inp('pay_tif', A.tif)}</div>
-      <div class="field"><label for="pay_ded">মোট কর্তন (জিপিএফ ইত্যাদি)</label>${inp('pay_ded', A.ded)}</div>
-    </div>
-    <div class="field"><span style="font-size:14px;font-weight:600">বাড়ি ভাড়া কোন মূল বেতনের ওপর</span>
-      <div class="tabs2" role="radiogroup"><button type="button" role="radio" aria-checked="${A.hrBase==='cur'}" class="${A.hrBase==='cur'?'on':''}" data-pay-base="cur">চলতি (নতুন) মূল বেতন</button><button type="button" role="radio" aria-checked="${A.hrBase==='old'}" class="${A.hrBase==='old'?'on':''}" data-pay-base="old">৩০ জুনের মূল বেতন</button></div>
-      <span class="hint">২০২৭ সালের ৩১ ডিসেম্বর পর্যন্ত বাড়ি ভাড়া পুরোনো হারে চলবে। আপনার বেতন বিবরণীর সঙ্গে যেটা মেলে, সেটা বেছে নিন।</span></div>
-    <div class="list">${R.map(x => `<div class="mem" style="flex-direction:column;align-items:stretch;gap:4px">
-      <span style="display:flex;justify-content:space-between"><span class="t1" style="font-weight:600;font-size:14px">${x.when}</span><b style="font-size:16px;color:#1E8A55">${tkp(x.gross)}</b></span>
-      <span class="t2">মূল ${tkp(x.basic)} + বাড়ি ভাড়া ${tk(x.hr)} + চিকিৎসা ${tk(A.med)} + টিফিন ${tk(A.tif)}${A.ded ? ` − কর্তন ${tk(A.ded)} = হাতে ${tkp(x.net)}` : ''}</span></div>`).join('')}</div>
-    <p class="hint">মোট বেতন = মূল বেতন + বাড়ি ভাড়া + চিকিৎসা + টিফিন। বিশেষ সুবিধা বা অন্য ভাতা থাকলে আলাদা যোগ হবে।</p>
+    ${field('pay_area','কর্মস্থল এলাকা (বাড়ি ভাড়ার জন্য)', sel('pay_area', PAY_AREAS, A.area))}
+    <label style="display:flex;gap:10px;align-items:center;font-size:14px"><input type="checkbox" id="pay_age50" ${A.age50 ? 'checked' : ''} style="width:22px;height:22px"> বয়স ৫০ বছরের বেশি (২০২৮ থেকে চিকিৎসা ভাতা ৪,০০০)</label>
+    <b style="font-size:14px">মাসিক কর্তন</b>
+    <div class="row2">${inp('pay_gpf', A.gpf, 'জিপিএফ')}${inp('pay_kal', A.kal, 'কল্যাণ তহবিল')}</div>
+    <div class="row2">${inp('pay_bima', A.bima, 'যৌথ বীমা')}${inp('pay_tax', A.tax, 'আয়কর')}</div>
+    ${inp('pay_oth', A.oth, 'অন্যান্য কর্তন (ঋণের কিস্তি ইত্যাদি)')}
+    <div class="list">${R.map(x => `<div class="mem" style="flex-direction:column;align-items:stretch;gap:4px${x.newRates ? ';background:#F3F7EE' : ''}">
+      <span class="t1" style="font-weight:600;font-size:14px">${x.when}</span>
+      <dl class="kv" style="margin:0"><dt>মূল বেতন</dt><dd>${tkp(x.basic)}</dd>
+        <dt>বাড়ি ভাড়া <span class="t2">(${x.hrNote})</span></dt><dd>${tkp(x.hr)}</dd>
+        <dt>চিকিৎসা ভাতা</dt><dd>${tk(x.med)}</dd>${x.tif ? `<dt>টিফিন ভাতা</dt><dd>${tk(x.tif)}</dd>` : ''}
+        <dt><b>মোট বেতন</b></dt><dd><b style="color:#1E8A55">${tkp(x.gross)}</b></dd>
+        ${x.ded ? `<dt>মোট কর্তন</dt><dd>− ${tkp(x.ded)}</dd><dt><b>হাতে পাবেন</b></dt><dd><b style="color:#1F4E8C">${tkp(x.net)}</b></dd>` : ''}</dl></div>`).join('')}</div>
+    <p class="hint">২০২৭ সালের ৩১ ডিসেম্বর পর্যন্ত বাড়ি ভাড়া, চিকিৎসা ও টিফিন ভাতা পুরোনো (২০১৫) হারে, ৩০ জুন ২০২৬-এর মূল বেতনের ওপর। ১ জানুয়ারি ২০২৮ থেকে নতুন হার। বিশেষ সুবিধা, শিক্ষা সহায়ক বা অন্য ভাতা এখানে ধরা হয়নি।</p>
   </div>`;
 }
 function salary(){
@@ -1818,7 +1827,7 @@ function salary(){
       <p class="hint">হিসাবরক্ষণ অফিসের নিয়মে: বেতন বৃদ্ধির পরিমাণ = নির্ধারিত বেতন − ৩০ জুনের মূল বেতন = ${tk(F.fixBasic)} − ${tk(old)} = ${tk(F.fixBasic - old)}। প্রথম পর্যায়: ${tk(old)} + ${tkp((F.fixBasic - old) * 0.5)} (৫০%)${F.inc ? ` + ইনক্রিমেন্ট ${tk(F.basic - F.fixBasic)}` : ''} = ${tkp(P[0].basic)}। ভাতাগুলো আলাদা সময়ে কার্যকর হবে।</p>
       <div class="row2"><button class="btn" data-sl-copy>${ic('copy',18)} কপি</button><button class="btn solid" data-sl-pension>পেনশন হিসাবে ব্যবহার</button></div>
     </div>
-    ${payCard(old, P)}
+    ${payCard(old, P, S.grade)}
     <div class="card" style="gap:8px;padding:14px">
       <b style="font-size:15px">${gradeOrd(S.grade)} গ্রেডের সব ধাপ (৯ম স্কেল)</b>
       <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px">${F.s9.map((v, i) => `<span style="font-size:13px;padding:6px 8px;border-radius:8px;text-align:center;${i === F.idx ? 'background:#1F4E8C;color:#fff;font-weight:700' : 'background:#F1F5FA'}">${bn(i + 1)}. ${bn(v.toLocaleString('en-IN'))}</span>`).join('')}</div>
@@ -1829,7 +1838,7 @@ function salary(){
 function salaryText(){
   const S = salaryDefaults(), s8 = ps8Steps(S.grade), old = s8[Math.min(S.step8, s8.length) - 1], F = fix9(S.grade, old, S.inc, S.method), P = phases(old, F.basic, F.s9, F.idx, F.fixBasic);
   return `বেতন নির্ধারণ (৯ম জাতীয় বেতন স্কেল ২০২৬) — ${DB.teacher.name}\n${gradeOrd(S.grade)} গ্রেড\nআগের মূল বেতন (৩০ জুন ২০২৬): ${tk(old)}${F.oldInc ? `\n৮ম স্কেলে ১ জুলাই ২০২৬ ইনক্রিমেন্ট: ${tk(F.oldInc)}` : ''}\nপার্থক্য: ${tk(F.base)} − ${tk(F.start8)} = ${tk(F.diff)}\n${tk(F.start9)} + ${tk(F.diff)} = ${tk(F.target)} → ধাপ ${bn(F.fixIdx + 1)}: ${tk(F.fixBasic)}${F.inc ? `\n১ জুলাই ২০২৬ ইনক্রিমেন্টসহ: ${tk(F.basic)} (ধাপ ${bn(F.idx + 1)})` : ''}\n\n` +
-    payRows(old, P).map(x => `${x.when}: মূল ${tkp(x.basic)}, বাড়ি ভাড়া ${tk(x.hr)}, মোট ${tkp(x.gross)}`).join('\n') + '\n(আনুমানিক; অফিসের বেতন নির্ধারণী আদেশ দেখে মিলিয়ে নিন)';
+    payRows(old, P, S.grade).map(x => `${x.when}: মূল ${tkp(x.basic)}, বাড়ি ভাড়া ${tkp(x.hr)}, চিকিৎসা ${tk(x.med)}${x.tif ? `, টিফিন ${tk(x.tif)}` : ''} = মোট ${tkp(x.gross)}${x.ded ? `; কর্তন ${tkp(x.ded)}, হাতে ${tkp(x.net)}` : ''}`).join('\n') + '\n(আনুমানিক; অফিসের বেতন নির্ধারণী আদেশ দেখে মিলিয়ে নিন)';
 }
 
 /* ---------- pension & gratuity calculator ---------- */
@@ -2072,6 +2081,9 @@ function bindView(r){
     g.addEventListener('change', () => { DB.salary.grade = parseInt(g.value); DB.salary.step8 = Math.min(salaryDefaults().step8, ps8Steps(DB.salary.grade).length); save(); render(); });
     document.querySelectorAll('[data-pay]').forEach(el => el.addEventListener('change', () => {
       const k = el.dataset.pay.slice(4); DB.salary.pay = {...(DB.salary.pay || {}), [k]: Math.max(0, num(toEn(el.value)))}; save(); render(); }));
+    const pa = document.getElementById('pay_area'), pg = document.getElementById('pay_age50');
+    if (pa) pa.addEventListener('change', () => { DB.salary.pay = {...(DB.salary.pay || {}), area: pa.value}; save(); render(); });
+    if (pg) pg.addEventListener('change', () => { DB.salary.pay = {...(DB.salary.pay || {}), age50: pg.checked}; save(); render(); });
     st.addEventListener('change', () => { DB.salary.grade = parseInt(g.value); DB.salary.step8 = parseInt(st.value); save(); render(); });
   }
   if (r === 'pension') {
@@ -2183,7 +2195,6 @@ document.addEventListener('click', e => {
     const steps = ds.paPs === '9' ? ps9Steps(grade) : ps8Steps(grade);
     DB.pension.auto = {...(DB.pension.auto || {}), ...A, ps: ds.paPs, grade, step: Math.min(step, steps.length)}; save(); return render(); }
   if (ds.slInc) { DB.salary.inc = ds.slInc === '1'; save(); return render(); }
-  if (ds.payBase) { DB.salary.pay = {...(DB.salary.pay || {}), hrBase: ds.payBase}; save(); return render(); }
   if (ds.slMethod) { DB.salary.method = ds.slMethod; save(); return render(); }
   if ('slCopy' in ds) return copyText(salaryText(), 'বেতন নির্ধারণের হিসাব কপি হয়েছে');
   if ('slPension' in ds) { const S = salaryDefaults(), old = ps8Steps(S.grade)[Math.min(S.step8, ps8Steps(S.grade).length) - 1], F = fix9(S.grade, old, S.inc, S.method);
