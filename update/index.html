@@ -246,7 +246,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '3.8';
+const WEB_VERSION = '3.9';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -1517,7 +1517,7 @@ function certInner(c, st){
        ${c.passed ? `<p>সে ${v(c.passed)} উত্তীর্ণ হয়েছে।</p>` : ''}
        <p>${esc(c.reason || 'অভিভাবকের অনুরোধে')} তাকে এই ছাড়পত্র প্রদান করা হলো। বিদ্যালয়ে তার নিকট কোনো পাওনা নেই। অধ্যয়নকালে তার আচরণ সন্তোষজনক ছিল।</p>
        <p>আমি তার উজ্জ্বল ভবিষ্যৎ কামনা করি।</p>`
-    : st.alumni ? `<p>এই মর্মে প্রত্যয়ন করা যাচ্ছে যে, ${who}, ${st.alumni.reason === 'pass5' ? `অত্র বিদ্যালয়ে ${v(bn(st.alumni.year))} শিক্ষাবর্ষে পঞ্চম শ্রেণিতে অধ্যয়ন করে পাস করেছে।` : `অত্র বিদ্যালয়ে ${v(bn(st.alumni.year))} শিক্ষাবর্ষে ${CLASS_IN[st.alumni.cls || st.cls] || ''} অধ্যয়ন করেছে।`} তার রোল নম্বর ছিল ${v((st.alumni.roll || st.roll) && bn(st.alumni.roll || st.roll))}। বিদ্যালয়ের ভর্তি রেজিস্টার অনুযায়ী তার জন্ম তারিখ ${v(dob && bn(dob))}${st.birthreg ? `, জন্ম নিবন্ধন নম্বর ${v(bn(st.birthreg))}` : ''}।</p>
+    : st.alumni ? `<p>এই মর্মে প্রত্যয়ন করা যাচ্ছে যে, ${who}, ${st.alumni.reason === 'pass5' ? `অত্র বিদ্যালয়ে ${v(bn(st.alumni.year))} শিক্ষাবর্ষে পঞ্চম শ্রেণিতে অধ্যয়ন করে চূড়ান্ত মূল্যায়ন পরীক্ষায় অংশগ্রহণ করে সাফল্যের সহিত উত্তীর্ণ হয়েছে।` : `অত্র বিদ্যালয়ে ${v(bn(st.alumni.year))} শিক্ষাবর্ষে ${CLASS_IN[st.alumni.cls || st.cls] || ''} অধ্যয়ন করেছে।`} তার রোল নম্বর ছিল ${v((st.alumni.roll || st.roll) && bn(st.alumni.roll || st.roll))}। বিদ্যালয়ের ভর্তি রেজিস্টার অনুযায়ী তার জন্ম তারিখ ${v(dob && bn(dob))}${st.birthreg ? `, জন্ম নিবন্ধন নম্বর ${v(bn(st.birthreg))}` : ''}।</p>
        <p>অধ্যয়নকালে তার স্বভাব-চরিত্র ভালো ছিল। আমার জানামতে সে রাষ্ট্র বা সমাজবিরোধী কোনো কাজে জড়িত ছিল না।</p>
        <p>আমি তার সর্বাঙ্গীণ মঙ্গল কামনা করি।</p>`
     : `<p>এই মর্মে প্রত্যয়ন করা যাচ্ছে যে, ${who}, অত্র বিদ্যালয়ের ${CLASS_OF[st.cls] || ''} একজন নিয়মিত শিক্ষার্থী। তার রোল নম্বর ${v(st.roll && bn(st.roll))}। বিদ্যালয়ের ভর্তি রেজিস্টার অনুযায়ী তার জন্ম তারিখ ${v(dob && bn(dob))}${st.birthreg ? `, জন্ম নিবন্ধন নম্বর ${v(bn(st.birthreg))}` : ''}।</p>
