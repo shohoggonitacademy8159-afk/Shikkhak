@@ -16,6 +16,11 @@ html,body{margin:0;background:#E4ECE7}
 body{font-family:'Hind Siliguri','SolaimanLipi','Nikosh','Noto Sans Bengali',sans-serif;color:var(--ink);-webkit-tap-highlight-color:transparent}
 button{font:inherit;color:inherit;cursor:pointer}
 a{color:var(--g)}
+.p2grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+.p2pg{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;display:flex;flex-direction:column}
+.p2im{position:relative;aspect-ratio:3/4;background:#EEF1F6;display:grid;place-items:center;overflow:hidden}.p2im img{max-width:100%;max-height:100%;object-fit:contain;transition:transform .2s}
+.p2no{position:absolute;left:6px;top:6px;background:#B42318;color:#fff;border-radius:10px;min-width:24px;height:24px;display:grid;place-items:center;font-size:12.5px;font-weight:700;padding:0 6px}
+.p2bt{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line)}.p2bt button{min-height:42px;background:none;border:0;font-size:17px;color:var(--ink);cursor:pointer}.p2bt button:disabled{opacity:.3}.p2bt button+button{border-left:1px solid var(--line)}
 .tcards{display:grid;gap:12px}
 .tcard{background:#fff;border-radius:16px;box-shadow:0 1px 3px rgba(18,40,74,.08);border:1px solid var(--line);border-top:5px solid var(--tc);padding:14px 14px 10px}
 .tc-top{display:flex;gap:12px;align-items:flex-start}
@@ -230,6 +235,7 @@ const P = {
   students:'<circle cx="9" cy="7" r="3.5"/><path d="M2 21v-1.5A5.5 5.5 0 0 1 7.5 14h3"/><path d="M16 3.5a3.5 3.5 0 0 1 0 7"/><path d="m14 18 2.5 2.5L22 15"/>',
   leave:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="m9 16 2 2 4-4"/>',
   plan:'<rect x="5" y="3" width="14" height="19" rx="2"/><path d="M9 3V2h6v1"/><path d="M9 9h7"/><path d="M9 13h7"/><path d="M9 17h4"/>',
+  pdf:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><rect x="7" y="12" width="10" height="6" rx="1"/>',
   book:'<path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/>',
   profile:'<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="11" r="2.5"/><path d="M5.5 17a3.5 3.5 0 0 1 7 0"/><path d="M15 10h3"/><path d="M15 14h3"/>',
   tools:'<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/><path d="M15 8h4v4"/>',
@@ -261,7 +267,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '4.2';
+const WEB_VERSION = '4.3';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -537,6 +543,7 @@ const FEATURES_A = [
   ['textbooks','book','#0E8C82','পাঠ্যবই','বই ও শিক্ষক সহায়িকা'],
   ['assessment','tools','#4F46E5','মূল্যায়ন ও অগ্রগতি','নম্বর, ফলাফল ও রিপোর্ট কার্ড'],
   ['certificates','cert','#C27C0E','সনদ ও কাগজপত্র','প্রত্যয়নপত্র ও ছাড়পত্র'],
+  ['img2pdf','pdf','#B42318','ছবি থেকে পিডিএফ','স্ক্যান করে PDF বানান'],
   ['committee','committee','#C0392B','কমিটি','এসএমসি, পিটিএ ও স্লিপ'],
 ];
 const FEATURES_B = [
@@ -2694,6 +2701,124 @@ function lvRecord(L){
       <p class="t2" style="font-size:13px;line-height:1.7">নৈমিত্তিক ছুটি বছরে ২০ দিন, একবারে সর্বোচ্চ ১০ দিন। ঐচ্ছিক ছুটি বছরে ৩ দিন। মাতৃত্বকালীন ছুটি ৬ মাস, চাকরিজীবনে দুইবার। শ্রান্তি বিনোদন ছুটি প্রতি ৩ বছরে ১৫ দিন, সঙ্গে এক মাসের মূল বেতনের সমান ভাতা। প্রাথমিক বিদ্যালয় অবকাশ বিভাগ হওয়ায় অর্জিত ছুটির হিসাব সার্ভিস বইয়ে দেখে নিন।</p></div>`;
 }
 
+/* ---------- image to PDF ---------- */
+// Pages live only in memory while the page is open (photos are large); nothing is written to storage.
+const P2_SIZES = [['a4p','A4 খাড়া'],['a4l','A4 আড়াআড়ি'],['fit','ছবির মাপে']];
+function p2State(){ if (!UI.p2) UI.p2 = {pages:[], size:'a4p', margin:'s', q:'n', bw:false, name:''}; return UI.p2; }
+const loadImg = src => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+// Read a picked file into a JPEG data URL, longest side at most 2400 px.
+async function fileToJpeg(file){
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await loadImg(url), k = Math.min(1, 2400 / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+    const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(img, 0, 0, c.width, c.height);
+    return c.toDataURL('image/jpeg', 0.92);
+  } finally { URL.revokeObjectURL(url); }
+}
+// Final page image: rotated, optionally turned into a clean black-and-white scan, sized for the chosen quality.
+async function pageJpeg(pg, o){
+  const img = await loadImg(pg.src), rot = ((pg.rot % 360) + 360) % 360, side = rot % 180 !== 0;
+  const max = o.q === 'h' ? 2200 : 1500, k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+  const w = Math.round(img.naturalWidth * k), h = Math.round(img.naturalHeight * k);
+  const c = document.createElement('canvas'); c.width = side ? h : w; c.height = side ? w : h;
+  const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+  x.translate(c.width / 2, c.height / 2); x.rotate(rot * Math.PI / 180); x.drawImage(img, -w / 2, -h / 2, w, h);
+  if (o.bw) {
+    const d = x.getImageData(0, 0, c.width, c.height), a = d.data;
+    for (let i = 0; i < a.length; i += 4) { let g = 0.299 * a[i] + 0.587 * a[i+1] + 0.114 * a[i+2]; g = Math.max(0, Math.min(255, (g - 128) * 1.6 + 150)); a[i] = a[i+1] = a[i+2] = g; }
+    x.putImageData(d, 0, 0);
+  }
+  const url = c.toDataURL('image/jpeg', o.q === 'h' ? 0.88 : 0.75), bin = atob(url.split(',')[1]), bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return {bytes, w: c.width, h: c.height};
+}
+// Minimal PDF writer: one JPEG image per page.
+function buildPdf(imgs, o){
+  const enc = new TextEncoder(), chunks = [], offs = []; let len = 0;
+  const put = b => { if (typeof b === 'string') b = enc.encode(b); chunks.push(b); len += b.length; };
+  const A4 = [595.28, 841.89], m = o.margin === 's' ? 20 : 0;
+  put('%PDF-1.4\n%âã\n');
+  const n = imgs.length, kids = imgs.map((_, i) => `${5 + 3 * i} 0 R`).join(' ');
+  offs[1] = len; put('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n');
+  offs[2] = len; put(`2 0 obj\n<< /Type /Pages /Kids [${kids}] /Count ${n} >>\nendobj\n`);
+  imgs.forEach((im, i) => {
+    const id = 3 + 3 * i;
+    let pw, ph;
+    if (o.size === 'a4p') [pw, ph] = A4; else if (o.size === 'a4l') [ph, pw] = A4;
+    else { pw = A4[0]; ph = +(A4[0] * im.h / im.w).toFixed(2); }
+    const s = Math.min((pw - 2 * m) / im.w, (ph - 2 * m) / im.h), dw = +(im.w * s).toFixed(2), dh = +(im.h * s).toFixed(2);
+    const x = +((pw - dw) / 2).toFixed(2), y = +((ph - dh) / 2).toFixed(2), content = `q ${dw} 0 0 ${dh} ${x} ${y} cm /Im0 Do Q`;
+    offs[id] = len; put(`${id} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${im.w} /Height ${im.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${im.bytes.length} >>\nstream\n`); put(im.bytes); put('\nendstream\nendobj\n');
+    offs[id + 1] = len; put(`${id + 1} 0 obj\n<< /Length ${content.length} >>\nstream\n${content}\nendstream\nendobj\n`);
+    offs[id + 2] = len; put(`${id + 2} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pw} ${ph}] /Resources << /XObject << /Im0 ${id} 0 R >> >> /Contents ${id + 1} 0 R >>\nendobj\n`);
+  });
+  const total = 3 + 3 * n, xref = len;
+  put(`xref\n0 ${total}\n0000000000 65535 f \n` + Array.from({length: total - 1}, (_, i) => String(offs[i + 1]).padStart(10, '0') + ' 00000 n \n').join(''));
+  put(`trailer\n<< /Size ${total} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
+  const out = new Uint8Array(len); let p = 0; chunks.forEach(c => { out.set(c, p); p += c.length; }); return out;
+}
+const toB64 = u8 => { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); };
+const fmtSize = b => b > 1048576 ? bn((b / 1048576).toFixed(1)) + ' এমবি' : bn(Math.max(1, Math.round(b / 1024))) + ' কেবি';
+function p2Name(){ const S = p2State(); return ((S.name || '').trim() || ('স্ক্যান_' + todayISO())).replace(/[\\/:*?"<>|]+/g, '_').replace(/\.pdf$/i, '') + '.pdf'; }
+async function p2Make(action){
+  const S = p2State(); if (!S.pages.length) return toast('আগে ছবি যোগ করুন');
+  if (UI.p2busy) return; UI.p2busy = true; render();
+  try {
+    const imgs = [];
+    for (const pg of S.pages) imgs.push(await pageJpeg(pg, S));
+    const pdf = buildPdf(imgs, S), name = p2Name();
+    UI.p2last = {name, size: pdf.length, n: imgs.length};
+    const br = window.AppBridge;
+    if (action === 'share' && br && br.shareFile) br.shareFile(name, 'application/pdf', toB64(pdf));
+    else if (action === 'save' && br && br.saveFile) { window.onFileSaved = ok => toast(ok ? 'PDF সংরক্ষিত হয়েছে' : 'সংরক্ষণ বাতিল হয়েছে'); br.saveFile(name, 'application/pdf', toB64(pdf)); }
+    else {
+      const file = new File([pdf], name, {type:'application/pdf'});
+      if (action === 'share' && navigator.canShare && navigator.canShare({files:[file]})) { try { await navigator.share({files:[file], title:name}); } catch(e) {} }
+      else { const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000); toast('PDF ডাউনলোড হচ্ছে'); }
+    }
+  } catch(e) { toast('PDF তৈরি করা যায়নি; ছবি কম দিয়ে আবার চেষ্টা করুন'); }
+  finally { UI.p2busy = false; render(); }
+}
+function img2pdf(){
+  const S = p2State(), n = S.pages.length, opt = (k, v, l) => `<button type="button" class="${S[k]===v?'on':''}" data-p2-opt="${k}" data-v="${v}">${l}</button>`;
+  return innerHeader('ছবি থেকে পিডিএফ','pdf','#B42318') + `
+  <div class="sec" style="padding-top:16px">
+    <label class="btn solid big full" for="p2File" style="cursor:pointer">${ic('plus',20)} ছবি যোগ করুন (ক্যামেরা বা গ্যালারি)</label>
+    <input type="file" id="p2File" accept="image/*" multiple class="vh">
+    <p class="hint" style="margin-top:-4px">একসঙ্গে অনেক ছবি বাছাই করা যায়। প্রতিটি ছবি PDF-এর একটি পাতা হবে; নিচে ক্রম বদলানো, ঘোরানো বা মুছে ফেলা যায়।</p>
+    ${n ? `<div class="top"><h2 style="font-size:17px">${bn(n)}টি পাতা</h2><button class="btn ghost" data-p2-clear style="min-height:36px">সব মুছুন</button></div>
+    <div class="p2grid">${S.pages.map((pg, i) => `<div class="p2pg">
+      <div class="p2im"><img src="${pg.src}" alt="পাতা ${bn(i + 1)}" style="transform:rotate(${pg.rot}deg)${pg.rot % 180 ? ' scale(.72)' : ''}${S.bw ? ';filter:grayscale(1) contrast(1.5)' : ''}"><span class="p2no">${bn(i + 1)}</span></div>
+      <div class="p2bt"><button type="button" aria-label="আগে নিন" data-p2-mv="${i}" data-d="-1" ${i ? '' : 'disabled'}>◀</button><button type="button" aria-label="ঘোরান" data-p2-rot="${i}">⟳</button><button type="button" aria-label="পরে নিন" data-p2-mv="${i}" data-d="1" ${i < n - 1 ? '' : 'disabled'}>▶</button><button type="button" aria-label="মুছুন" data-p2-del="${i}" style="color:var(--red)">✕</button></div>
+    </div>`).join('')}</div>
+    <div class="card" style="gap:10px;padding:14px 16px">
+      <div class="field"><span style="font-size:14px;font-weight:600">পাতার মাপ</span><div class="tabs2">${P2_SIZES.map(([v,l]) => opt('size', v, l)).join('')}</div></div>
+      <div class="row2"><div class="field"><span style="font-size:14px;font-weight:600">কিনারা</span><div class="tabs2">${opt('margin','s','সামান্য')}${opt('margin','n','নেই')}</div></div>
+        <div class="field"><span style="font-size:14px;font-weight:600">মান</span><div class="tabs2">${opt('q','n','সাধারণ')}${opt('q','h','উচ্চ')}</div></div></div>
+      <label style="display:flex;gap:10px;align-items:center;font-size:14px"><input type="checkbox" id="p2bw" ${S.bw ? 'checked' : ''} style="width:22px;height:22px"> সাদা-কালো স্ক্যানের মতো (লেখা স্পষ্ট, ফাইল ছোট)</label>
+      ${field('p2name','ফাইলের নাম', inp('p2name', S.name, `maxlength="60" placeholder="${esc('স্ক্যান_' + todayISO())}"`))}
+    </div>
+    <button class="btn solid big full" data-p2-make="save" ${UI.p2busy ? 'disabled' : ''}>${UI.p2busy ? 'PDF তৈরি হচ্ছে…' : `${ic('doc',20)} PDF তৈরি করে সংরক্ষণ`}</button>
+    <button class="btn big full" data-p2-make="share" ${UI.p2busy ? 'disabled' : ''}>${ic('upload',20)} PDF শেয়ার করুন (হোয়াটসঅ্যাপ, ইমেইল…)</button>
+    ${UI.p2last ? `<p class="hint">শেষ তৈরি: ${esc(UI.p2last.name)} · ${bn(UI.p2last.n)} পাতা · ${fmtSize(UI.p2last.size)}</p>` : ''}`
+    : `<div class="card empty"><span class="ib" style="background:#B42318">${ic('pdf',28)}</span><h2 style="font-size:17px">এখনও কোনো ছবি নেই</h2><p class="t2" style="font-size:14px;line-height:1.6">উপরের বোতাম চেপে ক্যামেরায় ছবি তুলুন বা গ্যালারি থেকে বেছে নিন — যেমন নোটিশ, ফরম, সনদ, বেতন বিবরণী। তারপর এক চাপে PDF বানিয়ে সংরক্ষণ বা শেয়ার করুন।</p></div>`}
+  </div>`;
+}
+function bindImg2pdf(){
+  const S = p2State(), f = document.getElementById('p2File');
+  if (f) f.addEventListener('change', async () => {
+    const files = [...(f.files || [])]; if (!files.length) return;
+    toast(`${bn(files.length)}টি ছবি যোগ হচ্ছে…`);
+    let bad = 0;
+    for (const file of files) { try { S.pages.push({src: await fileToJpeg(file), rot: 0}); } catch(e) { bad++; } }
+    if (bad) toast(`${bn(bad)}টি ছবি খোলা যায়নি`);
+    render();
+  });
+  const bw = document.getElementById('p2bw'); if (bw) bw.addEventListener('change', () => { S.bw = bw.checked; render(); });
+  const nm = document.getElementById('p2name'); if (nm) nm.addEventListener('input', () => { S.name = nm.value; });
+}
+
 /* ---------- placeholders ---------- */
 function placeholder(id){
   const f = ALL[id];
@@ -2715,12 +2840,12 @@ const ROUTE_ALIAS = {'student-profile':'students'};
 function render(){
   let r = (location.hash || '#home').slice(1) || 'home';
   r = ROUTE_ALIAS[r] || r;
-  if (!(TOP.includes(r) || r==='committee' || r==='students' || r==='teachers' || r==='lesson-plan' || r==='teacher-att' || r==='student-att' || r==='certificates' || r==='gpf' || r==='assessment' || r==='pension' || r==='salary' || r==='leave' || ALL[r])) r = 'home';
+  if (!(TOP.includes(r) || r==='committee' || r==='students' || r==='teachers' || r==='lesson-plan' || r==='teacher-att' || r==='student-att' || r==='certificates' || r==='gpf' || r==='assessment' || r==='pension' || r==='salary' || r==='leave' || r==='img2pdf' || ALL[r])) r = 'home';
   if (r !== UI.lastRoute) { if (r === 'teacher-att' || r === 'student-att') UI.attView = 'day'; UI.lastRoute = r; }
   const inner = !TOP.includes(r);
   $app.classList.toggle('inner', inner);
   $nav.style.display = inner ? 'none' : 'grid';
-  const views = {home, profile, settings, committee, students, teachers, 'lesson-plan':lessonPlan, 'teacher-att':teacherAtt, 'student-att':studentAtt, certificates, gpf, assessment, pension, salary, leave};
+  const views = {home, profile, settings, committee, students, teachers, 'lesson-plan':lessonPlan, 'teacher-att':teacherAtt, 'student-att':studentAtt, certificates, gpf, assessment, pension, salary, leave, img2pdf};
   $app.innerHTML = (views[r] || (() => placeholder(r)))();
   $nav.innerHTML = NAV.map(n => `<button class="${n[0]===r?'on':''}" data-go="${n[0]}" aria-label="${n[1]}" ${n[0]===r?'aria-current="page"':''}><span class="p">${ic(n[2])}</span>${n[1]}</button>`).join('');
   bindView(r);
@@ -2784,6 +2909,7 @@ function bindView(r){
         save(); gpfRefresh();
       }); });
   }
+  if (r === 'img2pdf') bindImg2pdf();
   if (r === 'leave') {
     bindLogo();
     const L = lvState(), pv = () => { const el = document.getElementById('lvPreview'); if (el) el.innerHTML = lvLetterHtml(L); };
@@ -2934,6 +3060,12 @@ document.addEventListener('click', e => {
   if (ds.certPick) { UI.cert.sid = ds.certPick; window.scrollTo(0,0); return render(); }
   if ('certChange' in ds) { UI.cert.sid = null; UI.cert.q = ''; return render(); }
   if ('certPrint' in ds) return printCert();
+  if (ds.p2Opt) { p2State()[ds.p2Opt] = ds.v; return render(); }
+  if (ds.p2Mv) { const S = p2State(), i = +ds.p2Mv, j = i + (+ds.d); if (j >= 0 && j < S.pages.length) { [S.pages[i], S.pages[j]] = [S.pages[j], S.pages[i]]; } return render(); }
+  if (ds.p2Rot) { const pg = p2State().pages[+ds.p2Rot]; if (pg) pg.rot = (pg.rot + 90) % 360; return render(); }
+  if (ds.p2Del) { p2State().pages.splice(+ds.p2Del, 1); return render(); }
+  if ('p2Clear' in ds) return confirmSheet('সব পাতা মুছবেন?', 'যোগ করা সব ছবি তালিকা থেকে সরে যাবে।', 'মুছুন', () => { p2State().pages = []; UI.p2last = null; });
+  if (ds.p2Make) return p2Make(ds.p2Make);
   if (ds.lvTab) { lvState().tab = ds.lvTab; return render(); }
   if ('lvFill' in ds) { const L = lvState(); L.to = addDays(L.from, LV_DAYS[L.type] - 1); return render(); }
   if ('lvPrint' in ds) { const L = lvState(); if (L.type === 'student' && !L.sid) return toast('শিক্ষার্থী বেছে নিন'); if (LV_TYPES[L.type][1]) lvSave(L); return printDoc(`${LV_TYPES[L.type][0]} - ${(DB.teachers.find(x => x.id === L.tid) || {}).name || ''}`, lvDoc(L)); }
