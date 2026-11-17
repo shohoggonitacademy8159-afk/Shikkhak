@@ -246,7 +246,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '3.4';
+const WEB_VERSION = '3.5';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -788,6 +788,9 @@ function bulkSheet(){
 // Former students keep their whole profile with an `alumni` record: {year, reason, date, note, cls, roll, section}
 const ALUMNI_REASONS = {pass5:'৫ম শ্রেণি পাস', tc:'ছাড়পত্র নিয়েছে', transfer:'অন্য বিদ্যালয়ে গেছে', drop:'ঝরে পড়েছে', other:'অন্যান্য'};
 const isActive = s => !s.alumni;
+// A student with no address of their own uses the school's common address.
+const commonAddr = () => (DB.teacher.commonAddr || '').trim();
+const stAddr = s => (s.address || '').trim() || commonAddr();
 const activeStudents = () => DB.students.filter(isActive);
 const alumniList = () => DB.students.filter(s => s.alumni);
 function makeAlumni(s, reason, date, note, year){
@@ -814,6 +817,7 @@ function students(){
       <button class="btn big" data-stu-bulk>${ic('list',20)} অনেক নাম একসাথে</button>
     </div>
     ${stuViewTabs(all.length, old)}
+    ${all.length ? `<button class="mem tap" data-common-addr style="border:1px solid var(--line);border-radius:14px"><span class="ib sm" style="background:#0E8C82">${S(P.home)}</span><span class="grow"><span class="t1" style="font-weight:600;font-size:14px">সবার ঠিকানা</span><span class="t2 clamp">${commonAddr() ? esc(commonAddr()) + ` · ${bn(all.filter(x => !(x.address || '').trim()).length)} জনের জন্য` : 'একবার লিখে সব শিক্ষার্থীর জন্য একই ঠিকানা দিন'}</span></span><span style="color:var(--mute)">${ic('edit',18)}</span></button>` : ''}
     ${all.length ? `<button class="btn big full" data-promote style="border-color:#C27C0E;color:#8A5600">${ic('cert',20)} বছর শেষে শ্রেণি উন্নয়ন ও ৫ম শ্রেণি পাস</button>` : ''}
     <label class="search">${ic('search',20)}<input id="stuSearch" type="search" placeholder="নাম, রোল বা অভিভাবকের নাম খুঁজুন" value="${esc(UI.stuQuery)}" aria-label="শিক্ষার্থী খুঁজুন"></label>
     <div class="chips" role="tablist" aria-label="শ্রেণি অনুযায়ী">
@@ -879,6 +883,25 @@ function alumniAddBulkSheet(){
   });
 }
 // Year-end: passed students go up one class, class-5 passers move to the former-students list, the rest stay as repeaters.
+function commonAddrSheet(){
+  const act = activeStudents(), own = act.filter(x => (x.address || '').trim());
+  openSheet(`<form class="f" id="caForm">
+    <h2 style="font-size:18px">সবার জন্য একই ঠিকানা</h2>
+    <p class="t2" style="font-size:13.5px;line-height:1.6">এখানে লেখা ঠিকানা সব শিক্ষার্থীর প্রোফাইল ও সনদে বসবে। কারও ঠিকানা আলাদা হলে তার প্রোফাইলে আলাদা করে লিখুন; সেটি শুধু তার জন্য থাকবে। এখানে বদলালে সবার ঠিকানা একসঙ্গে বদলে যাবে।</p>
+    ${field('ca_addr','সাধারণ ঠিকানা', ta('ca_addr', DB.teacher.commonAddr || '', 3, 'maxlength="200" placeholder="যেমন: গ্রাম: চরপাড়া, ডাকঘর: মেলান্দহ, উপজেলা: মেলান্দহ, জেলা: জামালপুর"'))}
+    ${own.length ? `<label style="display:flex;gap:10px;align-items:flex-start;font-size:14px;line-height:1.5"><input type="checkbox" id="ca_over" style="width:22px;height:22px;flex:none;margin-top:2px"> যে ${bn(own.length)} জনের আলাদা ঠিকানা লেখা আছে, তাদেরও এই ঠিকানা দিন (তাদের আলাদা ঠিকানা মুছে যাবে)</label>` : ''}
+    <p class="hint">${bn(act.length - own.length)} জন সাধারণ ঠিকানা পাবে${own.length ? `, ${bn(own.length)} জনের আলাদা ঠিকানা আছে` : ''}।</p>
+    <div class="row2"><button type="button" class="btn big" data-close>বাতিল</button><button type="submit" class="btn big solid">সংরক্ষণ</button></div>
+  </form>`);
+  document.getElementById('caForm').addEventListener('submit', e => {
+    e.preventDefault();
+    DB.teacher.commonAddr = e.target.elements.ca_addr.value.trim();
+    const over = document.getElementById('ca_over');
+    if (over && over.checked) own.forEach(x => { x.address = ''; x.updated = Date.now(); });
+    if (save()) toast(DB.teacher.commonAddr ? 'সবার ঠিকানা হালনাগাদ হয়েছে' : 'সাধারণ ঠিকানা মুছে ফেলা হয়েছে');
+    closeSheet(); render();
+  });
+}
 function promoteSheet(){
   const groups = CLASSES.map(([k, l]) => [k, l, sortedStudents(k)]).filter(g => g[2].length);
   if (!groups.length) return;
@@ -922,7 +945,7 @@ function alumniSheet(id){
   const A = s.alumni, row = (k, v) => v ? `<dt>${k}</dt><dd>${esc(v)}</dd>` : '';
   openSheet(`<div style="display:flex;gap:12px;align-items:center;margin-bottom:10px">${avatar(s.id, s.name, '#C27C0E', 60)}<span><h2 style="font-size:18px">${esc(s.name)}</h2><span class="st" style="background:#FFF1D6;color:#7A4A00">${ALUMNI_REASONS[A.reason] || ''} · ${esc(bn(A.year))}</span></span></div>
     <dl class="kv">${row('শেষ শ্রেণি', (CLASS_NAME[A.cls] || '') + (A.section ? ' (' + A.section + ')' : ''))}${row('রোল', A.roll && bn(A.roll))}${row('বিদায়ের তারিখ', A.date && fmtDate(A.date))}${row('মন্তব্য', A.note)}
-      ${row('পিতা', s.father)}${row('মাতা', s.mother)}${row('জন্ম তারিখ', s.dob && fmtDate(s.dob))}${row('জন্ম নিবন্ধন', s.birthreg && bn(s.birthreg))}${row('মোবাইল', s.phone)}${row('ঠিকানা', s.address)}</dl>
+      ${row('পিতা', s.father)}${row('মাতা', s.mother)}${row('জন্ম তারিখ', s.dob && fmtDate(s.dob))}${row('জন্ম নিবন্ধন', s.birthreg && bn(s.birthreg))}${row('মোবাইল', s.phone)}${row('ঠিকানা', stAddr(s))}</dl>
     <div class="row2" style="margin-top:12px"><button class="btn big solid" data-al-cert="${s.id}" data-type="study">${ic('cert',18)} প্রত্যয়নপত্র</button><button class="btn big solid" data-al-cert="${s.id}" data-type="tc">${ic('cert',18)} ছাড়পত্র</button></div>
     <div class="row2"><button class="btn big" data-al-edit="${s.id}">${ic('edit',18)} তথ্য সম্পাদনা</button><button class="btn big" data-al-restore="${s.id}">বর্তমান তালিকায় ফেরত</button></div>
     <button class="btn danger ghost full" data-stu-del="${s.id}">${ic('trash',18)} স্থায়ীভাবে মুছুন</button>`);
@@ -976,7 +999,7 @@ function studentSheet(id){
     ${field('s_father','পিতার নাম', inp('s_father', s.father, 'maxlength="80"'))}
     ${field('s_mother','মাতার নাম', inp('s_mother', s.mother, 'maxlength="80"'))}
     ${field('s_phone','অভিভাবকের মোবাইল', inp('s_phone', s.phone, 'type="tel" inputmode="tel" maxlength="20" placeholder="০১XXXXXXXXX"'))}
-    ${field('s_address','ঠিকানা', ta('s_address', s.address, 2, 'maxlength="200"'))}
+    ${field('s_address','ঠিকানা', ta('s_address', s.address, 2, `maxlength="200" placeholder="${esc(commonAddr() ? 'সাধারণ ঠিকানা: ' + commonAddr() : '')}"`), false, commonAddr() ? (s.address ? `আলাদা ঠিকানা দেওয়া আছে। মুছে ফাঁকা রাখলে সাধারণ ঠিকানা (${esc(commonAddr())}) বসবে।` : 'ফাঁকা রাখলে সবার সাধারণ ঠিকানাই বসবে; এর ঠিকানা আলাদা হলে এখানে লিখুন।') : 'শিক্ষার্থী তালিকার "সবার ঠিকানা" থেকে সবার জন্য একটি ঠিকানা দেওয়া যায়।')}
     <h3 style="font-size:14px;color:var(--g);margin-top:4px">অন্যান্য</h3>
     ${field('s_religion','ধর্ম (ধর্ম শিক্ষা বিষয়ের জন্য)', sel('s_religion', [['','নির্বাচন করুন'],['islam','ইসলাম'],['hindu','হিন্দু'],['buddha','বৌদ্ধ'],['christ','খ্রিষ্ট']], s.religion||''))}
     ${field('s_stipend','উপবৃত্তি', sel('s_stipend', [['','নির্বাচন করুন'],['হ্যাঁ','পায়'],['না','পায় না']], s.stipend||''))}
@@ -1360,13 +1383,13 @@ function headTeacher(){
   return h ? h.name : '';
 }
 function certFields(st){
-  return [['father','পিতার নাম'],['mother','মাতার নাম'],['roll','রোল'],['dob','জন্ম তারিখ'],['address','ঠিকানা']].filter(([k]) => !st[k]);
+  return [['father','পিতার নাম'],['mother','মাতার নাম'],['roll','রোল'],['dob','জন্ম তারিখ'],['address','ঠিকানা']].filter(([k]) => k === 'address' ? !stAddr(st) : !st[k]);
 }
 function certInner(c, st){
   const v = (x) => x ? `<b>${esc(x)}</b>` : '<span class="blank">.............................</span>';
   const T = DB.teacher;
   const sub = [T.upazila && 'উপজেলা: ' + T.upazila, T.district && 'জেলা: ' + T.district].filter(Boolean).join(', ');
-  const who = `${v(st.name)}, পিতা: ${v(st.father)}, মাতা: ${v(st.mother)}, ঠিকানা: ${v(st.address)}`;
+  const who = `${v(st.name)}, পিতা: ${v(st.father)}, মাতা: ${v(st.mother)}, ঠিকানা: ${v(stAddr(st))}`;
   const dob = st.dob ? longDate(st.dob).replace(/^[^,]+,\s*/, '') : '';
   const body = c.type === 'tc'
     ? `<p>এই মর্মে প্রত্যয়ন করা যাচ্ছে যে, ${who}, অত্র বিদ্যালয়ে ${CLASS_IN[st.cls] || ''} অধ্যয়নরত ছিল। তার রোল নম্বর ${v(st.roll && bn(st.roll))}। বিদ্যালয়ের ভর্তি রেজিস্টার অনুযায়ী তার জন্ম তারিখ ${v(dob && bn(dob))}${st.birthreg ? `, জন্ম নিবন্ধন নম্বর ${v(bn(st.birthreg))}` : ''}।</p>
@@ -2721,6 +2744,7 @@ document.addEventListener('click', e => {
   if ('logoDel' in ds) return confirmSheet('লোগো মুছবেন?', 'সনদ, আবেদন ও প্রতিবেদন থেকে লোগো ও জলছাপ সরে যাবে।', 'মুছুন', () => { setPhoto(LOGO_ID, null); });
   if (ds.stuView) { UI.stuView = ds.stuView; return render(); }
   if ('promote' in ds) return promoteSheet();
+  if ('commonAddr' in ds) return commonAddrSheet();
   if ('alNew' in ds) { UI.newAlumni = (UI.alYear && UI.alYear !== 'all') ? UI.alYear : String(new Date().getFullYear() - 1); return studentSheet(null); }
   if ('alBulknew' in ds) return alumniAddBulkSheet();
   if (ds.alumniOne) { closeSheet(); return alumniOneSheet(ds.alumniOne); }
