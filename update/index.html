@@ -246,7 +246,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '2.8';
+const WEB_VERSION = '2.9';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -2027,6 +2027,176 @@ function confirmSheet(title, msg, okLabel, onOk){
   document.getElementById('okBtn').addEventListener('click', () => { onOk(); closeSheet(); render(); });
 }
 
+/* ---------- leave & applications ---------- */
+// type: [label, counts as leave, yearly limit, reason label, reason placeholder]
+const LV_TYPES = {
+  casual:   ['নৈমিত্তিক ছুটি', true, 20, 'ছুটির কারণ', 'যেমন: পারিবারিক জরুরি কাজে বা অসুস্থতার'],
+  optional: ['ঐচ্ছিক ছুটি', true, 3, 'কোন উৎসব/দিবস', 'যেমন: শবে বরাত'],
+  earned:   ['অর্জিত ছুটি (গড় বেতনে)', true, 0, 'ছুটির কারণ', 'যেমন: পারিবারিক প্রয়োজনে'],
+  medical:  ['চিকিৎসাজনিত ছুটি', true, 0, 'অসুস্থতার বিবরণ', 'যেমন: টাইফয়েড জ্বর'],
+  maternity:['মাতৃত্বকালীন ছুটি', true, 0, 'সম্ভাব্য প্রসবের তারিখ (চিকিৎসকের মতে)', 'যেমন: ১৫ জানুয়ারি ২০২৭'],
+  rnr:      ['শ্রান্তি বিনোদন ছুটি ও ভাতা', true, 0, 'আগের শ্রান্তি বিনোদন ছুটি কবে ভোগ করেছেন', 'যেমন: ১০ জানুয়ারি ২০২৩ (না থাকলে চাকরিতে যোগদানের তারিখ)'],
+  station:  ['কর্মস্থল ত্যাগের অনুমতি', false, 0, 'কর্মস্থল ত্যাগের কারণ', 'যেমন: অসুস্থ মাকে দেখতে'],
+  joining:  ['ছুটি শেষে যোগদানপত্র', false, 0, 'কোন ছুটি ভোগ করেছেন', 'যেমন: নৈমিত্তিক ছুটি'],
+  student:  ['শিক্ষার্থীর ছুটির আবেদন', false, 0, 'ছুটির কারণ', 'যেমন: জ্বরে আক্রান্ত হওয়ায়'],
+  general:  ['সাধারণ আবেদন', false, 0, 'আবেদনের বিষয়', 'যেমন: বদলির জন্য আবেদন']
+};
+const LV_DAYS = {maternity:180, rnr:15};
+const UEO = () => `উপজেলা শিক্ষা অফিসার\nউপজেলা শিক্ষা অফিস\n${DB.teacher.upazila ? DB.teacher.upazila + (DB.teacher.district ? ', ' + DB.teacher.district : '') : '..........................'}`;
+const HT_ADDR = () => `প্রধান শিক্ষক\n${DB.teacher.school}\n${[DB.teacher.upazila, DB.teacher.district].filter(Boolean).join(', ') || '..........................'}`;
+function lvState(){
+  if (!UI.lv) UI.lv = {tab:'apply', type:'casual', tid:null, sid:null, cls:null, from:todayISO(), to:todayISO(), date:todayISO(), reason:'', addr:'', body:'', to2:'auto', guardian:'', year:String(new Date().getFullYear())};
+  const L = UI.lv;
+  if (!L.tid || !DB.teachers.some(t => t.id === L.tid)) L.tid = (DB.teachers.find(t => t.me) || bySerial(DB.teachers)[0] || {}).id || null;
+  return L;
+}
+const lvDays = (a, b) => { const d = Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 864e5) + 1; return isFinite(d) && d > 0 ? d : 0; };
+const addDays = (iso, n) => { const d = new Date(iso + 'T00:00:00'); d.setDate(d.getDate() + n); return new Date(d - d.getTimezoneOffset()*60000).toISOString().slice(0,10); };
+const dFmt = iso => iso ? bn(longDate(iso).replace(/^[^,]+,\s*/, '')) : '..........';
+const lvWhy = R => R ? (/(কারণে|কাজে|জন্য|হওয়ায়|থাকায়|প্রয়োজনে|উপলক্ষে|উদ্দেশ্যে)$/.test(R) ? esc(R) : esc(R) + ' কারণে') : '.......................... কারণে';
+const lvUsedTxt = (tid, type, yr, nm) => { const u = lvUsed(tid, type, yr); return u ? `চলতি বছরে আমি ইতোমধ্যে ${bn(u)} দিন ${nm} ভোগ করেছি।` : `চলতি বছরে আমি এখনো কোনো ${nm} ভোগ করিনি।`; };
+const isHeadT = t => /প্রধান শিক্ষক/.test((t && t.designation) || '');
+function lvUsed(tid, type, year, exceptId){
+  return (DB.leaves || []).filter(l => l.tid === tid && l.type === type && (l.from || '').startsWith(year) && l.id !== exceptId).reduce((a, l) => a + (l.days || 0), 0);
+}
+function lvLetter(L){
+  const T = DB.teacher, t = DB.teachers.find(x => x.id === L.tid) || {name: T.name, designation: T.designation};
+  const head = isHeadT(t), n = lvDays(L.from, L.to), nm = LV_TYPES[L.type][0], R = (L.reason || '').trim();
+  const r = x => x ? esc(x) : '..........................';
+  const span = `আগামী ${dFmt(L.from)} তারিখ থেকে ${dFmt(L.to)} তারিখ পর্যন্ত মোট ${bn(n)} দিন`;
+  const me = head ? `আমি ${esc(T.school)}-এ প্রধান শিক্ষক পদে কর্মরত আছি।` : `আমি অত্র বিদ্যালয়ে ${esc(t.designation || 'সহকারী শিক্ষক')} পদে কর্মরত আছি।`;
+  const addr = L.addr.trim() ? `<p>ছুটিকালীন আমার ঠিকানা: ${esc(L.addr.trim())}।</p>` : '';
+  let to = HT_ADDR(), via = '', subject = '', body = '', pray = '', sign = [esc(t.name), esc(t.designation || ''), esc(T.school)];
+  const sanction = head ? UEO() : HT_ADDR();
+  const viaHT = head ? '' : `মাধ্যম: প্রধান শিক্ষক, ${esc(T.school)}`;
+  const st = DB.students.find(x => x.id === L.sid);
+  switch (L.type) {
+    case 'casual': to = sanction; subject = `${bn(n)} দিনের নৈমিত্তিক ছুটির জন্য আবেদন।`;
+      body = `<p>${me} ${lvWhy(R)} ${span} আমার পক্ষে বিদ্যালয়ে উপস্থিত থাকা সম্ভব নয়। ${lvUsedTxt(L.tid, 'casual', L.from.slice(0,4), 'নৈমিত্তিক ছুটি')}</p>`;
+      pray = `উক্ত ${bn(n)} দিনের নৈমিত্তিক ছুটি মঞ্জুর করে বাধিত করবেন।`; break;
+    case 'optional': to = sanction; subject = `ঐচ্ছিক ছুটির জন্য আবেদন।`;
+      body = `<p>${me} ${r(R)} উপলক্ষে ${span} ঐচ্ছিক ছুটি ভোগ করতে ইচ্ছুক। ${lvUsedTxt(L.tid, 'optional', L.from.slice(0,4), 'ঐচ্ছিক ছুটি')}</p>`;
+      pray = `উক্ত ঐচ্ছিক ছুটি মঞ্জুর করে বাধিত করবেন।`; break;
+    case 'earned': to = UEO(); via = viaHT; subject = `${bn(n)} দিনের অর্জিত ছুটি (গড় বেতনে) মঞ্জুরের জন্য আবেদন।`;
+      body = `<p>${me} ${lvWhy(R)} ${span} আমার অর্জিত ছুটি প্রয়োজন। আমার হিসাবে পর্যাপ্ত অর্জিত ছুটি পাওনা আছে।</p>${addr}`;
+      pray = `${dFmt(L.from)} থেকে ${dFmt(L.to)} পর্যন্ত ${bn(n)} দিনের অর্জিত ছুটি (গড় বেতনে) মঞ্জুর করে বাধিত করবেন।`; break;
+    case 'medical': to = UEO(); via = viaHT; subject = `চিকিৎসাজনিত কারণে ${bn(n)} দিনের অর্জিত ছুটি মঞ্জুরের জন্য আবেদন।`;
+      body = `<p>${me} বর্তমানে আমি ${r(R)} রোগে আক্রান্ত হয়ে চিকিৎসাধীন আছি। চিকিৎসকের পরামর্শ অনুযায়ী ${span} আমার সম্পূর্ণ বিশ্রাম প্রয়োজন। চিকিৎসা সনদপত্র এই সঙ্গে সংযুক্ত করা হলো।</p>${addr}`;
+      pray = `চিকিৎসাজনিত কারণে উক্ত ${bn(n)} দিনের অর্জিত ছুটি মঞ্জুর করে বাধিত করবেন।`; break;
+    case 'maternity': to = UEO(); via = viaHT; subject = `মাতৃত্বকালীন ছুটি মঞ্জুরের জন্য আবেদন।`;
+      body = `<p>${me} আমি বর্তমানে সন্তানসম্ভবা। চিকিৎসকের মতে আমার সম্ভাব্য প্রসবের তারিখ ${r(R)}। বিধি অনুযায়ী ${span} (৬ মাস) পূর্ণ বেতনে মাতৃত্বকালীন ছুটি আমার প্রয়োজন। চিকিৎসকের সনদপত্র এই সঙ্গে সংযুক্ত করা হলো।</p>${addr}`;
+      pray = `উক্ত সময়ের জন্য মাতৃত্বকালীন ছুটি মঞ্জুর করে বাধিত করবেন।`; break;
+    case 'rnr': to = UEO(); via = viaHT; subject = `শ্রান্তি বিনোদন ছুটি ও ভাতা মঞ্জুরের জন্য আবেদন।`;
+      body = `<p>${me} আমি সর্বশেষ ${r(R)} তারিখে শ্রান্তি বিনোদন ছুটি ভোগ করেছি, তারপর তিন বছর পূর্ণ হয়েছে। বিধি অনুযায়ী ${span} শ্রান্তি বিনোদন ছুটি এবং এক মাসের মূল বেতনের সমপরিমাণ শ্রান্তি বিনোদন ভাতা আমার প্রাপ্য।</p>${addr}`;
+      pray = `${bn(n)} দিনের শ্রান্তি বিনোদন ছুটি ও ভাতা মঞ্জুর করে বাধিত করবেন।`; break;
+    case 'station': to = sanction; subject = `কর্মস্থল ত্যাগের অনুমতির জন্য আবেদন।`;
+      body = `<p>${me} ${lvWhy(R)} ${span} আমার কর্মস্থল ত্যাগ করা প্রয়োজন।</p>${addr}`;
+      pray = `উক্ত সময়ে কর্মস্থল ত্যাগের অনুমতি প্রদান করে বাধিত করবেন।`; break;
+    case 'joining': to = head ? UEO() : HT_ADDR(); subject = `ছুটি শেষে কাজে যোগদানপত্র।`;
+      body = `<p>${me} আমি ${dFmt(L.from)} তারিখ থেকে ${dFmt(L.to)} তারিখ পর্যন্ত মোট ${bn(n)} দিনের ${r(R)} ভোগ করেছি। ছুটি শেষে আজ ${dFmt(L.date)} তারিখ পূর্বাহ্নে আমি কাজে যোগদান করলাম।</p>`;
+      pray = `আমার এই যোগদানপত্র গ্রহণ করে বাধিত করবেন।`; break;
+    case 'student': {
+      to = HT_ADDR(); subject = `${bn(n)} দিনের ছুটির জন্য আবেদন।`;
+      const g = (L.guardian || (st && st.father) || '').trim();
+      body = `<p>আমার সন্তান ${st ? `<b>${esc(st.name)}</b>` : '..........'} অত্র বিদ্যালয়ের ${st ? (CLASS_OF[st.cls] || '') : '..........'} একজন নিয়মিত শিক্ষার্থী, রোল নম্বর ${st && st.roll ? bn(st.roll) : '.....'}। ${lvWhy(R)} সে ${span} বিদ্যালয়ে উপস্থিত থাকতে পারবে না।</p>`;
+      pray = `তাকে উক্ত ${bn(n)} দিনের ছুটি মঞ্জুর করে বাধিত করবেন।`;
+      sign = [g ? esc(g) : '..........................', `অভিভাবক, ${st ? esc(st.name) : ''}`, st ? `${CLASS_NAME[st.cls] || ''}${st.roll ? ', রোল: ' + bn(st.roll) : ''}` : '']; break; }
+    case 'general': to = L.to2 === 'ueo' ? UEO() : L.to2 === 'ht' ? HT_ADDR() : (head ? UEO() : HT_ADDR()); via = L.to2 === 'ueo' && !head ? viaHT : '';
+      subject = `${r(R)}।`; body = (L.body || '').trim() ? (L.body.trim().split(/\n+/).map(p => `<p>${esc(p)}</p>`).join('')) : `<p>${me} ..........................</p>`;
+      pray = `বিষয়টি সদয় বিবেচনা করে প্রয়োজনীয় ব্যবস্থা গ্রহণ করে বাধিত করবেন।`; break;
+  }
+  if (L.type !== 'general' && L.to2 === 'ueo') { to = UEO(); via = head ? '' : viaHT; }
+  if (L.type !== 'general' && L.to2 === 'ht' && !head) { to = HT_ADDR(); via = ''; }
+  return {to, via, subject, body, pray, sign: sign.filter(Boolean), date: L.type === 'joining' ? L.date : (L.date || todayISO())};
+}
+const LETTER_CSS = `
+.letter{font-family:'Hind Siliguri','SolaimanLipi','Nikosh','Noto Sans Bengali',sans-serif;color:#111;background:#fff;line-height:1.8;font-size:15px;padding:8px 4px}
+.letter p{margin:0 0 10px;text-align:justify}.letter .l-date{margin-bottom:12px}.letter .l-to{white-space:pre-line;margin-bottom:10px}
+.letter .l-sub{margin:10px 0}.letter .l-sign{margin-top:22px;line-height:1.6}.letter .l-sign .sp{height:36px}
+`;
+function lvLetterHtml(L){
+  const X = lvLetter(L);
+  return `<div class="letter"><div class="l-date">তারিখ: ${dFmt(X.date)}</div>
+    <div class="l-to">বরাবর\n${esc(X.to)}।</div>${X.via ? `<div class="l-to">${X.via}।</div>` : ''}
+    <div class="l-sub"><b>বিষয়: ${X.subject}</b></div>
+    <p>জনাব,</p>${X.body}<p>অতএব, মহোদয়ের নিকট বিনীত প্রার্থনা, ${X.pray}</p>
+    <div class="l-sign">${L.type === 'student' ? 'নিবেদক' : 'বিনীত নিবেদক'}<div class="sp"></div>${X.sign.map(s => `<div>${s}</div>`).join('')}</div></div>`;
+}
+function lvDoc(L){
+  return `<!DOCTYPE html><html lang="bn"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${LV_TYPES[L.type][0]}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>@page{size:A4;margin:20mm}html,body{margin:0;background:#fff}${LETTER_CSS}.letter{font-size:16px}</style></head><body>${lvLetterHtml(L)}</body></html>`;
+}
+function lvText(L){
+  const div = document.createElement('div'); div.innerHTML = lvLetterHtml(L);
+  div.querySelectorAll('p,.l-date,.l-to,.l-sub,.l-sign div').forEach(el => el.insertAdjacentText('afterend', '\n'));
+  return div.textContent.replace(/[ \t]+/g, ' ').replace(/\n[ \t]+/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+function lvSave(L){
+  const n = lvDays(L.from, L.to); if (!n) { toast('তারিখ ঠিক করুন'); return false; }
+  if (L.type === 'student') {
+    if (!L.sid) { toast('শিক্ষার্থী বেছে নিন'); return false; }
+    for (let i = 0; i < n; i++) { const d = addDays(L.from, i); if (!isFriday(d)) attDay('students', d, true)[L.sid] = 'l'; }
+    save(); toast(`হাজিরায় ${bn(n)} দিন "ছুটি" বসানো হয়েছে`); return true;
+  }
+  if (!LV_TYPES[L.type][1]) return true;
+  if (!Array.isArray(DB.leaves)) DB.leaves = [];
+  const dup = DB.leaves.find(l => l.tid === L.tid && l.type === L.type && l.from === L.from && l.to === L.to);
+  if (!dup) DB.leaves.push({id:uid(), tid:L.tid, type:L.type, from:L.from, to:L.to, days:n, reason:(L.reason || '').trim(), at:Date.now()});
+  for (let i = 0; i < n; i++) { const d = addDays(L.from, i); if (!isFriday(d)) { const day = attDay('teachers', d, true); if (!day[L.tid]) day[L.tid] = {s:'l'}; } }
+  save(); toast(dup ? 'আগেই হিসাবে আছে' : 'ছুটির হিসাবে যোগ হয়েছে, হাজিরাতেও "ছুটি" বসেছে'); return true;
+}
+function leave(){
+  const L = lvState(), head = innerHeader('ছুটি ও আবেদন','leave','#E0701A');
+  const tabs = `<div class="tabs2" role="tablist"><button role="tab" class="${L.tab==='apply'?'on':''}" data-lv-tab="apply">আবেদন তৈরি</button><button role="tab" class="${L.tab==='record'?'on':''}" data-lv-tab="record">ছুটির হিসাব</button></div>`;
+  return head + `<div class="sec" style="padding-top:16px">${tabs}${L.tab === 'apply' ? lvApply(L) : lvRecord(L)}</div>`;
+}
+function lvApply(L){
+  const ty = LV_TYPES[L.type], n = lvDays(L.from, L.to), t = DB.teachers.find(x => x.id === L.tid);
+  const isStu = L.type === 'student', yr = (L.from || todayISO()).slice(0,4);
+  const used = ty[2] ? lvUsed(L.tid, L.type, yr) : 0;
+  const stuOpts = DB.students.length ? [['', '— শিক্ষার্থী বেছে নিন —'], ...[...DB.students].sort((a,b) => (a.cls+'').localeCompare(b.cls+'') || (parseInt(toEn(a.roll))||9999) - (parseInt(toEn(b.roll))||9999)).map(s => [s.id, `${s.name} — ${CLASS_NAME[s.cls] || ''}${s.roll ? ', রোল ' + bn(s.roll) : ''}`])] : [['', 'শিক্ষার্থী তালিকা খালি']];
+  const warn = [];
+  if (L.type === 'casual' && n > 10) warn.push('একবারে ১০ দিনের বেশি নৈমিত্তিক ছুটি নেওয়া যায় না।');
+  if (ty[2] && used + n > ty[2]) warn.push(`এ বছরে ${ty[0]} ${bn(ty[2])} দিন পর্যন্ত; আগে ${bn(used)} দিন নেওয়া হয়েছে।`);
+  if (!n) warn.push('শেষের তারিখ শুরুর তারিখের আগে হতে পারে না।');
+  if ((L.type === 'earned' || L.type === 'medical' || L.type === 'maternity' || L.type === 'rnr' || (isHeadT(t) && !isStu)) && !DB.teacher.upazila) warn.push('প্রোফাইলে উপজেলার নাম দিলে প্রাপকের ঠিকানায় বসে যাবে।');
+  return `<div class="card" style="gap:12px;padding:18px 16px">
+    ${field('lv_type','আবেদনের ধরন', sel('lv_type', Object.entries(LV_TYPES).map(([k,v]) => [k, v[0]]), L.type))}
+    ${isStu ? field('lv_sid','শিক্ষার্থী', sel('lv_sid', stuOpts, L.sid || ''))
+      + field('lv_guardian','অভিভাবকের নাম', inp('lv_guardian', L.guardian, `maxlength="60" data-lv-in="guardian" placeholder="${esc((DB.students.find(x => x.id === L.sid) || {}).father || 'যেমন: মোঃ রফিকুল ইসলাম')}"`), false, 'ফাঁকা রাখলে প্রোফাইলের পিতার নাম বসবে')
+      : field('lv_tid','আবেদনকারী শিক্ষক', sel('lv_tid', bySerial(DB.teachers).map(x => [x.id, `${x.name} — ${x.designation || ''}`]), L.tid || ''))}
+    <div class="row2">${field('lv_from', L.type === 'joining' ? 'ছুটি শুরু' : 'শুরুর তারিখ', inp('lv_from', L.from, 'type="date" data-lv-in="from"'))}${field('lv_to', L.type === 'joining' ? 'ছুটি শেষ' : 'শেষের তারিখ', inp('lv_to', L.to, 'type="date" data-lv-in="to"'))}</div>
+    <p class="hint" style="margin-top:-4px">মোট <b>${bn(n)}</b> দিন${ty[2] ? ` · এ বছর আগে নেওয়া ${bn(used)} দিন, বাকি ${bn(Math.max(0, ty[2] - used))} দিন` : ''}${LV_DAYS[L.type] ? ` · বিধি অনুযায়ী ${bn(LV_DAYS[L.type])} দিন <button class="btn" style="padding:2px 10px;min-height:0;font-size:13px" data-lv-fill>শেষ তারিখ বসান</button>` : ''}</p>
+    ${field('lv_reason', ty[3], inp('lv_reason', L.reason, `maxlength="120" data-lv-in="reason" placeholder="${esc(ty[4])}"`))}
+    ${L.type === 'general' ? field('lv_body','আবেদনের মূল কথা', `<textarea id="lv_body" rows="5" data-lv-in="body" placeholder="প্রতিটি অনুচ্ছেদ নতুন লাইনে লিখুন">${esc(L.body)}</textarea>`) : ''}
+    ${['earned','medical','maternity','rnr','station'].includes(L.type) ? field('lv_addr','ছুটিকালীন ঠিকানা (ঐচ্ছিক)', inp('lv_addr', L.addr, 'maxlength="120" data-lv-in="addr"')) : ''}
+    <div class="row2">${field('lv_date', L.type === 'joining' ? 'যোগদানের তারিখ' : 'আবেদনের তারিখ', inp('lv_date', L.date, 'type="date" data-lv-in="date"'))}
+      ${isStu ? '' : field('lv_to2','প্রাপক', sel('lv_to2', [['auto','নিয়ম অনুযায়ী'],['ht','প্রধান শিক্ষক'],['ueo','উপজেলা শিক্ষা অফিসার']], L.to2))}</div>
+    ${warn.length ? `<div class="warnbox" role="note">${warn.map(w => `<span>${w}</span>`).join('')}</div>` : ''}
+  </div>
+  <h2 style="font-size:17px">আবেদনের নমুনা</h2>
+  <div class="certwrap" style="background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px"><style>${LETTER_CSS}.certwrap .letter{font-size:14px}</style><div id="lvPreview">${lvLetterHtml(L)}</div></div>
+  <button class="btn solid big full" data-lv-print>${ic('doc',20)} প্রিন্ট / PDF সংরক্ষণ</button>
+  <div class="row2"><button class="btn big" data-lv-copy>${ic('copy',20)} লেখা কপি</button>${ty[1] || isStu ? `<button class="btn big" data-lv-save>${isStu ? 'হাজিরায় ছুটি বসান' : 'হিসাবে যোগ করুন'}</button>` : ''}</div>
+  <p class="hint">প্রিন্ট করলে ছুটিটি নিজে থেকেই হিসাবে যোগ হয় এবং ওই দিনগুলোর হাজিরায় "ছুটি" বসে (শুক্রবার বাদে)।</p>`;
+}
+function lvRecord(L){
+  const yrs = [...new Set([String(new Date().getFullYear()), ...(DB.leaves || []).map(l => (l.from || '').slice(0,4))])].filter(Boolean).sort().reverse();
+  const list = (DB.leaves || []).filter(l => (l.from || '').startsWith(L.year)).sort((a,b) => b.from.localeCompare(a.from));
+  const rows = bySerial(DB.teachers).map(t => { const c = {}; Object.keys(LV_TYPES).forEach(k => c[k] = lvUsed(t.id, k, L.year)); return {t, c}; });
+  return `<div class="field">${sel('lv_year', yrs.map(y => [y, bn(y) + ' সাল']), L.year)}</div>
+    <div class="list">${rows.map(({t, c}) => `<div class="mem" style="flex-direction:column;align-items:stretch;gap:6px">
+      <span class="t1" style="font-weight:600">${t.serial ? esc(bn(t.serial)) + '. ' : ''}${esc(t.name)} <span class="t2">— ${esc(t.designation || '')}</span></span>
+      <span class="sumrow">${pill(`নৈমিত্তিক ${bn(c.casual)}/২০`, c.casual > 20 ? '#B42318' : '#17663F', c.casual > 20 ? '#FDE8E6' : '#E3F4EA')}${pill(`বাকি ${bn(Math.max(0, 20 - c.casual))}`,'#1F4E8C','#E6EFFA')}${pill(`ঐচ্ছিক ${bn(c.optional)}/৩`,'#7A4A00','#FFF1D6')}
+        ${['earned','medical','maternity','rnr'].filter(k => c[k]).map(k => pill(`${LV_TYPES[k][0].replace(/ \(.*\)/,'').replace(' ও ভাতা','')} ${bn(c[k])}`,'#6D3FB8','#F0EAFB')).join('')}</span></div>`).join('')}</div>
+    <h2 style="font-size:17px;margin-top:8px">ছুটির তালিকা (${bn(L.year)})</h2>
+    ${list.length ? `<div class="list">${list.map(l => { const t = DB.teachers.find(x => x.id === l.tid); return `<div class="mem"><span class="grow"><span class="t1" style="font-weight:600;font-size:14px">${esc(t ? t.name : 'মুছে ফেলা শিক্ষক')} — ${LV_TYPES[l.type] ? LV_TYPES[l.type][0] : l.type}</span><span class="t2">${dFmt(l.from)} – ${dFmt(l.to)} · ${bn(l.days)} দিন${l.reason ? ' · ' + esc(l.reason) : ''}</span></span><button class="btn" aria-label="মুছুন" data-lv-del="${l.id}">${ic('trash',18)}</button></div>`; }).join('')}</div>`
+      : '<div class="card empty"><p class="t2" style="font-size:14px;line-height:1.6">এ বছরে কোনো ছুটির হিসাব নেই। "আবেদন তৈরি" থেকে আবেদন প্রিন্ট বা "হিসাবে যোগ" করলে এখানে আসবে।</p></div>'}
+    <div class="card" style="gap:6px;padding:14px"><b style="font-size:15px">প্রধান ছুটির নিয়ম</b>
+      <p class="t2" style="font-size:13px;line-height:1.7">নৈমিত্তিক ছুটি বছরে ২০ দিন, একবারে সর্বোচ্চ ১০ দিন। ঐচ্ছিক ছুটি বছরে ৩ দিন। মাতৃত্বকালীন ছুটি ৬ মাস, চাকরিজীবনে দুইবার। শ্রান্তি বিনোদন ছুটি প্রতি ৩ বছরে ১৫ দিন, সঙ্গে এক মাসের মূল বেতনের সমান ভাতা। প্রাথমিক বিদ্যালয় অবকাশ বিভাগ হওয়ায় অর্জিত ছুটির হিসাব সার্ভিস বইয়ে দেখে নিন।</p></div>`;
+}
+
 /* ---------- placeholders ---------- */
 function placeholder(id){
   const f = ALL[id];
@@ -2048,12 +2218,12 @@ const ROUTE_ALIAS = {'student-profile':'students'};
 function render(){
   let r = (location.hash || '#home').slice(1) || 'home';
   r = ROUTE_ALIAS[r] || r;
-  if (!(TOP.includes(r) || r==='committee' || r==='students' || r==='teachers' || r==='lesson-plan' || r==='teacher-att' || r==='student-att' || r==='certificates' || r==='gpf' || r==='assessment' || r==='pension' || r==='salary' || ALL[r])) r = 'home';
+  if (!(TOP.includes(r) || r==='committee' || r==='students' || r==='teachers' || r==='lesson-plan' || r==='teacher-att' || r==='student-att' || r==='certificates' || r==='gpf' || r==='assessment' || r==='pension' || r==='salary' || r==='leave' || ALL[r])) r = 'home';
   if (r !== UI.lastRoute) { if (r === 'teacher-att' || r === 'student-att') UI.attView = 'day'; UI.lastRoute = r; }
   const inner = !TOP.includes(r);
   $app.classList.toggle('inner', inner);
   $nav.style.display = inner ? 'none' : 'grid';
-  const views = {home, profile, settings, committee, students, teachers, 'lesson-plan':lessonPlan, 'teacher-att':teacherAtt, 'student-att':studentAtt, certificates, gpf, assessment, pension, salary};
+  const views = {home, profile, settings, committee, students, teachers, 'lesson-plan':lessonPlan, 'teacher-att':teacherAtt, 'student-att':studentAtt, certificates, gpf, assessment, pension, salary, leave};
   $app.innerHTML = (views[r] || (() => placeholder(r)))();
   $nav.innerHTML = NAV.map(n => `<button class="${n[0]===r?'on':''}" data-go="${n[0]}" aria-label="${n[1]}" ${n[0]===r?'aria-current="page"':''}><span class="p">${ic(n[2])}</span>${n[1]}</button>`).join('');
   bindView(r);
@@ -2115,6 +2285,13 @@ function bindView(r){
         DB.gpf[key] = (key === 'dob' || key === 'pct' || key === 'months') ? el.value : toEn(el.value);
         save(); gpfRefresh();
       }); });
+  }
+  if (r === 'leave') {
+    const L = lvState(), pv = () => { const el = document.getElementById('lvPreview'); if (el) el.innerHTML = lvLetterHtml(L); };
+    document.querySelectorAll('[data-lv-in]').forEach(el => el.addEventListener('input', () => { L[el.dataset.lvIn] = el.value; pv(); }));
+    document.querySelectorAll('[data-lv-in][type="date"]').forEach(el => el.addEventListener('change', () => { L[el.dataset.lvIn] = el.value; if (el.dataset.lvIn === 'from' && L.to < L.from) L.to = L.from; render(); }));
+    [['lv_type','type'],['lv_tid','tid'],['lv_sid','sid'],['lv_to2','to2'],['lv_year','year']].forEach(([id, k]) => { const el = document.getElementById(id); if (el) el.addEventListener('change', () => {
+      L[k] = el.value; if (k === 'type') { L.reason = ''; if (LV_DAYS[L.type]) L.to = addDays(L.from, LV_DAYS[L.type] - 1); } render(); }); });
   }
   if (r === 'certificates') {
     const s = document.getElementById('certSearch');
@@ -2240,6 +2417,12 @@ document.addEventListener('click', e => {
   if (ds.certPick) { UI.cert.sid = ds.certPick; window.scrollTo(0,0); return render(); }
   if ('certChange' in ds) { UI.cert.sid = null; UI.cert.q = ''; return render(); }
   if ('certPrint' in ds) return printCert();
+  if (ds.lvTab) { lvState().tab = ds.lvTab; return render(); }
+  if ('lvFill' in ds) { const L = lvState(); L.to = addDays(L.from, LV_DAYS[L.type] - 1); return render(); }
+  if ('lvPrint' in ds) { const L = lvState(); if (L.type === 'student' && !L.sid) return toast('শিক্ষার্থী বেছে নিন'); if (LV_TYPES[L.type][1]) lvSave(L); return printDoc(`${LV_TYPES[L.type][0]} - ${(DB.teachers.find(x => x.id === L.tid) || {}).name || ''}`, lvDoc(L)); }
+  if ('lvCopy' in ds) return copyText(lvText(lvState()), 'আবেদন কপি হয়েছে');
+  if ('lvSave' in ds) { if (lvSave(lvState())) render(); return; }
+  if (ds.lvDel) return confirmSheet('এই ছুটি মুছবেন?', 'ছুটির হিসাব থেকে বাদ যাবে। হাজিরায় বসানো "ছুটি" আলাদাভাবে বদলাতে হবে।', 'মুছুন', () => { DB.leaves = (DB.leaves || []).filter(l => l.id !== ds.lvDel); save(); });
   if ('certCopy' in ds) { const st = certStudent(); if (st) { logCert(UI.cert, st); copyText(certPlainText(UI.cert, st), 'সনদের লেখা কপি হয়েছে'); } return; }
   if (ds.certLog) { const l = DB.certs.find(x => x.id === ds.certLog); if (l && DB.students.some(x => x.id === l.sid)) { Object.assign(UI.cert, {type:l.type, sid:l.sid, memo:l.memo||'', date:l.date, reason:l.reason||UI.cert.reason, passed:l.passed||''}); window.scrollTo(0,0); render(); } else toast('এই শিক্ষার্থীর প্রোফাইল আর নেই'); return; }
   // attendance
