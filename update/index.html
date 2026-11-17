@@ -16,6 +16,7 @@ html,body{margin:0;background:#E4ECE7}
 body{font-family:'Hind Siliguri','SolaimanLipi','Nikosh','Noto Sans Bengali',sans-serif;color:var(--ink);-webkit-tap-highlight-color:transparent}
 button{font:inherit;color:inherit;cursor:pointer}
 a{color:var(--g)}
+.okbox{display:flex;flex-direction:column;gap:2px;background:#E3F4EA;border:1px solid #9FD3B4;color:#17663F;border-radius:12px;padding:10px 12px;font-size:13.5px;line-height:1.55}
 .p2grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
 .p2pg{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;display:flex;flex-direction:column}
 .p2im{position:relative;aspect-ratio:3/4;background:#EEF1F6;display:grid;place-items:center;overflow:hidden}.p2im img{max-width:100%;max-height:100%;object-fit:contain;transition:transform .2s}
@@ -267,7 +268,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '4.5';
+const WEB_VERSION = '4.6';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -315,7 +316,7 @@ try { PHOTOS = JSON.parse(localStorage.getItem(PHOTO_KEY) || '{}') || {}; } catc
 function setPhoto(id, data){
   const prev = PHOTOS[id];
   if (data) PHOTOS[id] = data; else delete PHOTOS[id];
-  try { localStorage.setItem(PHOTO_KEY, JSON.stringify(PHOTOS)); return true; }
+  try { localStorage.setItem(PHOTO_KEY, JSON.stringify(PHOTOS)); if (typeof scheduleBackup === 'function') scheduleBackup(); return true; }
   catch(e) { if (prev) PHOTOS[id] = prev; else delete PHOTOS[id]; toast('ছবি রাখার জায়গা ভরে গেছে; কিছু পুরোনো ছবি মুছে আবার চেষ্টা করুন'); return false; }
 }
 // Shrink any picked image to a small square JPEG (about 5 KB).
@@ -513,6 +514,7 @@ function withTeachers(db){
   return db;
 }
 let canStore = true;
+let FRESH = false; try { FRESH = !localStorage.getItem(KEY); } catch(e) {}
 let DB = (() => {
   const d = DEFAULTS();
   try {
@@ -525,8 +527,64 @@ let DB = (() => {
   return withTeachers(d);
 })();
 function save(){
-  try { localStorage.setItem(KEY, JSON.stringify(DB)); return true; }
+  try { localStorage.setItem(KEY, JSON.stringify(DB)); scheduleBackup(); return true; }
   catch(e){ canStore = false; toast('এই ব্রাউজারে তথ্য সংরক্ষণ করা যাচ্ছে না'); return false; }
+}
+
+/* ---------- automatic backup ----------
+   Every change is mirrored to a file inside the Android app, and — once a folder is chosen — written as a full
+   backup (data + photos) to that folder, which survives uninstalling the app. Nothing to do by hand. */
+const bkWhen = t => { try { const d = new Date(+t); return d.toLocaleDateString('bn-BD', {day:'numeric', month:'long', year:'numeric'}) + ', ' + d.toLocaleTimeString('bn-BD', {hour:'numeric', minute:'2-digit'}); } catch(e) { return ''; } };
+const bkOk = () => !!(window.AppBridge && AppBridge.writeBackup && AppBridge.mirror);
+const bkPayload = () => JSON.stringify({app:'shikkhok', v:1, at:Date.now(), db:DB, photos:PHOTOS});
+function bkInfo(){ try { return bkOk() ? JSON.parse(AppBridge.backupInfo() || '{}') : {}; } catch(e) { return {}; } }
+let bkMirrorT = null, bkFolderT = null, bkDirty = false;
+function scheduleBackup(){
+  if (!bkOk()) return;
+  bkDirty = true;
+  clearTimeout(bkMirrorT); bkMirrorT = setTimeout(() => { try { AppBridge.mirror(bkPayload()); } catch(e) {} }, 1500);
+  clearTimeout(bkFolderT); bkFolderT = setTimeout(flushBackup, 20000);
+}
+function flushBackup(force){
+  if (!bkOk() || (!bkDirty && !force)) return;
+  clearTimeout(bkFolderT); bkDirty = false;
+  try { const p = bkPayload(); AppBridge.mirror(p); if (bkInfo().folder) AppBridge.writeBackup(p); } catch(e) {}
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushBackup(); });
+// Accepts the new backup file ({db, photos}) and the older copied text (just the data).
+function applyBackup(obj){
+  const s = obj && obj.db ? obj.db : obj;
+  if (!s || !s.teacher || !s.committees || !Array.isArray(s.students)) throw new Error('bad backup');
+  const d = DEFAULTS();
+  DB = withTeachers({...d, ...s, teacher:{...d.teacher, ...s.teacher}, committees:{...d.committees, ...s.committees}, plans:Array.isArray(s.plans)?s.plans:[]});
+  if (obj && obj.photos && typeof obj.photos === 'object') { PHOTOS = obj.photos; try { localStorage.setItem(PHOTO_KEY, JSON.stringify(PHOTOS)); } catch(e) {} }
+  save();
+}
+window.onBackupFolder = (ok, label) => {
+  if (!ok) { toast('ফোল্ডার বেছে নেওয়া হয়নি'); return; }
+  if (UI.bkRestore) { UI.bkRestore = false; toast('ব্যাকআপ খোঁজা হচ্ছে…'); AppBridge.readBackup(); return; }
+  toast(`স্বয়ংক্রিয় ব্যাকআপ চালু: ${label}`); flushBackup(true); render();
+};
+window.onBackupWritten = ok => { if (!ok && !UI.bkWarned) { UI.bkWarned = true; toast('ব্যাকআপ ফোল্ডারে লেখা যায়নি — সেটিংস থেকে ফোল্ডারটি আবার বেছে দিন'); } if (location.hash.slice(1) === 'settings') render(); };
+window.onBackupRead = text => {
+  if (!text) { toast('এই ফোল্ডারে কোনো ব্যাকআপ পাওয়া যায়নি'); return; }
+  let obj; try { obj = JSON.parse(text); } catch(e) { toast('ব্যাকআপ ফাইলটি পড়া যায়নি'); return; }
+  const when = obj && obj.at ? bkWhen(obj.at) : '';
+  const doIt = () => { try { applyBackup(obj); toast('আগের সব তথ্য ফিরে এসেছে'); closeSheet(); render(); } catch(e) { toast('ব্যাকআপ ফাইলটি সঠিক নয়'); } };
+  if (FRESH) { FRESH = false; return doIt(); }
+  confirmSheet('ব্যাকআপ থেকে ফেরত আনবেন?', `${when ? when + '-এর ' : ''}ব্যাকআপ পাওয়া গেছে। এখনকার সব তথ্য এর দ্বারা বদলে যাবে।`, 'ফেরত আনুন', doIt);
+};
+function bkStatusHtml(){
+  const I = bkInfo(), last = +I.last || 0;
+  const when = last ? bkWhen(last) : '';
+  return I.folder ? `<div class="okbox"><b>✓ স্বয়ংক্রিয় ব্যাকআপ চালু আছে</b><span>ফোল্ডার: ${esc(I.folder)}</span><span>${when ? 'সর্বশেষ ব্যাকআপ: ' + esc(when) : 'প্রথম ব্যাকআপ শিগগিরই হবে'}</span></div>`
+    : `<div class="warnbox"><span><b>স্থায়ী সংরক্ষণ এখনো চালু হয়নি।</b> একবার একটি ফোল্ডার বেছে দিন — এরপর প্রতিটি পরিবর্তন নিজে থেকেই সেখানে জমা হবে; অ্যাপ মুছে আবার ইনস্টল করলেও তথ্য ফিরিয়ে আনা যাবে।</span></div>`;
+}
+function bkWelcomeSheet(){
+  openSheet(`<h2 style="font-size:18px">আগে এই অ্যাপ ব্যবহার করেছেন?</h2>
+    <p class="t2" style="font-size:14px;line-height:1.7;margin:8px 0 12px">আগের ব্যাকআপ ফোল্ডারটি (যেমন Documents ভেতরের "শিক্ষক অ্যাপ ব্যাকআপ") বেছে দিলে শিক্ষক, শিক্ষার্থী, হাজিরা, নম্বর ও ছবিসহ সব তথ্য ফিরে আসবে।</p>
+    <button class="btn solid big full" data-bk-restore>${ic('upload',20)} ব্যাকআপ ফোল্ডার বেছে দিন</button>
+    <button class="btn big full" data-bk-new style="margin-top:8px">না, নতুন করে শুরু করব</button>`);
 }
 
 /* ---------- ui state ---------- */
@@ -610,7 +668,8 @@ function home(){
       </div>
     </button>
   </header>
-  <section class="card overlap" aria-label="আজকের সারসংক্ষেপ">
+  ${bkOk() && !bkInfo().folder && !(DB.bkSnooze && Date.now() < DB.bkSnooze) ? `<section class="card overlap" style="gap:8px;border:1.5px solid #E0A100;background:#FFF8E6"><b style="font-size:15px">তথ্য স্থায়ীভাবে সংরক্ষণ করুন</b><span class="t2" style="font-size:13.5px;line-height:1.6">একবার একটি ফোল্ডার বেছে দিলেই সব তথ্য নিজে থেকে সেখানে জমা থাকবে — অ্যাপ মুছে গেলেও ফিরিয়ে আনা যাবে।</span><div class="row2"><button class="btn solid" data-bk-folder>ফোল্ডার বেছে নিন</button><button class="btn ghost" data-bk-snooze>পরে</button></div></section>` : ''}
+  <section class="card${bkOk() && !bkInfo().folder && !(DB.bkSnooze && Date.now() < DB.bkSnooze) ? '' : ' overlap'}" aria-label="আজকের সারসংক্ষেপ">
     <div class="top"><h2 style="font-size:16px">বিদ্যালয়ের সারসংক্ষেপ</h2><span class="pill"><span style="color:#C77700;display:flex">${ic('cloud',16)}</span>২৬° আংশিক মেঘলা</span></div>
     <div class="row2">
       ${(() => { const T = DB.teachers.length, AS = activeStudents(), St = AS.length;
@@ -2467,12 +2526,21 @@ function settings(){
   <div class="sec" style="padding-top:16px">
     <div class="card">
       <h2 style="font-size:16px">তথ্য সংরক্ষণ</h2>
-      <p class="t2" style="font-size:14px;line-height:1.6">সব তথ্য শুধু এই ফোনে সংরক্ষিত থাকে। অ্যাপ মুছে ফেললে বা ফোন বদলালে তথ্য হারিয়ে যাবে, তাই মাঝে মাঝে ব্যাকআপ নিন।</p>
+      ${bkOk() ? `${bkStatusHtml()}
+      <button class="btn ${bkInfo().folder ? '' : 'solid '}big full" data-bk-folder>${ic('upload',20)} ${bkInfo().folder ? 'ব্যাকআপ ফোল্ডার বদলান' : 'ব্যাকআপ ফোল্ডার বেছে নিন (একবার)'}</button>
+      ${bkInfo().folder ? `<button class="btn big full" data-bk-now>এখনই ব্যাকআপ নিন</button>` : ''}
+      <button class="btn big full" data-bk-restore>${ic('upload',20)} ব্যাকআপ ফোল্ডার থেকে তথ্য ফেরত আনুন</button>
+      <button class="btn big full" data-bk-share>${ic('upload',20)} ব্যাকআপ ফাইল পাঠান (Drive/WhatsApp/ইমেইল)</button>
+      <p class="hint">পরামর্শ: ফোল্ডার বাছাইয়ের সময় Documents-এর ভেতরে "শিক্ষক অ্যাপ ব্যাকআপ" নামে নতুন ফোল্ডার বানিয়ে সেটি বেছে নিন। ফোন হারানো বা নষ্টের ঝুঁকি এড়াতে মাঝে মাঝে "ব্যাকআপ ফাইল পাঠান" দিয়ে নিজের Google Drive-এ রাখুন।</p>`
+      : `<p class="t2" style="font-size:14px;line-height:1.6">সব তথ্য শুধু এই ফোনে সংরক্ষিত থাকে। মাঝে মাঝে ব্যাকআপ নিন।</p>`}
       <dl class="kv"><dt>শিক্ষক</dt><dd>${bn(DB.teachers.length)} জন</dd><dt>শিক্ষার্থী</dt><dd>${bn(activeStudents().length)} জন${alumniList().length ? ` (পুরাতন ${bn(alumniList().length)} জন)` : ''}</dd><dt>পাঠ পরিকল্পনা</dt><dd>${bn(DB.plans.length)}টি</dd><dt>কমিটি সদস্য</dt><dd>${bn(Object.values(DB.committees).reduce((a,b)=>a+b.length,0))} জন</dd></dl>
       ${canStore?'':'<p class="hint" style="color:var(--red)">এই ব্রাউজারে সংরক্ষণ বন্ধ আছে; তথ্য পেজ বন্ধ করলে হারিয়ে যাবে।</p>'}
-      <p class="hint">ছবিগুলো ব্যাকআপের লেখায় থাকে না; নতুন ফোনে ছবি আবার যোগ করতে হবে।</p>
-      <button class="btn big full" data-backup>${ic('copy',20)} ব্যাকআপ কপি করুন</button>
-      <button class="btn big full" data-restore>${ic('upload',20)} ব্যাকআপ থেকে ফেরত আনুন</button>
+      <details class="tdet"><summary><span class="tdet-btn">অন্য উপায় (লেখা/ফাইল)</span></summary>
+        <div style="display:grid;gap:8px;margin-top:8px">
+        <button class="btn big full" data-backup>${ic('copy',20)} ব্যাকআপ লেখা কপি করুন (ছবি ছাড়া)</button>
+        <button class="btn big full" data-restore>ব্যাকআপ লেখা পেস্ট করে ফেরত আনুন</button>
+        <label class="btn big full" for="bkFile" style="cursor:pointer">ব্যাকআপ ফাইল বেছে ফেরত আনুন</label><input type="file" id="bkFile" accept=".json,application/json,text/plain" class="vh">
+        </div></details>
     </div>
     <div class="card">
       <h2 style="font-size:16px">অ্যাপ আপডেট</h2>
@@ -2510,11 +2578,8 @@ function restoreSheet(){
   document.getElementById('rsForm').addEventListener('submit', e => {
     e.preventDefault();
     try {
-      const s = JSON.parse(formData(e.target).rs);
-      if (!s || !s.teacher || !s.committees || !Array.isArray(s.students)) throw 0;
-      const d = DEFAULTS();
-      DB = withTeachers({...d, ...s, teacher:{...d.teacher, ...s.teacher}, plans:Array.isArray(s.plans)?s.plans:[]});
-      if (save()) toast('ব্যাকআপ থেকে তথ্য ফেরত এসেছে');
+      applyBackup(JSON.parse(formData(e.target).rs));
+      toast('ব্যাকআপ থেকে তথ্য ফেরত এসেছে');
       closeSheet(); render();
     } catch(_) { document.getElementById('rsErr').style.display='block'; }
   });
@@ -3175,6 +3240,12 @@ document.addEventListener('click', e => {
   if ('updDismiss' in ds) { updDismissed = true; return drawUpdBar(); }
   if ('updCheck' in ds) { UPD = {state:'checking'}; const l = document.getElementById('updLine'); if (l) l.textContent = UPD_TEXT.checking; return checkUpdate(true); }
   // settings
+  if ('bkFolder' in ds) { if (bkOk()) AppBridge.chooseBackupFolder(); return; }
+  if ('bkNow' in ds) { flushBackup(true); toast('ব্যাকআপ নেওয়া হচ্ছে…'); return; }
+  if ('bkRestore' in ds) { if (!bkOk()) return; closeSheet(); UI.bkRestore = true; AppBridge.chooseBackupFolder(); return; }
+  if ('bkSnooze' in ds) { DB.bkSnooze = Date.now() + 3 * 864e5; save(); return render(); }
+  if ('bkNew' in ds) { FRESH = false; closeSheet(); return; }
+  if ('bkShare' in ds) { const d = new Date(), n = `shikkhok-backup-${todayISO()}.json`; if (window.AppBridge && AppBridge.shareFile) AppBridge.shareFile(n, 'application/json', btoa(unescape(encodeURIComponent(bkPayload())))); return; }
   if ('backup' in ds) return backupSheet();
   if ('copyBk' in ds) {
     const t = document.getElementById('bk');
@@ -3197,7 +3268,21 @@ document.addEventListener('change', e => {
   }
 });
 window.addEventListener('hashchange', () => { closeSheet(); render(); window.scrollTo(0,0); });
+document.addEventListener('change', e => {
+  if (e.target && e.target.id === 'bkFile') {
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    f.text().then(t => window.onBackupRead(t)).catch(() => toast('ফাইলটি পড়া যায়নি'));
+    e.target.value = '';
+  }
+});
+// First run after (re)installing: bring data back from the app's own mirror, or offer the backup folder.
+if (FRESH && bkOk()) {
+  let m = ''; try { m = AppBridge.readMirror() || ''; } catch(e) {}
+  if (m) { try { applyBackup(JSON.parse(m)); FRESH = false; setTimeout(() => toast('আগের তথ্য ফিরিয়ে আনা হয়েছে'), 400); } catch(e) {} }
+}
 render();
+if (FRESH && bkOk()) setTimeout(bkWelcomeSheet, 600);
+else if (bkOk()) setTimeout(() => flushBackup(true), 4000);
 if (BR) setTimeout(() => checkUpdate(false), 1500);
 </script>
 </body>
