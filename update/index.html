@@ -246,7 +246,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '3.5';
+const WEB_VERSION = '3.6';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -316,11 +316,27 @@ function shrinkImage(file, size){
 }
 /* ---------- logo for certificates, letters and reports ---------- */
 const LOGO_ID = '__logo';
-const logoSrc = () => PHOTOS[LOGO_ID] || '';
+const LOGO2_ID = '__logo2';
+const logoL = () => PHOTOS[LOGO_ID] || '', logoR = () => PHOTOS[LOGO2_ID] || '';
+const logoSrc = () => logoL() || logoR();
 const logoOn = () => !!logoSrc() && DB.teacher.logoTop !== false;
-const wmOn = () => !!logoSrc() && DB.teacher.logoWm !== false;
+const wmSrc = () => (DB.teacher.wmSide === 'r' ? logoR() || logoL() : logoL() || logoR());
+const wmOn = () => !!wmSrc() && DB.teacher.logoWm !== false;
 const logoHead = cls => logoOn() ? `<img class="lg${cls ? ' ' + cls : ''}" src="${logoSrc()}" alt="লোগো">` : '';
-const logoWm = () => wmOn() ? `<img class="wm" src="${logoSrc()}" alt="" aria-hidden="true">` : '';
+const logoWm = () => wmOn() ? `<img class="wm" src="${wmSrc()}" alt="" aria-hidden="true">` : '';
+// Certificate letterhead: logos on both sides, government lines above the school name, school details below.
+const HEAD_TOP_DEFAULT = 'গণপ্রজাতন্ত্রী বাংলাদেশ সরকার\nপ্রাথমিক ও গণশিক্ষা মন্ত্রণালয়\nপ্রাথমিক শিক্ষা অধিদপ্তর';
+const headTop = () => (DB.teacher.headTop ?? HEAD_TOP_DEFAULT).split('\n').map(x => x.trim()).filter(Boolean);
+function docHead(){
+  const T = DB.teacher, show = DB.teacher.logoTop !== false;
+  const place = [T.upazila && 'উপজেলা: ' + T.upazila, T.district && 'জেলা: ' + T.district].filter(Boolean).join(', ');
+  const lines = [place && place + '।', T.estd && `বিদ্যালয় প্রতিষ্ঠার সন: ${bn(T.estd)} খ্রিঃ`, T.emis && `ইএমআইএস কোড: ${bn(T.emis)}`,
+    ...(T.headExtra || '').split('\n').map(x => x.trim())].filter(Boolean);
+  const side = src => `<span class="hl">${show && src ? `<img src="${src}" alt="লোগো">` : ''}</span>`;
+  return `<div class="c-head"><div class="hrow">${side(logoL())}<div class="hmid">
+    ${headTop().map((l, i) => `<div class="c-top${i ? '' : ' first'}">${esc(l)}</div>`).join('')}
+    <div class="c-school">${esc(T.school)}</div>${lines.map(l => `<div class="c-sub">${esc(l)}</div>`).join('')}</div>${side(logoR())}</div></div>`;
+}
 const LOGO_CSS = `.lg{display:block;margin:0 auto 6px;height:64px;max-width:160px;object-fit:contain}
 .wm{position:absolute;left:50%;top:54%;transform:translate(-50%,-50%);width:50%;max-width:400px;max-height:70%;object-fit:contain;opacity:.08;pointer-events:none;z-index:0}`;
 // Keep the logo's shape and transparency; longest side 360 px.
@@ -340,24 +356,28 @@ function shrinkLogo(file){
   });
 }
 function logoCard(){
-  const src = logoSrc();
+  const one = (id, label) => { const src = PHOTOS[id] || '';
+    return `<div style="display:flex;gap:10px;align-items:center">
+      <span style="width:56px;height:56px;border-radius:12px;border:1px dashed var(--line);display:grid;place-items:center;flex:none;background:#fff">${src ? `<img src="${src}" alt="${label}" style="max-width:48px;max-height:48px">` : `<span class="t2" style="font-size:10.5px;text-align:center">নেই</span>`}</span>
+      <span class="grow"><b style="font-size:14px">${label}</b></span>
+      <label class="btn" for="logoFile_${id}" style="min-height:38px;padding:0 10px">${ic('upload',16)} ${src ? 'বদলান' : 'যোগ'}</label>
+      ${src ? `<button type="button" class="btn danger ghost" style="min-height:38px;padding:0 8px" aria-label="${label} মুছুন" data-logo-del="${id}">${ic('trash',16)}</button>` : ''}
+      <input type="file" id="logoFile_${id}" data-logo-file="${id}" accept="image/*" class="vh"></div>`; };
+  const any = logoL() || logoR(), both = logoL() && logoR();
   return `<div class="card" style="gap:10px;padding:14px 16px">
-    <div style="display:flex;gap:12px;align-items:center">
-      <span style="width:64px;height:64px;border-radius:12px;border:1px dashed var(--line);display:grid;place-items:center;flex:none;background:#fff">${src ? `<img src="${src}" alt="লোগো" style="max-width:56px;max-height:56px">` : `<span class="t2" style="font-size:11px;text-align:center">লোগো নেই</span>`}</span>
-      <span class="grow"><b style="font-size:15px">প্রাথমিক শিক্ষার লোগো</b><span class="t2" style="display:block;font-size:12.5px;line-height:1.5">ফোনে রাখা লোগোর ছবি বেছে দিন। সনদ, আবেদন ও অগ্রগতি প্রতিবেদনে বসবে।</span></span></div>
-    <div class="row2"><label class="btn" for="logoFile" style="min-height:42px">${ic('upload',18)} ${src ? 'লোগো বদলান' : 'লোগো যোগ করুন'}</label>${src ? `<button type="button" class="btn danger ghost" data-logo-del>${ic('trash',16)} মুছুন</button>` : ''}</div>
-    <input type="file" id="logoFile" accept="image/*" class="vh">
-    ${src ? `<label style="display:flex;gap:10px;align-items:center;font-size:14px"><input type="checkbox" data-logo-opt="logoTop" ${DB.teacher.logoTop !== false ? 'checked' : ''} style="width:22px;height:22px"> উপরে লোগো</label>
-    <label style="display:flex;gap:10px;align-items:center;font-size:14px"><input type="checkbox" data-logo-opt="logoWm" ${DB.teacher.logoWm !== false ? 'checked' : ''} style="width:22px;height:22px"> মাঝখানে হালকা জলছাপ (ওয়াটারমার্ক)</label>` : ''}
+    <b style="font-size:15px">লোগো</b><span class="t2" style="font-size:12.5px;line-height:1.5;margin-top:-6px">ফোনে রাখা লোগোর ছবি দিন — যেমন বামে সরকারি লোগো, ডানে প্রাথমিক শিক্ষার লোগো। সনদের উপরে দুই পাশে বসবে।</span>
+    ${one(LOGO_ID, 'বাম পাশের লোগো')}${one(LOGO2_ID, 'ডান পাশের লোগো')}
+    ${any ? `<label style="display:flex;gap:10px;align-items:center;font-size:14px"><input type="checkbox" data-logo-opt="logoTop" ${DB.teacher.logoTop !== false ? 'checked' : ''} style="width:22px;height:22px"> উপরে লোগো দেখান</label>
+    <label style="display:flex;gap:10px;align-items:center;font-size:14px"><input type="checkbox" data-logo-opt="logoWm" ${DB.teacher.logoWm !== false ? 'checked' : ''} style="width:22px;height:22px"> মাঝখানে হালকা জলছাপ (ওয়াটারমার্ক)</label>
+    ${both && DB.teacher.logoWm !== false ? `<div class="tabs2" role="radiogroup" aria-label="জলছাপের লোগো"><button type="button" class="${DB.teacher.wmSide !== 'r' ? 'on' : ''}" data-wm-side="l">জলছাপে বামের লোগো</button><button type="button" class="${DB.teacher.wmSide === 'r' ? 'on' : ''}" data-wm-side="r">জলছাপে ডানের লোগো</button></div>` : ''}` : ''}
   </div>`;
 }
 function bindLogo(){
-  const f = document.getElementById('logoFile');
-  if (f) f.addEventListener('change', async () => {
+  document.querySelectorAll('[data-logo-file]').forEach(f => f.addEventListener('change', async () => {
     const file = f.files && f.files[0]; if (!file) return;
-    try { const d = await shrinkLogo(file); if (setPhoto(LOGO_ID, d)) toast('লোগো যোগ হয়েছে'); render(); }
+    try { const d = await shrinkLogo(file); if (setPhoto(f.dataset.logoFile, d)) toast('লোগো যোগ হয়েছে'); render(); }
     catch(e) { toast('ছবিটি খোলা যায়নি; অন্য ছবি দিন'); }
-  });
+  }));
   document.querySelectorAll('[data-logo-opt]').forEach(el => el.addEventListener('change', () => { DB.teacher[el.dataset.logoOpt] = el.checked; save(); render(); }));
 }
 function avatar(id, name, color, size){
@@ -616,7 +636,10 @@ function profile(){
         ${field('upazila','উপজেলা', inp('upazila', t.upazila, 'maxlength="40"'))}
         ${field('district','জেলা', inp('district', t.district, 'maxlength="40"'))}
       </div>
-      ${field('emis','ইআইআইএন / ইএমআইএস কোড', inp('emis', t.emis, 'inputmode="numeric" maxlength="20"'))}
+      <div class="row2">${field('emis','ইএমআইএস কোড', inp('emis', t.emis, 'inputmode="numeric" maxlength="20" placeholder="যেমন: ৯১৩০১০৭০২০৬"'))}${field('estd','প্রতিষ্ঠার সন', inp('estd', t.estd, 'inputmode="numeric" maxlength="4" placeholder="যেমন: ১৯৮৬"'))}</div>
+      <h3 style="font-size:14px;color:var(--g);margin-top:4px">সনদের উপরের লেখা</h3>
+      ${field('headTop','বিদ্যালয়ের নামের উপরে', ta('headTop', t.headTop ?? HEAD_TOP_DEFAULT, 3, 'maxlength="300"'), false, 'প্রতি লাইনে একটি; সব মুছে দিলে কিছুই থাকবে না।')}
+      ${field('headExtra','বিদ্যালয়ের নামের নিচে আরও তথ্য (ঐচ্ছিক)', ta('headExtra', t.headExtra, 2, 'maxlength="300" placeholder="যেমন: ডাকঘর: মেলান্দহ&#10;মোবাইল: ০১XXXXXXXXX"'), false, 'উপজেলা/জেলা, প্রতিষ্ঠার সন ও ইএমআইএস কোড নিজে থেকে বসে; এখানে বাড়তি লাইন দিন।')}
       <button type="submit" class="btn solid big">সংরক্ষণ করুন</button>
     </form>
   </div>`;
@@ -1368,6 +1391,11 @@ const CERT_CSS = LOGO_CSS + `
 .cert .blank{color:#888}
 .cert .c-sign{margin-top:56px;margin-left:auto;width:220px;text-align:center;font-size:13px;line-height:1.5}
 .cert .c-sign .line{border-top:1px solid #111;margin-bottom:6px}
+.cert .hrow{display:flex;align-items:center;gap:10px}.cert .hmid{flex:1;text-align:center}
+.cert .hl{width:76px;flex:none;display:flex;justify-content:center}.cert .hl img{max-width:76px;max-height:76px;object-fit:contain}
+.cert .c-top{font-size:12.5px;color:#222;line-height:1.45}.cert .c-top.first{font-weight:600}
+.cert .c-signs{display:flex;justify-content:space-between;align-items:flex-start;margin-top:56px}.cert .c-signs .c-sign{margin:0}
+.cert.land .c-signs{margin-top:auto;padding-top:26px}.cert .c-signs .c-sign{margin-top:0!important;padding-top:0!important}.cert.land .hl{width:92px}.cert.land .hl img{max-width:92px;max-height:92px}.cert.land .c-top{font-size:14px}
 .cert{position:relative;overflow:hidden}.cert>*:not(.wm){position:relative;z-index:1}
 .cert.land .lg{height:62px;margin-bottom:0}
 .cert.land{width:1050px;min-height:730px;display:flex;flex-direction:column;border:7px double #1E7F4F;outline:2px solid #C9A227;outline-offset:-16px;padding:30px 64px 28px;font-size:18.5px;line-height:1.85}
@@ -1396,7 +1424,7 @@ function certInner(c, st){
        ${c.passed ? `<p>সে ${v(c.passed)} উত্তীর্ণ হয়েছে।</p>` : ''}
        <p>${esc(c.reason || 'অভিভাবকের অনুরোধে')} তাকে এই ছাড়পত্র প্রদান করা হলো। বিদ্যালয়ে তার নিকট কোনো পাওনা নেই। অধ্যয়নকালে তার আচরণ সন্তোষজনক ছিল।</p>
        <p>আমি তার উজ্জ্বল ভবিষ্যৎ কামনা করি।</p>`
-    : st.alumni ? `<p>এই মর্মে প্রত্যয়ন করা যাচ্ছে যে, ${who}, অত্র বিদ্যালয়ের একজন প্রাক্তন শিক্ষার্থী। ${st.alumni.reason === 'pass5' ? `সে ${v(bn(st.alumni.year))} সালে অত্র বিদ্যালয় থেকে পঞ্চম শ্রেণি পাস করেছে।` : `সে ${v(bn(st.alumni.year))} সাল পর্যন্ত অত্র বিদ্যালয়ে ${CLASS_IN[st.alumni.cls || st.cls] || ''} অধ্যয়নরত ছিল।`} তার রোল নম্বর ছিল ${v((st.alumni.roll || st.roll) && bn(st.alumni.roll || st.roll))}। বিদ্যালয়ের ভর্তি রেজিস্টার অনুযায়ী তার জন্ম তারিখ ${v(dob && bn(dob))}${st.birthreg ? `, জন্ম নিবন্ধন নম্বর ${v(bn(st.birthreg))}` : ''}।</p>
+    : st.alumni ? `<p>এই মর্মে প্রত্যয়ন করা যাচ্ছে যে, ${who}, ${st.alumni.reason === 'pass5' ? `অত্র বিদ্যালয়ে ${v(bn(st.alumni.year))} শিক্ষাবর্ষে পঞ্চম শ্রেণিতে অধ্যয়ন করে পাস করেছে।` : `অত্র বিদ্যালয়ে ${v(bn(st.alumni.year))} শিক্ষাবর্ষে ${CLASS_IN[st.alumni.cls || st.cls] || ''} অধ্যয়ন করেছে।`} তার রোল নম্বর ছিল ${v((st.alumni.roll || st.roll) && bn(st.alumni.roll || st.roll))}। বিদ্যালয়ের ভর্তি রেজিস্টার অনুযায়ী তার জন্ম তারিখ ${v(dob && bn(dob))}${st.birthreg ? `, জন্ম নিবন্ধন নম্বর ${v(bn(st.birthreg))}` : ''}।</p>
        <p>অধ্যয়নকালে তার স্বভাব-চরিত্র ভালো ছিল। আমার জানামতে সে রাষ্ট্র বা সমাজবিরোধী কোনো কাজে জড়িত ছিল না।</p>
        <p>আমি তার সর্বাঙ্গীণ মঙ্গল কামনা করি।</p>`
     : `<p>এই মর্মে প্রত্যয়ন করা যাচ্ছে যে, ${who}, অত্র বিদ্যালয়ের ${CLASS_OF[st.cls] || ''} একজন নিয়মিত শিক্ষার্থী। তার রোল নম্বর ${v(st.roll && bn(st.roll))}। বিদ্যালয়ের ভর্তি রেজিস্টার অনুযায়ী তার জন্ম তারিখ ${v(dob && bn(dob))}${st.birthreg ? `, জন্ম নিবন্ধন নম্বর ${v(bn(st.birthreg))}` : ''}।</p>
@@ -1404,11 +1432,12 @@ function certInner(c, st){
        <p>আমি তার সর্বাঙ্গীণ মঙ্গল কামনা করি।</p>`;
   const date = c.date || todayISO();
   return `<div class="cert${c.orient === 'port' ? '' : ' land'}">${logoWm()}
-    <div class="c-head">${logoHead()}<div class="c-school">${esc(T.school)}</div>${sub ? `<div class="c-sub">${esc(sub)}</div>` : ''}${T.emis ? `<div class="c-sub">ইআইআইএন/ইএমআইএস কোড: ${esc(bn(T.emis))}</div>` : ''}</div>
+    ${docHead()}
     <div class="c-meta"><span>স্মারক নং: ${c.memo ? esc(c.memo) : '..................'}</span><span>তারিখ: ${esc(bn(longDate(date).replace(/^[^,]+,\s*/, '')))}</span></div>
     <div class="c-title"><span>${CERT_TYPES[c.type]}</span></div>
     ${body}
-    <div class="c-sign"><div class="line"></div><div>প্রধান শিক্ষক</div>${headTeacher() ? `<div>${esc(headTeacher())}</div>` : ''}<div>${esc(T.school)}</div></div>
+    <div class="c-signs">${DB.teacher.sigClass !== false ? `<div class="c-sign"><div class="line"></div><div>শ্রেণি শিক্ষকের স্বাক্ষর</div></div>` : '<span></span>'}
+    <div class="c-sign"><div class="line"></div><div>প্রধান শিক্ষকের স্বাক্ষর</div>${headTeacher() ? `<div>${esc(headTeacher())}</div>` : ''}<div>${esc(T.school)}</div></div></div>
   </div>`;
 }
 function certDoc(c, st){
@@ -1460,10 +1489,12 @@ function certificates(){
       ${headTeacher() ? '' : '<p class="hint">শিক্ষক তালিকায় "প্রধান শিক্ষক" পদবির কেউ না থাকায় স্বাক্ষরের নিচে নাম থাকবে না।</p>'}
     </div>
     ${logoCard()}
+    <button class="mem tap" data-go="profile" style="border:1px solid var(--line);border-radius:14px"><span class="grow"><span class="t1" style="font-weight:600;font-size:14px">সনদের উপরের তথ্য</span><span class="t2 clamp">${DB.teacher.emis ? 'ইএমআইএস ' + esc(bn(DB.teacher.emis)) : 'ইএমআইএস কোড দেওয়া নেই'} · ${DB.teacher.estd ? 'প্রতিষ্ঠা ' + esc(bn(DB.teacher.estd)) : 'প্রতিষ্ঠার সন নেই'} · প্রোফাইলে বদলান</span></span><span style="color:var(--mute)">${ic('edit',18)}</span></button>
+    <label style="display:flex;gap:10px;align-items:center;font-size:14px"><input type="checkbox" data-cert-sig ${DB.teacher.sigClass !== false ? 'checked' : ''} style="width:22px;height:22px"> বামে শ্রেণি শিক্ষকের স্বাক্ষরের জায়গা</label>
     <div class="field"><span style="font-size:14px;font-weight:600">কাগজের দিক</span>
       <div class="tabs2" role="radiogroup"><button type="button" role="radio" aria-checked="${c.orient!=='port'}" class="${c.orient!=='port'?'on':''}" data-cert-orient="land">আনুভূমিক (ল্যান্ডস্কেপ)</button><button type="button" role="radio" aria-checked="${c.orient==='port'}" class="${c.orient==='port'?'on':''}" data-cert-orient="port">খাড়া (পোর্ট্রেট)</button></div></div>
     <h2 style="font-size:17px">সনদের নমুনা</h2>
-    <div class="certwrap"><style>${CERT_CSS}.certwrap .cert{padding:18px 16px;font-size:13.5px}.certwrap .c-school{font-size:18px}.certwrap .c-sign{margin-top:36px}.certwrap .cert.land{padding:30px 64px 28px;font-size:18.5px}.certwrap .cert.land .c-school{font-size:30px}.certwrap .cert.land .c-sign{margin-top:auto}#certPreview{transform-origin:0 0}</style><div id="certPreview">${certInner(c, st)}</div></div>
+    <div class="certwrap"><style>${CERT_CSS}.certwrap .cert{padding:18px 16px;font-size:13.5px}.certwrap .c-school{font-size:18px}.certwrap .c-sign{margin-top:36px}.certwrap .cert.land{padding:30px 64px 28px;font-size:18.5px}.certwrap .cert.land .c-school{font-size:30px}.certwrap .cert.land .c-signs{margin-top:auto}.certwrap .c-signs{margin-top:36px}#certPreview{transform-origin:0 0}</style><div id="certPreview">${certInner(c, st)}</div></div>
     <button class="btn solid big full" data-cert-print>${ic('doc',20)} প্রিন্ট / PDF সংরক্ষণ</button>
     <button class="btn big full" data-cert-copy>${ic('copy',20)} লেখা কপি করুন</button>
   </div>`;
@@ -1482,7 +1513,7 @@ function certLogHtml(){
 }
 function certPlainText(c, st){
   const div = document.createElement('div'); div.innerHTML = certInner(c, st);
-  div.querySelectorAll('p,.c-school,.c-sub,.c-meta span,.c-title,.c-sign div').forEach(el => el.insertAdjacentText('afterend', '\n'));
+  div.querySelectorAll('p,.c-top,.c-school,.c-sub,.c-meta span,.c-title,.c-sign div').forEach(el => el.insertAdjacentText('afterend', '\n'));
   return div.textContent.replace(/[ \t]+/g, ' ').replace(/\n[ \t]+/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 function logCert(c, st){
@@ -2559,7 +2590,8 @@ function bindView(r){
       e.preventDefault();
       const d = formData(e.target);
       if (!d.school.trim() || !d.name.trim()) return;
-      DB.teacher = {name:d.name.trim(), designation:d.designation, school:d.school.trim(), mobile:d.mobile.trim(), upazila:d.upazila.trim(), district:d.district.trim(), emis:toEn(d.emis.trim())};
+      Object.assign(DB.teacher, {name:d.name.trim(), designation:d.designation, school:d.school.trim(), mobile:d.mobile.trim(), upazila:d.upazila.trim(), district:d.district.trim(), emis:toEn(d.emis.trim()),
+        estd:toEn(d.estd.trim()), headTop:d.headTop.split('\n').map(x => x.trim()).filter(Boolean).join('\n'), headExtra:d.headExtra.split('\n').map(x => x.trim()).filter(Boolean).join('\n')});
       const me = DB.teachers.find(x => x.me);
       const ph = UI.photoGet ? UI.photoGet() : undefined;
       if (me && ph !== undefined) setPhoto(me.id, ph);
@@ -2626,6 +2658,7 @@ function bindView(r){
       if (st && pv) { pv.innerHTML = certInner(UI.cert, st); certFit(); }
     }));
     certFit(); bindLogo();
+    const sg = document.querySelector('[data-cert-sig]'); if (sg) sg.addEventListener('change', () => { DB.teacher.sigClass = sg.checked; save(); render(); });
   }
   if (r === 'students') {
     const ay = document.getElementById('alYear'); if (ay) ay.addEventListener('change', () => { UI.alYear = ay.value; render(); });
@@ -2741,7 +2774,8 @@ document.addEventListener('click', e => {
   }
   // certificates
   if (ds.certType) { UI.cert.type = ds.certType; return render(); }
-  if ('logoDel' in ds) return confirmSheet('লোগো মুছবেন?', 'সনদ, আবেদন ও প্রতিবেদন থেকে লোগো ও জলছাপ সরে যাবে।', 'মুছুন', () => { setPhoto(LOGO_ID, null); });
+  if (ds.logoDel) return confirmSheet('লোগো মুছবেন?', 'এই লোগোটি সনদ ও অন্য কাগজ থেকে সরে যাবে।', 'মুছুন', () => { setPhoto(ds.logoDel, null); });
+  if (ds.wmSide) { DB.teacher.wmSide = ds.wmSide; save(); return render(); }
   if (ds.stuView) { UI.stuView = ds.stuView; return render(); }
   if ('promote' in ds) return promoteSheet();
   if ('commonAddr' in ds) return commonAddrSheet();
