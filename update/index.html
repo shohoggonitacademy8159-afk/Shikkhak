@@ -268,7 +268,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '4.6';
+const WEB_VERSION = '4.7';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -540,6 +540,7 @@ const bkPayload = () => JSON.stringify({app:'shikkhok', v:1, at:Date.now(), db:D
 function bkInfo(){ try { return bkOk() ? JSON.parse(AppBridge.backupInfo() || '{}') : {}; } catch(e) { return {}; } }
 let bkMirrorT = null, bkFolderT = null, bkDirty = false;
 function scheduleBackup(){
+  if (typeof cloudSchedule === 'function') cloudSchedule();
   if (!bkOk()) return;
   bkDirty = true;
   clearTimeout(bkMirrorT); bkMirrorT = setTimeout(() => { try { AppBridge.mirror(bkPayload()); } catch(e) {} }, 1500);
@@ -550,7 +551,7 @@ function flushBackup(force){
   clearTimeout(bkFolderT); bkDirty = false;
   try { const p = bkPayload(); AppBridge.mirror(p); if (bkInfo().folder) AppBridge.writeBackup(p); } catch(e) {}
 }
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushBackup(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { flushBackup(); if (typeof cloudSync === 'function') cloudSync(); } });
 // Accepts the new backup file ({db, photos}) and the older copied text (just the data).
 function applyBackup(obj){
   const s = obj && obj.db ? obj.db : obj;
@@ -580,12 +581,179 @@ function bkStatusHtml(){
   return I.folder ? `<div class="okbox"><b>✓ স্বয়ংক্রিয় ব্যাকআপ চালু আছে</b><span>ফোল্ডার: ${esc(I.folder)}</span><span>${when ? 'সর্বশেষ ব্যাকআপ: ' + esc(when) : 'প্রথম ব্যাকআপ শিগগিরই হবে'}</span></div>`
     : `<div class="warnbox"><span><b>স্থায়ী সংরক্ষণ এখনো চালু হয়নি।</b> একবার একটি ফোল্ডার বেছে দিন — এরপর প্রতিটি পরিবর্তন নিজে থেকেই সেখানে জমা হবে; অ্যাপ মুছে আবার ইনস্টল করলেও তথ্য ফিরিয়ে আনা যাবে।</span></div>`;
 }
+function setupSheet(){
+  const t = DB.teacher;
+  openSheet(`<form class="f" id="setupForm">
+    <h2 style="font-size:18px">স্বাগতম! আপনার বিদ্যালয়ের তথ্য দিন</h2>
+    ${field('su_school','বিদ্যালয়ের নাম', inp('su_school', '', 'maxlength="80" required placeholder="যেমন: দক্ষিণ কাহিলা সরকারি প্রাথমিক বিদ্যালয়"'), true)}
+    ${field('su_name','আপনার নাম', inp('su_name', '', 'maxlength="60" required'), true)}
+    ${field('su_des','পদবি', sel('su_des', ['প্রধান শিক্ষক','ভারপ্রাপ্ত প্রধান শিক্ষক','সহকারী শিক্ষক','সহকারী শিক্ষক (প্রাক-প্রাথমিক)'].map(x => [x, x]), 'সহকারী শিক্ষক'))}
+    <div class="row2">${field('su_up','উপজেলা', inp('su_up', '', 'maxlength="40"'))}${field('su_dist','জেলা', inp('su_dist', '', 'maxlength="40"'))}</div>
+    ${field('su_mob','মোবাইল (ঐচ্ছিক)', inp('su_mob', '', 'inputmode="tel" maxlength="20"'))}
+    <button type="submit" class="btn solid big full">শুরু করুন</button>
+  </form>`);
+  document.getElementById('setupForm').addEventListener('submit', e => {
+    e.preventDefault(); const d = formData(e.target);
+    if (!d.su_school.trim() || !d.su_name.trim()) return toast('বিদ্যালয় ও আপনার নাম দিন');
+    Object.assign(DB.teacher, {school: d.su_school.trim(), name: d.su_name.trim(), designation: d.su_des, upazila: d.su_up.trim(), district: d.su_dist.trim(), mobile: d.su_mob.trim()});
+    DB.committees = {smc:[], pta:[], slip:[]};
+    const me = DB.teachers.find(x => x.me); if (me) Object.assign(me, {name: DB.teacher.name, designation: DB.teacher.designation, mobile: DB.teacher.mobile});
+    save(); closeSheet(); render();
+    setTimeout(() => { if (!cloudOn()) cloudAuthSheet('up'); }, 500);
+  });
+}
 function bkWelcomeSheet(){
   openSheet(`<h2 style="font-size:18px">আগে এই অ্যাপ ব্যবহার করেছেন?</h2>
-    <p class="t2" style="font-size:14px;line-height:1.7;margin:8px 0 12px">আগের ব্যাকআপ ফোল্ডারটি (যেমন Documents ভেতরের "শিক্ষক অ্যাপ ব্যাকআপ") বেছে দিলে শিক্ষক, শিক্ষার্থী, হাজিরা, নম্বর ও ছবিসহ সব তথ্য ফিরে আসবে।</p>
-    <button class="btn solid big full" data-bk-restore>${ic('upload',20)} ব্যাকআপ ফোল্ডার বেছে দিন</button>
+    <p class="t2" style="font-size:14px;line-height:1.7;margin:8px 0 12px">আগের অনলাইন অ্যাকাউন্টে লগইন করলে, বা ফোনের ব্যাকআপ ফোল্ডারটি বেছে দিলে, শিক্ষক, শিক্ষার্থী, হাজিরা, নম্বর ও ছবিসহ সব তথ্য ফিরে আসবে।</p>
+    <button class="btn solid big full" data-cl-auth="in">অনলাইন অ্যাকাউন্টে লগইন করে তথ্য আনুন</button>
+    ${bkOk() ? `<button class="btn big full" data-bk-restore style="margin-top:8px">${ic('upload',20)} ফোনের ব্যাকআপ ফোল্ডার বেছে দিন</button>` : ''}
     <button class="btn big full" data-bk-new style="margin-top:8px">না, নতুন করে শুরু করব</button>`);
 }
+
+/* ---------- online backup (Firebase: email login + Firestore) ----------
+   Each account can only read and write its own folder users/{uid}/… (enforced by the database rules).
+   The data is split into pieces (Firestore keeps at most 1 MB per document); photos are sent only when they change. */
+const FB = {key:'AIzaSyAoZLJatAyNl__icHitQ2_e_0pztA_fYhc', project:'shikkhok-app-8331d'};
+const CLOUD_KEY = 'shikkhok_cloud_v1';
+const FS_BASE = `https://firestore.googleapis.com/v1/projects/${FB.project}/databases/(default)/documents`;
+const CHUNK = 250000; // characters; Bangla text is up to 3 bytes a character, so a piece stays under 1 MB
+let CLOUD = {};
+try { CLOUD = JSON.parse(localStorage.getItem(CLOUD_KEY) || '{}') || {}; } catch(e) { CLOUD = {}; }
+const cloudSave = () => { try { localStorage.setItem(CLOUD_KEY, JSON.stringify(CLOUD)); } catch(e) {} };
+const cloudOn = () => !!(CLOUD.uid && CLOUD.refresh);
+const AUTH_ERR = {EMAIL_EXISTS:'এই ইমেইলে আগেই অ্যাকাউন্ট আছে — লগইন করুন', EMAIL_NOT_FOUND:'এই ইমেইলে কোনো অ্যাকাউন্ট নেই', INVALID_PASSWORD:'পাসওয়ার্ড ভুল',
+  INVALID_LOGIN_CREDENTIALS:'ইমেইল বা পাসওয়ার্ড ভুল', INVALID_EMAIL:'ইমেইল ঠিকানাটি সঠিক নয়', USER_DISABLED:'এই অ্যাকাউন্ট বন্ধ করা আছে',
+  TOO_MANY_ATTEMPTS_TRY_LATER:'অনেকবার চেষ্টা হয়েছে — কিছুক্ষণ পরে আবার চেষ্টা করুন', WEAK_PASSWORD:'পাসওয়ার্ড অন্তত ৬ অক্ষরের হতে হবে', OPERATION_NOT_ALLOWED:'ইমেইল লগইন এখনো চালু হয়নি (Firebase-এ Email/Password চালু করুন)'};
+const authMsg = code => { const k = Object.keys(AUTH_ERR).find(x => (code || '').startsWith(x)); return k ? AUTH_ERR[k] : 'সংযোগে সমস্যা — ইন্টারনেট দেখে আবার চেষ্টা করুন'; };
+async function authCall(path, body){
+  const r = await fetch(`https://identitytoolkit.googleapis.com/v1/${path}?key=${FB.key}`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error((j.error && j.error.message) || 'NETWORK');
+  return j;
+}
+async function idToken(){
+  if (!cloudOn()) throw new Error('NOT_SIGNED_IN');
+  if (CLOUD.token && CLOUD.exp > Date.now() + 60000) return CLOUD.token;
+  const r = await fetch(`https://securetoken.googleapis.com/v1/token?key=${FB.key}`, {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:'grant_type=refresh_token&refresh_token=' + encodeURIComponent(CLOUD.refresh)});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { const m = (j.error && j.error.message) || ''; if (/TOKEN_EXPIRED|USER_NOT_FOUND|USER_DISABLED|INVALID_REFRESH_TOKEN/.test(m)) { CLOUD = {email: CLOUD.email}; cloudSave(); render(); } throw new Error(m || 'NETWORK'); }
+  CLOUD.token = j.id_token; CLOUD.refresh = j.refresh_token; CLOUD.exp = Date.now() + (+j.expires_in || 3600) * 1000; cloudSave();
+  return CLOUD.token;
+}
+function signedIn(j){ CLOUD = {uid:j.localId, email:j.email, refresh:j.refreshToken, token:j.idToken, exp:Date.now() + (+j.expiresIn || 3600) * 1000}; cloudSave(); }
+const fsUrl = (doc, mask) => `${FS_BASE}/users/${CLOUD.uid}/backup/${doc}` + (mask ? '?' + mask.map(f => 'updateMask.fieldPaths=' + f).join('&') : '');
+async function fsSet(doc, fields){
+  const r = await fetch(fsUrl(doc), {method:'PATCH', headers:{'Content-Type':'application/json', Authorization:'Bearer ' + await idToken()}, body:JSON.stringify({fields})});
+  if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error((j.error && j.error.status) || 'HTTP ' + r.status); }
+}
+async function fsGet(doc){
+  const r = await fetch(fsUrl(doc), {headers:{Authorization:'Bearer ' + await idToken()}});
+  if (r.status === 404) return null;
+  if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error((j.error && j.error.status) || 'HTTP ' + r.status); }
+  return (await r.json()).fields || {};
+}
+const sv = s => ({stringValue: String(s)}), iv = n => ({integerValue: String(n)});
+const photoSig = () => { const k = Object.keys(PHOTOS); return k.length + ':' + k.reduce((a, x) => a + x.length + (PHOTOS[x] || '').length, 0); };
+async function putParts(prefix, text){
+  const n = Math.max(1, Math.ceil(text.length / CHUNK));
+  for (let i = 0; i < n; i++) await fsSet(`${prefix}${i}`, {d: sv(text.slice(i * CHUNK, (i + 1) * CHUNK))});
+  return n;
+}
+async function getParts(prefix, n){
+  let out = '';
+  for (let i = 0; i < n; i++) { const f = await fsGet(`${prefix}${i}`); if (!f || !f.d) throw new Error('MISSING_PART'); out += f.d.stringValue; }
+  return out;
+}
+let cloudT = null, cloudBusy = false;
+function cloudSchedule(){
+  if (!cloudOn()) return;
+  try { localStorage.setItem('cloudDirty', '1'); } catch(e) {}
+  clearTimeout(cloudT); cloudT = setTimeout(cloudSync, 60000);
+}
+async function cloudSync(force){
+  if (!cloudOn() || cloudBusy) return;
+  let dirty = '1'; try { dirty = localStorage.getItem('cloudDirty'); } catch(e) {}
+  if (!dirty && !force) return;
+  if (!navigator.onLine) { UI.cloudErr = 'ইন্টারনেট নেই — সংযোগ পেলে নিজে থেকে পাঠানো হবে'; return; }
+  cloudBusy = true; clearTimeout(cloudT);
+  try {
+    const dbText = JSON.stringify(DB), dbParts = await putParts('db', dbText);
+    const sig = photoSig(); let phParts = CLOUD.phParts || 0;
+    if (sig !== CLOUD.phSig || !phParts) { phParts = await putParts('ph', JSON.stringify(PHOTOS)); CLOUD.phSig = sig; CLOUD.phParts = phParts; }
+    const at = Date.now();
+    await fsSet('meta', {at: iv(at), dbParts: iv(dbParts), phParts: iv(phParts), size: iv(dbText.length), school: sv(DB.teacher.school || ''), ver: sv(WEB_VERSION)});
+    CLOUD.last = at; cloudSave(); UI.cloudErr = '';
+    try { localStorage.removeItem('cloudDirty'); } catch(e) {}
+  } catch(e) {
+    UI.cloudErr = /PERMISSION_DENIED/.test(e.message) ? 'অনলাইন ডাটাবেইজ অনুমতি দিচ্ছে না (Firestore-এর Rules দেখুন)' : /NOT_FOUND/.test(e.message) ? 'অনলাইন ডাটাবেইজ পাওয়া যায়নি (Firestore তৈরি করা হয়েছে কি?)' : 'অনলাইনে পাঠানো যায়নি — পরে আবার চেষ্টা হবে';
+  } finally { cloudBusy = false; if (location.hash.slice(1) === 'settings') render(); }
+}
+async function cloudFetch(){
+  const m = await fsGet('meta'); if (!m) return null;
+  const at = +(m.at && m.at.integerValue) || 0, dbN = +(m.dbParts && m.dbParts.integerValue) || 0, phN = +(m.phParts && m.phParts.integerValue) || 0;
+  const db = JSON.parse(await getParts('db', dbN)), photos = phN ? JSON.parse(await getParts('ph', phN)) : {};
+  return {at, db, photos, phN, school: m.school && m.school.stringValue};
+}
+async function cloudRestore(ask){
+  toast('অনলাইন থেকে তথ্য আনা হচ্ছে…');
+  let b; try { b = await cloudFetch(); } catch(e) { return toast('অনলাইন থেকে আনা যায়নি — ইন্টারনেট দেখে আবার চেষ্টা করুন'); }
+  if (!b) { toast('এই অ্যাকাউন্টে এখনো কোনো অনলাইন ব্যাকআপ নেই'); return cloudSync(true); }
+  const doIt = () => { try { applyBackup(b); CLOUD.phSig = photoSig(); CLOUD.phParts = b.phN; cloudSave(); try { localStorage.removeItem('cloudDirty'); } catch(e) {} FRESH = false; toast('অনলাইন থেকে সব তথ্য ফিরে এসেছে'); closeSheet(); render(); } catch(e) { toast('অনলাইনের তথ্য পড়া যায়নি'); } };
+  if (!ask) return doIt();
+  confirmSheet('অনলাইন থেকে তথ্য আনবেন?', `${b.school ? esc(b.school) + ' — ' : ''}${bkWhen(b.at)}-এর অনলাইন ব্যাকআপ। এই ফোনের এখনকার তথ্য এর দ্বারা বদলে যাবে।`, 'ফেরত আনুন', doIt);
+}
+// Right after logging in: decide between the phone's data and the online copy.
+async function afterLogin(){
+  let m = null; try { m = await fsGet('meta'); } catch(e) {}
+  const localEmpty = FRESH || (!activeStudents().length && DB.teachers.length <= 1 && !DB.plans.length);
+  if (!m) { cloudSync(true); return toast('লগইন হয়েছে — এই ফোনের তথ্য অনলাইনে রাখা হচ্ছে'); }
+  if (localEmpty) return cloudRestore(false);
+  openSheet(`<h2 style="font-size:18px">কোন তথ্য রাখবেন?</h2>
+    <p class="t2" style="font-size:14px;line-height:1.7;margin:8px 0 12px">এই অ্যাকাউন্টে ${bkWhen(+m.at.integerValue)}-এর অনলাইন ব্যাকআপ আছে${m.school ? ` (${esc(m.school.stringValue)})` : ''}, আবার এই ফোনেও তথ্য আছে।</p>
+    <button class="btn solid big full" data-cl-pull>অনলাইনের তথ্য এই ফোনে আনুন</button>
+    <button class="btn big full" data-cl-push style="margin-top:8px">এই ফোনের তথ্য অনলাইনে রাখুন</button>`);
+}
+function cloudAuthSheet(mode){
+  const up = mode === 'up';
+  openSheet(`<form class="f" id="clForm" novalidate>
+    <h2 style="font-size:18px">${up ? 'নতুন অ্যাকাউন্ট খুলুন' : 'অনলাইন অ্যাকাউন্টে লগইন'}</h2>
+    ${field('cl_email','ইমেইল', inp('cl_email', CLOUD.email || '', 'type="email" autocomplete="email" inputmode="email" required'), true)}
+    ${field('cl_pass','পাসওয়ার্ড', inp('cl_pass', '', `type="password" autocomplete="${up ? 'new-password' : 'current-password'}" minlength="6" required`), true, up ? 'অন্তত ৬ অক্ষর; কোথাও লিখে রাখুন' : '')}
+    ${up ? field('cl_pass2','পাসওয়ার্ড আবার', inp('cl_pass2', '', 'type="password" autocomplete="new-password" required'), true) : ''}
+    ${up ? `<label style="display:flex;gap:10px;align-items:flex-start;font-size:13px;line-height:1.6"><input type="checkbox" id="cl_ok" style="width:22px;height:22px;flex:none;margin-top:2px"> আমি জানি, আমার বিদ্যালয়ের তথ্য (শিক্ষক-শিক্ষার্থীর নাম, ছবি, হাজিরা, নম্বর ইত্যাদি) Google Firebase-এ এই অ্যাকাউন্টের অধীনে রাখা হবে; শুধু এই অ্যাকাউন্ট দিয়েই তা দেখা যাবে, আর যেকোনো সময় সেটিংস থেকে অ্যাকাউন্ট ও অনলাইন তথ্য মুছে ফেলা যাবে।</label>` : ''}
+    <p class="hint" id="clErr" style="color:var(--red);display:none" role="alert"></p>
+    <button type="submit" class="btn solid big full" id="clGo">${up ? 'অ্যাকাউন্ট খুলুন' : 'লগইন'}</button>
+    <div class="row2"><button type="button" class="btn ghost" data-cl-mode="${up ? 'in' : 'up'}">${up ? 'আগে অ্যাকাউন্ট আছে? লগইন' : 'নতুন অ্যাকাউন্ট খুলুন'}</button>${up ? '<span></span>' : '<button type="button" class="btn ghost" data-cl-reset>পাসওয়ার্ড ভুলে গেছেন?</button>'}</div>
+  </form>`);
+  const f = document.getElementById('clForm'), err = t => { const e = document.getElementById('clErr'); e.textContent = t; e.style.display = t ? 'block' : 'none'; };
+  f.addEventListener('submit', async e => {
+    e.preventDefault(); err('');
+    const email = f.elements.cl_email.value.trim(), pass = f.elements.cl_pass.value;
+    if (!/^\S+@\S+\.\S+$/.test(email)) return err('সঠিক ইমেইল ঠিকানা লিখুন');
+    if (pass.length < 6) return err('পাসওয়ার্ড অন্তত ৬ অক্ষরের হতে হবে');
+    if (up && pass !== f.elements.cl_pass2.value) return err('দুই পাসওয়ার্ড মেলেনি');
+    if (up && !document.getElementById('cl_ok').checked) return err('অ্যাকাউন্ট খুলতে উপরের শর্তে টিক দিন');
+    const b = document.getElementById('clGo'); b.disabled = true; b.textContent = 'অপেক্ষা করুন…';
+    try {
+      signedIn(await authCall(up ? 'accounts:signUp' : 'accounts:signInWithPassword', {email, password: pass, returnSecureToken: true}));
+      closeSheet(); render(); afterLogin();
+    } catch(x) { err(authMsg(x.message)); b.disabled = false; b.textContent = up ? 'অ্যাকাউন্ট খুলুন' : 'লগইন'; }
+  });
+}
+function cloudCard(){
+  if (!cloudOn()) return `<div class="card">
+    <h2 style="font-size:16px">অনলাইন ব্যাকআপ</h2>
+    <p class="t2" style="font-size:14px;line-height:1.6">ইমেইল দিয়ে একটি অ্যাকাউন্ট খুললে সব তথ্য ছবিসহ নিজে থেকেই অনলাইনে জমা থাকবে। ফোন হারালে বা বদলালেও একই ইমেইলে লগইন করলে সব ফিরে আসবে।</p>
+    <div class="row2"><button class="btn solid big" data-cl-auth="up">অ্যাকাউন্ট খুলুন</button><button class="btn big" data-cl-auth="in">লগইন</button></div></div>`;
+  return `<div class="card">
+    <h2 style="font-size:16px">অনলাইন ব্যাকআপ</h2>
+    <div class="${UI.cloudErr ? 'warnbox' : 'okbox'}">${UI.cloudErr ? `<span>${esc(UI.cloudErr)}</span>` : `<b>✓ অনলাইন ব্যাকআপ চালু আছে</b>`}<span>অ্যাকাউন্ট: ${esc(CLOUD.email || '')}</span><span>${CLOUD.last ? 'সর্বশেষ পাঠানো: ' + esc(bkWhen(CLOUD.last)) : 'প্রথম ব্যাকআপ পাঠানো হচ্ছে…'}</span></div>
+    <button class="btn big full" data-cl-sync ${cloudBusy ? 'disabled' : ''}>${cloudBusy ? 'পাঠানো হচ্ছে…' : 'এখনই অনলাইনে পাঠান'}</button>
+    <button class="btn big full" data-cl-pull>অনলাইন থেকে তথ্য ফেরত আনুন</button>
+    <div class="row2"><button class="btn big" data-cl-out>লগআউট</button><button class="btn danger ghost big" data-cl-del>অ্যাকাউন্ট মুছুন</button></div>
+    <p class="hint">প্রতিটি পরিবর্তনের এক মিনিট পরে ও অ্যাপ বন্ধ করার সময় নিজে থেকে পাঠানো হয়; ইন্টারনেট না থাকলে পরে যায়।</p></div>`;
+}
+window.addEventListener('online', () => cloudSync());
 
 /* ---------- ui state ---------- */
 const UI = {as:{view:'entry', year:String(new Date().getFullYear()), term:'t1', cls:null, subj:null, sid:null}, gpfView:'simple', gpfShow:false, penShow:false, penMode:'auto', cert:{type:'study', orient:'land', cls:null, sid:null, q:'', memo:'', date:null, reason:'অভিভাবকের অনুরোধে', passed:''}, attDate:null, attView:'day', attMonth:null, attClass:null, committeeTab:'smc', showAllMembers:false, stuClass:'all', stuQuery:'', lpClass:'1', lpSubject:null};
@@ -668,8 +836,8 @@ function home(){
       </div>
     </button>
   </header>
-  ${bkOk() && !bkInfo().folder && !(DB.bkSnooze && Date.now() < DB.bkSnooze) ? `<section class="card overlap" style="gap:8px;border:1.5px solid #E0A100;background:#FFF8E6"><b style="font-size:15px">তথ্য স্থায়ীভাবে সংরক্ষণ করুন</b><span class="t2" style="font-size:13.5px;line-height:1.6">একবার একটি ফোল্ডার বেছে দিলেই সব তথ্য নিজে থেকে সেখানে জমা থাকবে — অ্যাপ মুছে গেলেও ফিরিয়ে আনা যাবে।</span><div class="row2"><button class="btn solid" data-bk-folder>ফোল্ডার বেছে নিন</button><button class="btn ghost" data-bk-snooze>পরে</button></div></section>` : ''}
-  <section class="card${bkOk() && !bkInfo().folder && !(DB.bkSnooze && Date.now() < DB.bkSnooze) ? '' : ' overlap'}" aria-label="আজকের সারসংক্ষেপ">
+  ${(() => { UI.bkBanner = !cloudOn() && !(DB.bkSnooze && Date.now() < DB.bkSnooze); return UI.bkBanner ? `<section class="card overlap" style="gap:8px;border:1.5px solid #E0A100;background:#FFF8E6"><b style="font-size:15px">তথ্য অনলাইনে সুরক্ষিত রাখুন</b><span class="t2" style="font-size:13.5px;line-height:1.6">ইমেইল দিয়ে একবার অ্যাকাউন্ট খুললেই সব তথ্য নিজে থেকে অনলাইনে জমা থাকবে — ফোন হারালে বা অ্যাপ মুছে গেলেও লগইন করে ফিরিয়ে আনা যাবে।</span><div class="row2"><button class="btn solid" data-cl-auth="up">অ্যাকাউন্ট খুলুন</button><button class="btn" data-cl-auth="in">লগইন</button></div><button class="btn ghost" data-bk-snooze style="min-height:34px">পরে মনে করিয়ে দিন</button></section>` : ''; })()}
+  <section class="card${UI.bkBanner ? '' : ' overlap'}" aria-label="আজকের সারসংক্ষেপ">
     <div class="top"><h2 style="font-size:16px">বিদ্যালয়ের সারসংক্ষেপ</h2><span class="pill"><span style="color:#C77700;display:flex">${ic('cloud',16)}</span>২৬° আংশিক মেঘলা</span></div>
     <div class="row2">
       ${(() => { const T = DB.teachers.length, AS = activeStudents(), St = AS.length;
@@ -2524,8 +2692,9 @@ function penInfoSheet(){
 function settings(){
   return topHeader('সেটিংস','gear') + `
   <div class="sec" style="padding-top:16px">
+    ${cloudCard()}
     <div class="card">
-      <h2 style="font-size:16px">তথ্য সংরক্ষণ</h2>
+      <h2 style="font-size:16px">ফোনে তথ্য সংরক্ষণ</h2>
       ${bkOk() ? `${bkStatusHtml()}
       <button class="btn ${bkInfo().folder ? '' : 'solid '}big full" data-bk-folder>${ic('upload',20)} ${bkInfo().folder ? 'ব্যাকআপ ফোল্ডার বদলান' : 'ব্যাকআপ ফোল্ডার বেছে নিন (একবার)'}</button>
       ${bkInfo().folder ? `<button class="btn big full" data-bk-now>এখনই ব্যাকআপ নিন</button>` : ''}
@@ -3244,7 +3413,19 @@ document.addEventListener('click', e => {
   if ('bkNow' in ds) { flushBackup(true); toast('ব্যাকআপ নেওয়া হচ্ছে…'); return; }
   if ('bkRestore' in ds) { if (!bkOk()) return; closeSheet(); UI.bkRestore = true; AppBridge.chooseBackupFolder(); return; }
   if ('bkSnooze' in ds) { DB.bkSnooze = Date.now() + 3 * 864e5; save(); return render(); }
-  if ('bkNew' in ds) { FRESH = false; closeSheet(); return; }
+  if ('bkNew' in ds) { FRESH = false; closeSheet(); return setupSheet(); }
+  if (ds.clAuth) { closeSheet(); return cloudAuthSheet(ds.clAuth); }
+  if (ds.clMode) { closeSheet(); return cloudAuthSheet(ds.clMode); }
+  if ('clReset' in ds) { const em = (document.getElementById('cl_email') || {}).value || ''; if (!/^\S+@\S+\.\S+$/.test(em.trim())) return toast('আগে ইমেইল ঠিকানা লিখুন');
+    authCall('accounts:sendOobCode', {requestType:'PASSWORD_RESET', email: em.trim()}).then(() => toast('পাসওয়ার্ড বদলানোর লিংক ইমেইলে পাঠানো হয়েছে')).catch(x => toast(authMsg(x.message))); return; }
+  if ('clSync' in ds) { cloudSync(true); return render(); }
+  if ('clPull' in ds) { closeSheet(); return cloudRestore(!FRESH); }
+  if ('clPush' in ds) { closeSheet(); toast('এই ফোনের তথ্য অনলাইনে রাখা হচ্ছে'); return cloudSync(true); }
+  if ('clOut' in ds) return confirmSheet('লগআউট করবেন?', 'এই ফোনের তথ্য থাকবে, কিন্তু আর অনলাইনে পাঠানো হবে না। পরে আবার লগইন করা যাবে।', 'লগআউট', () => { flushBackup(); CLOUD = {email: CLOUD.email}; cloudSave(); });
+  if ('clDel' in ds) return confirmSheet('অ্যাকাউন্ট মুছবেন?', 'অনলাইনে রাখা সব তথ্য ও অ্যাকাউন্ট স্থায়ীভাবে মুছে যাবে। এই ফোনের তথ্য থাকবে।', 'স্থায়ীভাবে মুছুন', async () => {
+    try { const t = await idToken(); for (const d of ['meta', ...Array.from({length: 40}, (_, i) => 'db' + i), ...Array.from({length: 40}, (_, i) => 'ph' + i)]) { const r = await fetch(fsUrl(d), {method:'DELETE', headers:{Authorization:'Bearer ' + t}}); if (d !== 'meta' && r.status === 404) {} }
+      await authCall('accounts:delete', {idToken: t}); CLOUD = {}; cloudSave(); toast('অ্যাকাউন্ট ও অনলাইন তথ্য মুছে ফেলা হয়েছে'); render(); }
+    catch(e) { toast('মুছতে সমস্যা হয়েছে — আবার লগইন করে চেষ্টা করুন'); } });
   if ('bkShare' in ds) { const d = new Date(), n = `shikkhok-backup-${todayISO()}.json`; if (window.AppBridge && AppBridge.shareFile) AppBridge.shareFile(n, 'application/json', btoa(unescape(encodeURIComponent(bkPayload())))); return; }
   if ('backup' in ds) return backupSheet();
   if ('copyBk' in ds) {
@@ -3281,7 +3462,8 @@ if (FRESH && bkOk()) {
   if (m) { try { applyBackup(JSON.parse(m)); FRESH = false; setTimeout(() => toast('আগের তথ্য ফিরিয়ে আনা হয়েছে'), 400); } catch(e) {} }
 }
 render();
-if (FRESH && bkOk()) setTimeout(bkWelcomeSheet, 600);
+if (FRESH && !cloudOn()) setTimeout(bkWelcomeSheet, 600);
+if (cloudOn()) setTimeout(() => cloudSync(), 5000);
 else if (bkOk()) setTimeout(() => flushBackup(true), 4000);
 if (BR) setTimeout(() => checkUpdate(false), 1500);
 </script>
