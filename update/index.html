@@ -246,7 +246,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '3.0';
+const WEB_VERSION = '3.1';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -443,7 +443,7 @@ function save(){
 }
 
 /* ---------- ui state ---------- */
-const UI = {as:{view:'entry', year:String(new Date().getFullYear()), term:'t1', cls:null, subj:null, sid:null}, gpfView:'simple', gpfShow:false, penShow:false, penMode:'auto', cert:{type:'study', cls:null, sid:null, q:'', memo:'', date:null, reason:'অভিভাবকের অনুরোধে', passed:''}, attDate:null, attView:'day', attMonth:null, attClass:null, committeeTab:'smc', showAllMembers:false, stuClass:'all', stuQuery:'', lpClass:'1', lpSubject:null};
+const UI = {as:{view:'entry', year:String(new Date().getFullYear()), term:'t1', cls:null, subj:null, sid:null}, gpfView:'simple', gpfShow:false, penShow:false, penMode:'auto', cert:{type:'study', orient:'land', cls:null, sid:null, q:'', memo:'', date:null, reason:'অভিভাবকের অনুরোধে', passed:''}, attDate:null, attView:'day', attMonth:null, attClass:null, committeeTab:'smc', showAllMembers:false, stuClass:'all', stuQuery:'', lpClass:'1', lpSubject:null};
 try { UI.committeeTab = localStorage.getItem('committeeTab') || 'smc'; } catch(e) {}
 
 const FEATURES_A = [
@@ -1156,6 +1156,13 @@ const CERT_CSS = `
 .cert .blank{color:#888}
 .cert .c-sign{margin-top:56px;margin-left:auto;width:220px;text-align:center;font-size:13px;line-height:1.5}
 .cert .c-sign .line{border-top:1px solid #111;margin-bottom:6px}
+.cert.land{width:1050px;min-height:730px;display:flex;flex-direction:column;border:7px double #1E7F4F;outline:2px solid #C9A227;outline-offset:-16px;padding:44px 70px 40px;font-size:20px;line-height:2}
+.cert.land .c-head{border-bottom:0;margin-bottom:4px;padding-bottom:4px}
+.cert.land .c-school{font-size:34px}.cert.land .c-sub{font-size:16px}
+.cert.land .c-meta{font-size:15px;margin:6px 0 10px;border-top:1.5px solid #1E7F4F;padding-top:8px}
+.cert.land .c-title{margin:0 0 18px}.cert.land .c-title span{font-size:26px;padding:4px 34px;border-width:2px;background:#F3F8F4}
+.cert.land p{text-indent:48px}
+.cert.land .c-sign{margin-top:auto;width:280px;font-size:16px;padding-top:40px}
 `;
 function headTeacher(){
   const h = bySerial(DB.teachers).find(t => /প্রধান শিক্ষক/.test(t.designation));
@@ -1179,7 +1186,7 @@ function certInner(c, st){
        <p>আমার জানামতে তার স্বভাব-চরিত্র ভালো। সে রাষ্ট্র বা সমাজবিরোধী কোনো কাজে জড়িত নয়।</p>
        <p>আমি তার সর্বাঙ্গীণ মঙ্গল কামনা করি।</p>`;
   const date = c.date || todayISO();
-  return `<div class="cert">
+  return `<div class="cert${c.orient === 'port' ? '' : ' land'}">
     <div class="c-head"><div class="c-school">${esc(T.school)}</div>${sub ? `<div class="c-sub">${esc(sub)}</div>` : ''}${T.emis ? `<div class="c-sub">ইআইআইএন/ইএমআইএস কোড: ${esc(bn(T.emis))}</div>` : ''}</div>
     <div class="c-meta"><span>স্মারক নং: ${c.memo ? esc(c.memo) : '..................'}</span><span>তারিখ: ${esc(bn(longDate(date).replace(/^[^,]+,\s*/, '')))}</span></div>
     <div class="c-title"><span>${CERT_TYPES[c.type]}</span></div>
@@ -1190,8 +1197,18 @@ function certInner(c, st){
 function certDoc(c, st){
   return `<!DOCTYPE html><html lang="bn"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${CERT_TYPES[c.type]} - ${esc(st.name)}</title>
   <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;600;700&display=swap" rel="stylesheet">
-  <style>@page{size:A4;margin:16mm}html,body{margin:0;background:#fff}${CERT_CSS}.cert{min-height:240mm}</style></head><body>${certInner(c, st)}</body></html>`;
+  <style>${c.orient === 'port' ? '@page{size:A4;margin:16mm}' : '@page{size:A4 landscape;margin:8mm}'}html,body{margin:0;background:#fff}${CERT_CSS}${c.orient === 'port' ? '.cert{min-height:240mm}' : '.cert.land{width:auto;min-height:192mm;height:192mm;overflow:hidden}'}</style></head><body>${certInner(c, st)}</body></html>`;
 }
+// Shrink the landscape preview (drawn at full A4 width) to fit the phone screen
+function certFit(){
+  const pv = document.getElementById('certPreview'); if (!pv) return;
+  const wrap = pv.parentElement, land = pv.querySelector('.cert.land');
+  pv.style.transform = ''; wrap.style.height = '';
+  if (!land || !wrap.clientWidth) return;
+  const k = Math.min(1, (wrap.clientWidth - 20) / land.offsetWidth);
+  pv.style.transform = `scale(${k})`; wrap.style.height = Math.ceil(land.offsetHeight * k + 20) + 'px';
+}
+addEventListener('resize', () => { if (location.hash.slice(1) === 'certificates') certFit(); });
 function certStudent(){ return DB.students.find(x => x.id === UI.cert.sid) || null; }
 function certificates(){
   const c = UI.cert; if (!c.date) c.date = todayISO();
@@ -1225,8 +1242,10 @@ function certificates(){
         ${field('c_passed','উত্তীর্ণ শ্রেণি / পরীক্ষা', inp('c_passed', c.passed, 'maxlength="80" placeholder="ঐচ্ছিক, যেমন: ২০২৬ সালের বার্ষিক পরীক্ষায় ৩য় শ্রেণি" data-cert-in="passed"'))}` : ''}
       ${headTeacher() ? '' : '<p class="hint">শিক্ষক তালিকায় "প্রধান শিক্ষক" পদবির কেউ না থাকায় স্বাক্ষরের নিচে নাম থাকবে না।</p>'}
     </div>
+    <div class="field"><span style="font-size:14px;font-weight:600">কাগজের দিক</span>
+      <div class="tabs2" role="radiogroup"><button type="button" role="radio" aria-checked="${c.orient!=='port'}" class="${c.orient!=='port'?'on':''}" data-cert-orient="land">আনুভূমিক (ল্যান্ডস্কেপ)</button><button type="button" role="radio" aria-checked="${c.orient==='port'}" class="${c.orient==='port'?'on':''}" data-cert-orient="port">খাড়া (পোর্ট্রেট)</button></div></div>
     <h2 style="font-size:17px">সনদের নমুনা</h2>
-    <div class="certwrap"><style>${CERT_CSS}.certwrap .cert{padding:18px 16px;font-size:13.5px}.certwrap .c-school{font-size:18px}.certwrap .c-sign{margin-top:36px}</style><div id="certPreview">${certInner(c, st)}</div></div>
+    <div class="certwrap"><style>${CERT_CSS}.certwrap .cert{padding:18px 16px;font-size:13.5px}.certwrap .c-school{font-size:18px}.certwrap .c-sign{margin-top:36px}.certwrap .cert.land{padding:44px 70px 40px;font-size:20px}.certwrap .cert.land .c-school{font-size:30px}.certwrap .cert.land .c-sign{margin-top:auto}#certPreview{transform-origin:0 0}</style><div id="certPreview">${certInner(c, st)}</div></div>
     <button class="btn solid big full" data-cert-print>${ic('doc',20)} প্রিন্ট / PDF সংরক্ষণ</button>
     <button class="btn big full" data-cert-copy>${ic('copy',20)} লেখা কপি করুন</button>
   </div>`;
@@ -2383,8 +2402,9 @@ function bindView(r){
     document.querySelectorAll('[data-cert-in]').forEach(el => el.addEventListener('input', () => {
       UI.cert[el.dataset.certIn] = el.value;
       const st = certStudent(), pv = document.getElementById('certPreview');
-      if (st && pv) pv.innerHTML = certInner(UI.cert, st);
+      if (st && pv) { pv.innerHTML = certInner(UI.cert, st); certFit(); }
     }));
+    certFit();
   }
   if (r === 'students') {
     const s = document.getElementById('stuSearch');
@@ -2497,6 +2517,7 @@ document.addEventListener('click', e => {
   }
   // certificates
   if (ds.certType) { UI.cert.type = ds.certType; return render(); }
+  if (ds.certOrient) { UI.cert.orient = ds.certOrient; return render(); }
   if (ds.certClass) { UI.cert.cls = ds.certClass; UI.cert.q = ''; return render(); }
   if (ds.certPick) { UI.cert.sid = ds.certPick; window.scrollTo(0,0); return render(); }
   if ('certChange' in ds) { UI.cert.sid = null; UI.cert.q = ''; return render(); }
