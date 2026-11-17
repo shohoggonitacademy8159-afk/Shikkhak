@@ -267,7 +267,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '4.3';
+const WEB_VERSION = '4.4';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -2819,6 +2819,58 @@ function bindImg2pdf(){
   const nm = document.getElementById('p2name'); if (nm) nm.addEventListener('input', () => { S.name = nm.value; });
 }
 
+/* ---------- textbooks & teacher guides ---------- */
+// The PDFs stay where the teacher keeps them on the phone; the app only remembers a link (Android) and opens them offline.
+const TB_BASE = [['bangla','আমার বাংলা বই'],['english','English for Today'],['math','প্রাথমিক গণিত']];
+const TB_MORE = [['bgs','বাংলাদেশ ও বিশ্বপরিচয়'],['science','প্রাথমিক বিজ্ঞান'],['islam','ইসলাম ও নৈতিক শিক্ষা'],['hindu','হিন্দুধর্ম ও নৈতিক শিক্ষা'],['buddha','বৌদ্ধধর্ম ও নৈতিক শিক্ষা'],['christ','খ্রিষ্টধর্ম ও নৈতিক শিক্ষা']];
+const tbBooks = cls => cls === 'pre' ? [['pre','প্রাক-প্রাথমিকের বই']] : (cls === '1' || cls === '2') ? TB_BASE : [...TB_BASE, ...TB_MORE];
+const tbCan = () => !!(window.AppBridge && AppBridge.pickPdf && AppBridge.listPdfs);
+function tbLinked(){ try { return tbCan() ? JSON.parse(AppBridge.listPdfs() || '{}') : {}; } catch(e) { return {}; } }
+window.onPdfPicked = (key, name) => { toast(`যুক্ত হয়েছে: ${name}`); render(); };
+function textbooks(){
+  if (!UI.tbClass) UI.tbClass = '1';
+  if (!UI.tbKind) UI.tbKind = 'book';
+  const cls = UI.tbClass, kind = UI.tbKind, can = tbCan(), linked = tbLinked();
+  const custom = (DB.tbCustom || []).filter(x => x.cls === cls && x.kind === kind);
+  const rows = [...tbBooks(cls).map(([k, l]) => ({key:`tb:${cls}:${k}:${kind}`, title: kind === 'guide' ? `শিক্ষক সহায়িকা — ${l}` : l})),
+    ...custom.map(x => ({key:`tb:x:${x.id}`, title:x.title, custom:x.id}))];
+  const nLinked = rows.filter(r => linked[r.key]).length;
+  return innerHeader('পাঠ্যবই ও শিক্ষক সহায়িকা','book','#0E8C82') + `
+  <div class="sec" style="padding-top:16px">
+    <div class="chips" role="tablist" aria-label="শ্রেণি">${CLASSES.map(([k,l]) => `<button class="${k===cls?'on':''}" data-tb-class="${k}">${l}</button>`).join('')}</div>
+    <div class="tabs2" role="tablist"><button role="tab" class="${kind==='book'?'on':''}" data-tb-kind="book">পাঠ্যবই</button><button role="tab" class="${kind==='guide'?'on':''}" data-tb-kind="guide">শিক্ষক সহায়িকা</button></div>
+    <a class="mem tap" href="https://nctb.gov.bd/" target="_blank" rel="noopener" style="border:1px solid var(--line);border-radius:14px;text-decoration:none;color:inherit">
+      <span class="ib sm" style="background:#0E8C82">${S(P.doc)}</span><span class="grow"><span class="t1" style="font-weight:600;font-size:14px">NCTB-র অফিসিয়াল ওয়েবসাইট</span><span class="t2">২০২৬ শিক্ষাবর্ষের সব পাঠ্যবইয়ের PDF — সেখান থেকে নামিয়ে নিচে যোগ করুন</span></span><span style="color:var(--mute)">${ic('chev',20)}</span></a>
+    ${can ? '' : `<div class="warnbox" role="note"><span>ফোন থেকে PDF যোগ করে অফলাইনে খোলার সুবিধা অ্যান্ড্রয়েড অ্যাপের নতুন সংস্করণে (৪.৪ বা পরের APK) কাজ করে। অ্যাপে "নতুন সংস্করণ" বার্তা এলে ইনস্টল করুন।</span></div>`}
+    <div class="top"><h2 style="font-size:17px">${CLASS_NAME[cls]} — ${kind === 'guide' ? 'শিক্ষক সহায়িকা' : 'পাঠ্যবই'}</h2><span class="count">${bn(nLinked)}/${bn(rows.length)} যুক্ত</span></div>
+    <div class="list">${rows.map(r => { const f = linked[r.key];
+      return `<div class="mem" style="flex-wrap:wrap;gap:10px">
+        <span class="ib sm" style="background:${f ? '#0E8C82' : '#9AA8BC'}">${S(P.book)}</span>
+        <span class="grow" style="min-width:150px"><span class="t1" style="font-weight:600;font-size:14.5px">${esc(r.title)}</span><span class="t2">${f ? '📎 ' + esc(f) : 'PDF যোগ করা হয়নি'}</span></span>
+        <span style="display:flex;gap:6px;flex-wrap:wrap">
+          ${f ? `<button class="btn solid" style="min-height:40px" data-tb-open="${esc(r.key)}">খুলুন</button><button class="btn" style="min-height:40px" aria-label="বদলান" data-tb-pick="${esc(r.key)}">বদলান</button><button class="btn danger ghost" style="min-height:40px;padding:0 10px" aria-label="সরান" data-tb-unlink="${esc(r.key)}">${ic('trash',16)}</button>`
+            : `<button class="btn" style="min-height:40px" data-tb-pick="${esc(r.key)}" ${can ? '' : 'disabled'}>${ic('plus',16)} PDF যোগ</button>`}
+          ${r.custom ? `<button class="btn ghost" style="min-height:40px;padding:0 10px" aria-label="তালিকা থেকে মুছুন" data-tb-delx="${r.custom}">✕</button>` : ''}
+        </span></div>`; }).join('')}</div>
+    <button class="btn big full" data-tb-addx>${ic('plus',20)} অন্য বই বা নির্দেশিকা যোগ করুন</button>
+    <p class="hint">PDF ফোনে যেখানে আছে সেখানেই থাকে; অ্যাপ শুধু মনে রাখে কোনটি কোন বই। একবার যোগ করলে ইন্টারনেট ছাড়াই ফোনের PDF রিডারে খুলবে। ফাইলটি মুছে বা সরিয়ে ফেললে আবার যোগ করতে হবে।</p>
+  </div>`;
+}
+function tbAddSheet(){
+  openSheet(`<form class="f" id="tbAdd">
+    <h2 style="font-size:18px">অন্য বই বা নির্দেশিকা</h2>
+    ${field('tbx_title','নাম', inp('tbx_title','', 'maxlength="80" required placeholder="যেমন: প্রাথমিক শিক্ষক নির্দেশিকা, অনুশীলন খাতা"'), true)}
+    <p class="t2" style="font-size:13px">${CLASS_NAME[UI.tbClass]} — ${UI.tbKind === 'guide' ? 'শিক্ষক সহায়িকা' : 'পাঠ্যবই'} তালিকায় যোগ হবে।</p>
+    <div class="row2"><button type="button" class="btn big" data-close>বাতিল</button><button type="submit" class="btn big solid">যোগ করুন</button></div>
+  </form>`);
+  document.getElementById('tbAdd').addEventListener('submit', e => {
+    e.preventDefault(); const t = e.target.elements.tbx_title.value.trim(); if (!t) return;
+    if (!Array.isArray(DB.tbCustom)) DB.tbCustom = [];
+    const id = uid(); DB.tbCustom.push({id, cls: UI.tbClass, kind: UI.tbKind, title: t}); save(); closeSheet(); render();
+    if (tbCan()) AppBridge.pickPdf(`tb:x:${id}`);
+  });
+}
+
 /* ---------- placeholders ---------- */
 function placeholder(id){
   const f = ALL[id];
@@ -2840,12 +2892,12 @@ const ROUTE_ALIAS = {'student-profile':'students'};
 function render(){
   let r = (location.hash || '#home').slice(1) || 'home';
   r = ROUTE_ALIAS[r] || r;
-  if (!(TOP.includes(r) || r==='committee' || r==='students' || r==='teachers' || r==='lesson-plan' || r==='teacher-att' || r==='student-att' || r==='certificates' || r==='gpf' || r==='assessment' || r==='pension' || r==='salary' || r==='leave' || r==='img2pdf' || ALL[r])) r = 'home';
+  if (!(TOP.includes(r) || r==='committee' || r==='students' || r==='teachers' || r==='lesson-plan' || r==='teacher-att' || r==='student-att' || r==='certificates' || r==='gpf' || r==='assessment' || r==='pension' || r==='salary' || r==='leave' || r==='img2pdf' || r==='textbooks' || ALL[r])) r = 'home';
   if (r !== UI.lastRoute) { if (r === 'teacher-att' || r === 'student-att') UI.attView = 'day'; UI.lastRoute = r; }
   const inner = !TOP.includes(r);
   $app.classList.toggle('inner', inner);
   $nav.style.display = inner ? 'none' : 'grid';
-  const views = {home, profile, settings, committee, students, teachers, 'lesson-plan':lessonPlan, 'teacher-att':teacherAtt, 'student-att':studentAtt, certificates, gpf, assessment, pension, salary, leave, img2pdf};
+  const views = {home, profile, settings, committee, students, teachers, 'lesson-plan':lessonPlan, 'teacher-att':teacherAtt, 'student-att':studentAtt, certificates, gpf, assessment, pension, salary, leave, img2pdf, textbooks};
   $app.innerHTML = (views[r] || (() => placeholder(r)))();
   $nav.innerHTML = NAV.map(n => `<button class="${n[0]===r?'on':''}" data-go="${n[0]}" aria-label="${n[1]}" ${n[0]===r?'aria-current="page"':''}><span class="p">${ic(n[2])}</span>${n[1]}</button>`).join('');
   bindView(r);
@@ -3060,6 +3112,13 @@ document.addEventListener('click', e => {
   if (ds.certPick) { UI.cert.sid = ds.certPick; window.scrollTo(0,0); return render(); }
   if ('certChange' in ds) { UI.cert.sid = null; UI.cert.q = ''; return render(); }
   if ('certPrint' in ds) return printCert();
+  if (ds.tbClass) { UI.tbClass = ds.tbClass; return render(); }
+  if (ds.tbKind) { UI.tbKind = ds.tbKind; return render(); }
+  if (ds.tbPick) { if (tbCan()) AppBridge.pickPdf(ds.tbPick); return; }
+  if (ds.tbOpen) { const r = tbCan() && AppBridge.openPdf ? AppBridge.openPdf(ds.tbOpen) : 'missing'; if (r === 'gone') toast('ফাইলটি পাওয়া যাচ্ছে না — সরানো বা মুছে ফেলা হয়েছে; আবার যোগ করুন'); else if (r !== 'ok') toast('PDF খোলা যায়নি'); return; }
+  if (ds.tbUnlink) return confirmSheet('এই PDF সরাবেন?', 'অ্যাপ থেকে শুধু সংযোগটি সরবে; ফোনের ফাইল মুছবে না।', 'সরান', () => { if (tbCan()) AppBridge.removePdf(ds.tbUnlink); });
+  if ('tbAddx' in ds) return tbAddSheet();
+  if (ds.tbDelx) return confirmSheet('তালিকা থেকে মুছবেন?', 'এই নামটি তালিকা থেকে সরবে; ফোনের ফাইল মুছবে না।', 'মুছুন', () => { DB.tbCustom = (DB.tbCustom || []).filter(x => x.id !== ds.tbDelx); if (tbCan()) AppBridge.removePdf('tb:x:' + ds.tbDelx); save(); });
   if (ds.p2Opt) { p2State()[ds.p2Opt] = ds.v; return render(); }
   if (ds.p2Mv) { const S = p2State(), i = +ds.p2Mv, j = i + (+ds.d); if (j >= 0 && j < S.pages.length) { [S.pages[i], S.pages[j]] = [S.pages[j], S.pages[i]]; } return render(); }
   if (ds.p2Rot) { const pg = p2State().pages[+ds.p2Rot]; if (pg) pg.rot = (pg.rot + 90) % 360; return render(); }
