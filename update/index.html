@@ -246,7 +246,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '2.5';
+const WEB_VERSION = '2.6';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -1756,6 +1756,36 @@ function salaryDefaults(){
   const grade = S.grade || (/প্রধান শিক্ষক/.test(me.designation || DB.teacher.designation || '') ? 10 : 13);
   return {grade, step8: S.step8 || 1, inc: S.inc !== false, method: S.method || 'B'};
 }
+function payDefaults(){
+  const A = DB.salary.pay || {};
+  return {hr: A.hr ?? 45, hrBase: A.hrBase || 'cur', med: A.med ?? 1500, tif: A.tif ?? 200, ded: A.ded ?? 0};
+}
+function payRows(old, P){
+  const A = payDefaults();
+  return P.map(x => { const hrBase = A.hrBase === 'old' ? old : x.basic, hr = Math.round(hrBase * A.hr / 100);
+    const gross = x.basic + hr + A.med + A.tif; return {...x, hr, gross, net: gross - A.ded}; });
+}
+function payCard(old, P){
+  const A = payDefaults(), R = payRows(old, P), inp = (id, v) => `<input id="${id}" data-pay="${id}" inputmode="decimal" value="${esc(bn(v))}">`;
+  return `<div class="card" style="gap:12px;padding:18px 16px">
+    <b style="font-size:16px">মোট মাসিক বেতন</b>
+    <div class="row2">
+      <div class="field"><label for="pay_hr">বাড়ি ভাড়া (%)</label>${inp('pay_hr', A.hr)}</div>
+      <div class="field"><label for="pay_med">চিকিৎসা ভাতা</label>${inp('pay_med', A.med)}</div>
+    </div>
+    <div class="row2">
+      <div class="field"><label for="pay_tif">টিফিন ভাতা</label>${inp('pay_tif', A.tif)}</div>
+      <div class="field"><label for="pay_ded">মোট কর্তন (জিপিএফ ইত্যাদি)</label>${inp('pay_ded', A.ded)}</div>
+    </div>
+    <div class="field"><span style="font-size:14px;font-weight:600">বাড়ি ভাড়া কোন মূল বেতনের ওপর</span>
+      <div class="tabs2" role="radiogroup"><button type="button" role="radio" aria-checked="${A.hrBase==='cur'}" class="${A.hrBase==='cur'?'on':''}" data-pay-base="cur">চলতি (নতুন) মূল বেতন</button><button type="button" role="radio" aria-checked="${A.hrBase==='old'}" class="${A.hrBase==='old'?'on':''}" data-pay-base="old">৩০ জুনের মূল বেতন</button></div>
+      <span class="hint">২০২৭ সালের ৩১ ডিসেম্বর পর্যন্ত বাড়ি ভাড়া পুরোনো হারে চলবে। আপনার বেতন বিবরণীর সঙ্গে যেটা মেলে, সেটা বেছে নিন।</span></div>
+    <div class="list">${R.map(x => `<div class="mem" style="flex-direction:column;align-items:stretch;gap:4px">
+      <span style="display:flex;justify-content:space-between"><span class="t1" style="font-weight:600;font-size:14px">${x.when}</span><b style="font-size:16px;color:#1E8A55">${tkp(x.gross)}</b></span>
+      <span class="t2">মূল ${tkp(x.basic)} + বাড়ি ভাড়া ${tk(x.hr)} + চিকিৎসা ${tk(A.med)} + টিফিন ${tk(A.tif)}${A.ded ? ` − কর্তন ${tk(A.ded)} = হাতে ${tkp(x.net)}` : ''}</span></div>`).join('')}</div>
+    <p class="hint">মোট বেতন = মূল বেতন + বাড়ি ভাড়া + চিকিৎসা + টিফিন। বিশেষ সুবিধা বা অন্য ভাতা থাকলে আলাদা যোগ হবে।</p>
+  </div>`;
+}
 function salary(){
   const S = salaryDefaults(), s8 = ps8Steps(S.grade), step8 = Math.min(S.step8, s8.length), old = s8[step8 - 1];
   const F = fix9(S.grade, old, S.inc, S.method), P = phases(old, F.basic, F.s9, F.idx, F.fixBasic);
@@ -1788,6 +1818,7 @@ function salary(){
       <p class="hint">হিসাবরক্ষণ অফিসের নিয়মে: বেতন বৃদ্ধির পরিমাণ = নির্ধারিত বেতন − ৩০ জুনের মূল বেতন = ${tk(F.fixBasic)} − ${tk(old)} = ${tk(F.fixBasic - old)}। প্রথম পর্যায়: ${tk(old)} + ${tkp((F.fixBasic - old) * 0.5)} (৫০%)${F.inc ? ` + ইনক্রিমেন্ট ${tk(F.basic - F.fixBasic)}` : ''} = ${tkp(P[0].basic)}। ভাতাগুলো আলাদা সময়ে কার্যকর হবে।</p>
       <div class="row2"><button class="btn" data-sl-copy>${ic('copy',18)} কপি</button><button class="btn solid" data-sl-pension>পেনশন হিসাবে ব্যবহার</button></div>
     </div>
+    ${payCard(old, P)}
     <div class="card" style="gap:8px;padding:14px">
       <b style="font-size:15px">${gradeOrd(S.grade)} গ্রেডের সব ধাপ (৯ম স্কেল)</b>
       <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px">${F.s9.map((v, i) => `<span style="font-size:13px;padding:6px 8px;border-radius:8px;text-align:center;${i === F.idx ? 'background:#1F4E8C;color:#fff;font-weight:700' : 'background:#F1F5FA'}">${bn(i + 1)}. ${bn(v.toLocaleString('en-IN'))}</span>`).join('')}</div>
@@ -1798,7 +1829,7 @@ function salary(){
 function salaryText(){
   const S = salaryDefaults(), s8 = ps8Steps(S.grade), old = s8[Math.min(S.step8, s8.length) - 1], F = fix9(S.grade, old, S.inc, S.method), P = phases(old, F.basic, F.s9, F.idx, F.fixBasic);
   return `বেতন নির্ধারণ (৯ম জাতীয় বেতন স্কেল ২০২৬) — ${DB.teacher.name}\n${gradeOrd(S.grade)} গ্রেড\nআগের মূল বেতন (৩০ জুন ২০২৬): ${tk(old)}${F.oldInc ? `\n৮ম স্কেলে ১ জুলাই ২০২৬ ইনক্রিমেন্ট: ${tk(F.oldInc)}` : ''}\nপার্থক্য: ${tk(F.base)} − ${tk(F.start8)} = ${tk(F.diff)}\n${tk(F.start9)} + ${tk(F.diff)} = ${tk(F.target)} → ধাপ ${bn(F.fixIdx + 1)}: ${tk(F.fixBasic)}${F.inc ? `\n১ জুলাই ২০২৬ ইনক্রিমেন্টসহ: ${tk(F.basic)} (ধাপ ${bn(F.idx + 1)})` : ''}\n\n` +
-    P.map(x => `${x.when}: ${tkp(x.basic)}`).join('\n') + '\n(আনুমানিক; অফিসের বেতন নির্ধারণী আদেশ দেখে মিলিয়ে নিন)';
+    payRows(old, P).map(x => `${x.when}: মূল ${tkp(x.basic)}, বাড়ি ভাড়া ${tk(x.hr)}, মোট ${tkp(x.gross)}`).join('\n') + '\n(আনুমানিক; অফিসের বেতন নির্ধারণী আদেশ দেখে মিলিয়ে নিন)';
 }
 
 /* ---------- pension & gratuity calculator ---------- */
@@ -2039,6 +2070,8 @@ function bindView(r){
   if (r === 'salary') {
     const g = document.getElementById('sl_grade'), st = document.getElementById('sl_step');
     g.addEventListener('change', () => { DB.salary.grade = parseInt(g.value); DB.salary.step8 = Math.min(salaryDefaults().step8, ps8Steps(DB.salary.grade).length); save(); render(); });
+    document.querySelectorAll('[data-pay]').forEach(el => el.addEventListener('change', () => {
+      const k = el.dataset.pay.slice(4); DB.salary.pay = {...(DB.salary.pay || {}), [k]: Math.max(0, num(toEn(el.value)))}; save(); render(); }));
     st.addEventListener('change', () => { DB.salary.grade = parseInt(g.value); DB.salary.step8 = parseInt(st.value); save(); render(); });
   }
   if (r === 'pension') {
@@ -2150,6 +2183,7 @@ document.addEventListener('click', e => {
     const steps = ds.paPs === '9' ? ps9Steps(grade) : ps8Steps(grade);
     DB.pension.auto = {...(DB.pension.auto || {}), ...A, ps: ds.paPs, grade, step: Math.min(step, steps.length)}; save(); return render(); }
   if (ds.slInc) { DB.salary.inc = ds.slInc === '1'; save(); return render(); }
+  if (ds.payBase) { DB.salary.pay = {...(DB.salary.pay || {}), hrBase: ds.payBase}; save(); return render(); }
   if (ds.slMethod) { DB.salary.method = ds.slMethod; save(); return render(); }
   if ('slCopy' in ds) return copyText(salaryText(), 'বেতন নির্ধারণের হিসাব কপি হয়েছে');
   if ('slPension' in ds) { const S = salaryDefaults(), old = ps8Steps(S.grade)[Math.min(S.step8, ps8Steps(S.grade).length) - 1], F = fix9(S.grade, old, S.inc, S.method);
