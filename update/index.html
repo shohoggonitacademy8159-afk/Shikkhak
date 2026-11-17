@@ -246,7 +246,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '3.6';
+const WEB_VERSION = '3.7';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -702,6 +702,49 @@ function memberSheet(id){
   });
 }
 
+/* ---------- PRL & pension dates ---------- */
+// Government servants go on PRL when they complete 59 years (60 for freedom fighters): PRL runs one year from the
+// birthday on which that age is reached, and pension starts the day after PRL ends.
+const isoOf = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const dParse = iso => { const d = iso ? new Date(iso + 'T00:00:00') : null; return d && !isNaN(d) ? d : null; };
+const addYears = (d, n) => { const x = new Date(d.getFullYear() + n, d.getMonth(), d.getDate()); if (x.getMonth() !== d.getMonth()) x.setDate(0); return x; };
+function ymd(a, b){ // a <= b; whole years, months, days from a up to (not including) b
+  if (!a || !b || b <= a) return {y:0, m:0, d:0};
+  let y = b.getFullYear() - a.getFullYear(), m = b.getMonth() - a.getMonth(), d = b.getDate() - a.getDate();
+  if (d < 0) { m--; d += new Date(b.getFullYear(), b.getMonth(), 0).getDate(); }
+  if (m < 0) { y--; m += 12; }
+  return {y, m, d};
+}
+const ymdTxt = o => [o.y && bn(o.y) + ' বছর', o.m && bn(o.m) + ' মাস', o.d && bn(o.d) + ' দিন'].filter(Boolean).join(' ') || '০ দিন';
+function retireInfo(t){
+  const dob = dParse(t && t.dob); if (!dob) return null;
+  const age = t.ff ? 60 : 59, prl = addYears(dob, age), pen = addYears(dob, age + 1), prlEnd = new Date(pen - 864e5);
+  const now = new Date(); now.setHours(0,0,0,0);
+  const join = dParse(t.join);
+  return {age, prl, prlEnd, pen, join, svc: join && join < prl ? ymd(join, prl) : null, left: ymd(now, prl), toPen: ymd(now, pen),
+    status: now < prl ? 'service' : now < pen ? 'prl' : 'retired'};
+}
+const fmtD = d => fmtDate(isoOf(d));
+function retireLine(t){
+  const R = retireInfo(t); if (!R) return '';
+  const tag = R.status === 'service' ? `<span class="st" style="background:#E6EFFA;color:#1F4E8C">পিআরএল ${ymdTxt(R.left)} পর</span>`
+    : R.status === 'prl' ? `<span class="st" style="background:#FFF1D6;color:#7A4A00">পিআরএলে আছেন · পেনশন ${ymdTxt(R.toPen)} পর</span>` : `<span class="st" style="background:#EEF1F6;color:#3E5070">অবসরপ্রাপ্ত</span>`;
+  return `<span class="t2">পিআরএল: ${esc(fmtD(R.prl))} · পেনশন: ${esc(fmtD(R.pen))}</span>${tag}`;
+}
+function retireBox(t){
+  const R = retireInfo(t);
+  if (!R) return '<p class="hint">জন্ম তারিখ দিলে পিআরএল ও পেনশনের তারিখ নিজে থেকে দেখাবে।</p>';
+  return `<div class="card" style="gap:4px;padding:12px;background:#F7FAF8;box-shadow:none"><b style="font-size:14.5px">অবসরের সময়সূচি (স্বয়ংক্রিয়)</b>
+    <dl class="kv">
+      <dt>${bn(R.age)} বছর পূর্ণ / অবসর (শেষ কর্মদিবস)</dt><dd>${esc(fmtD(new Date(R.prl - 864e5)))}</dd>
+      <dt>পিআরএল শুরু</dt><dd>${esc(fmtD(R.prl))}</dd>
+      <dt>পিআরএল শেষ (১ বছর)</dt><dd>${esc(fmtD(R.prlEnd))}</dd>
+      <dt>চূড়ান্ত অবসর / পেনশন শুরু</dt><dd style="color:#5B2F99">${esc(fmtD(R.pen))}</dd>
+      ${R.svc ? `<dt>পিআরএল পর্যন্ত চাকরিকাল</dt><dd>${ymdTxt(R.svc)}</dd>` : '<dt>চাকরিকাল</dt><dd>যোগদানের তারিখ দিন</dd>'}
+      ${R.status === 'service' ? `<dt>পিআরএল আসতে বাকি</dt><dd>${ymdTxt(R.left)}</dd>` : R.status === 'prl' ? `<dt>পেনশন আসতে বাকি</dt><dd>${ymdTxt(R.toPen)}</dd>` : '<dt>অবস্থা</dt><dd>অবসরপ্রাপ্ত</dd>'}
+    </dl></div>`;
+}
+
 /* ---------- teachers ---------- */
 const bySerial = list => [...list].sort((a,b) => (parseInt(a.serial)||9999) - (parseInt(b.serial)||9999) || a.name.localeCompare(b.name, 'bn'));
 const nextSerial = () => Math.max(0, ...DB.teachers.map(t => parseInt(t.serial) || 0)) + 1;
@@ -716,7 +759,7 @@ function teachers(){
       <div class="mem">
         <span class="rollb" title="ক্রমিক নং" aria-label="ক্রমিক ${esc(bn(t.serial||''))}">${esc(bn(t.serial||'–'))}</span>
         ${avatar(t.id, t.name, PAL[i%PAL.length])}
-        <span class="grow"><span class="t1" style="font-weight:600">${esc(t.name)}${t.me?' <span class="st" style="background:#E3F4EA;color:#17663F;margin:0">আমি</span>':''}</span><span class="t2">${esc(t.designation)}${t.mobile?' · '+esc(t.mobile):''}</span></span>
+        <span class="grow"><span class="t1" style="font-weight:600">${esc(t.name)}${t.me?' <span class="st" style="background:#E3F4EA;color:#17663F;margin:0">আমি</span>':''}</span><span class="t2">${esc(t.designation)}${t.mobile?' · '+esc(t.mobile):''}</span>${retireLine(t)}</span>
         ${t.mobile?`<a class="sq" href="tel:${esc(toEn(t.mobile).replace(/[^\d+]/g,''))}" aria-label="${esc(t.name)}-কে ফোন করুন">${ic('phone',20)}</a>`:''}
         <button class="sq blue" data-teacher="${t.id}" aria-label="${esc(t.name)} সম্পাদনা">${ic('edit',20)}</button>
       </div>`).join('')}</div>`
@@ -739,6 +782,8 @@ function teacherSheet(id){
       ${field('t_join','যোগদানের তারিখ', inp('t_join', t.join, 'type="date"'))}
       ${field('t_dob','জন্ম তারিখ', inp('t_dob', t.dob, 'type="date"'))}
     </div>
+    <label style="display:flex;gap:10px;align-items:center;font-size:14px"><input type="checkbox" id="t_ff" ${t.ff ? 'checked' : ''} style="width:22px;height:22px"> বীর মুক্তিযোদ্ধা (পিআরএল ৬০ বছরে)</label>
+    <div id="retBox">${retireBox(t)}</div>
     ${field('t_pds','পিডিএস আইডি', inp('t_pds', t.pds, 'inputmode="numeric" maxlength="20"'))}
     ${field('t_edu','শিক্ষাগত যোগ্যতা', inp('t_edu', t.edu, 'maxlength="80" placeholder="যেমন: স্নাতক, সি-ইন-এড/ডিপিএড"'))}
     ${field('t_notes','মন্তব্য', ta('t_notes', t.notes, 2, 'maxlength="300"'))}
@@ -746,10 +791,12 @@ function teacherSheet(id){
     ${id?`<button type="button" class="btn danger full" data-teacher-del="${id}">${ic('trash',18)} তালিকা থেকে মুছুন</button>`:''}
   </form>`);
   const getPhoto = bindPhotoPicker();
+  const tf = document.getElementById('teacherForm'), rb = () => { document.getElementById('retBox').innerHTML = retireBox({dob: tf.elements.t_dob.value, join: tf.elements.t_join.value, ff: document.getElementById('t_ff').checked}); };
+  ['t_dob','t_join','t_ff'].forEach(k => document.getElementById(k).addEventListener('change', rb));
   document.getElementById('teacherForm').addEventListener('submit', e => {
     e.preventDefault();
     const d = formData(e.target);
-    const rec = {serial:parseInt(toEn(d.t_serial)) || nextSerial(), name:d.t_name.trim(), designation:d.t_desig, mobile:d.t_mobile.trim(), join:d.t_join, dob:d.t_dob, pds:toEn(d.t_pds.trim()), edu:d.t_edu.trim(), notes:d.t_notes.trim()};
+    const rec = {serial:parseInt(toEn(d.t_serial)) || nextSerial(), name:d.t_name.trim(), designation:d.t_desig, mobile:d.t_mobile.trim(), join:d.t_join, dob:d.t_dob, ff:document.getElementById('t_ff').checked, pds:toEn(d.t_pds.trim()), edu:d.t_edu.trim(), notes:d.t_notes.trim()};
     if (!rec.name) return;
     // A serial already in use: move that teacher and everyone after them down by one.
     if (DB.teachers.some(x => x !== t && parseInt(x.serial) === rec.serial)) DB.teachers.forEach(x => { if (x !== t && parseInt(x.serial) >= rec.serial) x.serial = parseInt(x.serial) + 1; });
@@ -1971,7 +2018,7 @@ function penAutoDefaults(){
   const grade = A.grade || (/প্রধান শিক্ষক/.test(me.designation || DB.teacher.designation || '') ? 10 : 13);
   const ps = A.ps || (DB.pension.auto ? '8' : '9');  // older saved settings were for the 8th scale
   const g = ps === '9' && !PS9_GRADES.includes(grade) ? 13 : grade;
-  return {ps, grade: g, step: A.step || 1, join: A.join || me.join || '', dob: A.dob || me.dob || '', retAge: A.retAge || 59, leave: A.leave ?? 18, med: A.med ?? '', gpf: A.gpf ?? ''};
+  return {ps, grade: g, step: A.step || 1, join: A.join || me.join || '', dob: A.dob || me.dob || '', retAge: A.retAge || (me.ff ? 60 : 59), leave: A.leave ?? 18, med: A.med ?? '', gpf: A.gpf ?? ''};
 }
 // Everything follows from grade, present step, joining date and birth date.
 function penAuto(A){
@@ -2005,7 +2052,7 @@ function penAutoForm(){
       ${field('pa_dob','জন্ম তারিখ', inp('pa_dob', A.dob, 'type="date"'))}
     </div>
     <div class="row2">
-      ${field('pa_ret','অবসরের বয়স', inp('pa_ret', bn(A.retAge), 'inputmode="numeric" maxlength="2"'))}
+      ${field('pa_ret','পিআরএল শুরুর বয়স (মুক্তিযোদ্ধা ৬০)', inp('pa_ret', bn(A.retAge), 'inputmode="numeric" maxlength="2"'))}
       ${field('pa_leave','ছুটি নগদায়ন (মাস)', inp('pa_leave', bn(A.leave), 'inputmode="numeric" maxlength="2"'))}
     </div>
     <div class="row2">
@@ -2031,7 +2078,8 @@ function penAutoResult(){
     <div class="card" style="gap:6px;padding:12px;background:#F7FAF8;box-shadow:none">
       <b style="font-size:15px">চাকরির হিসাব (স্বয়ংক্রিয়)</b>
       <dl class="kv">
-        <dt>অবসরের তারিখ</dt><dd>${esc(fmtDate(retIso))}${X.retired ? ' (পেরিয়ে গেছে)' : ''}</dd>
+        <dt>পিআরএল শুরু</dt><dd>${esc(fmtDate(retIso))}${X.retired ? ' (পেরিয়ে গেছে)' : ''}</dd>
+        <dt>পেনশন শুরু (পিআরএল শেষে)</dt><dd>${esc(fmtD(addYears(X.ret, 1)))}</dd>
         <dt>মোট চাকরিকাল</dt><dd>${bn(X.years)} বছর${X.restM ? ' ' + bn(X.restM) + ' মাস' : ''}</dd>
         <dt>বর্তমান মূল বেতন</dt><dd>${tk(X.steps[X.idx])} (ধাপ ${bn(X.idx + 1)})</dd>
         <dt>অবসর পর্যন্ত ইনক্রিমেন্ট</dt><dd>${bn(X.lastIdx - X.idx)}টি${X.capped ? ' (গ্রেডের শেষ ধাপে পৌঁছাবে)' : ''}</dd>
@@ -2238,10 +2286,20 @@ function penCalc(P){
   const med = num(P.med), gpf = num(P.gpf);
   return {basic, years, rate, gr, gross, net, gratuity, leave, med, gpf, monthly: net + med, festival: net * 2, lump: gratuity + leave + gpf};
 }
+function retireTable(){
+  const list = bySerial(DB.teachers), withDob = list.filter(t => retireInfo(t));
+  if (!list.length) return '';
+  return `<div class="card" style="gap:8px;padding:14px 16px"><b style="font-size:16px">শিক্ষকদের পিআরএল ও পেনশনের সময়</b>
+    ${withDob.length ? `<div class="list">${withDob.sort((a,b) => retireInfo(a).prl - retireInfo(b).prl).map(t => { const R = retireInfo(t);
+      return `<button class="mem tap" data-teacher="${t.id}" style="flex-direction:column;align-items:stretch;gap:2px"><span class="t1" style="font-weight:600;font-size:14px">${esc(t.name)} <span class="t2">— ${esc(t.designation || '')}</span></span>${retireLine(t)}${R.svc ? `<span class="t2">পিআরএল পর্যন্ত চাকরিকাল: ${ymdTxt(R.svc)}</span>` : ''}</button>`; }).join('')}</div>` : ''}
+    ${withDob.length < list.length ? `<p class="hint">${bn(list.length - withDob.length)} জন শিক্ষকের জন্ম তারিখ দেওয়া নেই। শিক্ষক তালিকায় তথ্য সম্পাদনা করে জন্ম ও যোগদানের তারিখ দিন।</p>` : ''}
+  </div>`;
+}
 function pension(){
   const auto = UI.penMode !== 'manual';
   return innerHeader('পেনশন ও আনুতোষিক','pension','#6D3FB8') + `<div class="sec" style="padding-top:16px">
     <div class="card" style="gap:4px;text-align:center;padding:18px 16px"><h2 style="font-size:20px">পেনশন ও আনুতোষিক হিসাব</h2><span class="t2" style="font-size:14px">বেতন স্কেল, গ্রেড ও চাকরির বয়স থেকে নিজে থেকে হিসাব।</span></div>
+    ${retireTable()}
     <div class="tabs2" role="tablist"><button role="tab" class="${auto?'on':''}" data-pen-mode="auto">স্বয়ংক্রিয় হিসাব</button><button role="tab" class="${auto?'':'on'}" data-pen-mode="manual">নিজে লিখুন</button></div>
     ${auto ? penAutoForm() : penManual()}
   </div>`;
