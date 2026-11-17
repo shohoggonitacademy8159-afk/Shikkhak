@@ -246,7 +246,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '3.2';
+const WEB_VERSION = '3.3';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -571,11 +571,11 @@ function home(){
   <section class="card overlap" aria-label="আজকের সারসংক্ষেপ">
     <div class="top"><h2 style="font-size:16px">বিদ্যালয়ের সারসংক্ষেপ</h2><span class="pill"><span style="color:#C77700;display:flex">${ic('cloud',16)}</span>২৬° আংশিক মেঘলা</span></div>
     <div class="row2">
-      ${(() => { const T = DB.teachers.length, St = DB.students.length;
-        const boys = DB.students.filter(x => x.gender==='ছেলে').length, girls = DB.students.filter(x => x.gender==='মেয়ে').length;
+      ${(() => { const T = DB.teachers.length, AS = activeStudents(), St = AS.length;
+        const boys = AS.filter(x => x.gender==='ছেলে').length, girls = AS.filter(x => x.gender==='মেয়ে').length;
         const td = DB.attendance.teachers[todayISO()] || {}, sd = DB.attendance.students[todayISO()] || {};
         const tToday = {n: DB.teachers.filter(t => td[t.id] && td[t.id].s).length, p: DB.teachers.filter(t => td[t.id] && (td[t.id].s==='p' || td[t.id].s==='late')).length};
-        const sToday = {n: DB.students.filter(x => sd[x.id]).length, p: DB.students.filter(x => sd[x.id]==='p').length};
+        const sToday = {n: AS.filter(x => sd[x.id]).length, p: AS.filter(x => sd[x.id]==='p').length};
         return `<button class="stat" data-go="teachers" style="background:#E8F5EE;border:0;text-align:left"><span style="font-size:13px;color:#2F4A3B">শিক্ষক</span><span class="n">${bn(T)}<span> জন</span></span><span style="font-size:12px;color:#17663F;font-weight:600">${!T?'+ নাম যোগ করুন':tToday.n?`আজ উপস্থিত ${bn(tToday.p)}/${bn(T)}`:'আজ হাজিরা নেওয়া হয়নি'}</span></button>
         <button class="stat" data-go="students" style="background:#E9EFF8;border:0;text-align:left"><span style="font-size:13px;color:#2C3F5E">শিক্ষার্থী</span><span class="n">${bn(St)}<span> জন</span></span><span style="font-size:12px;color:#1F3A68;font-weight:600">${!St?'+ নাম যোগ করুন':sToday.n?`আজ উপস্থিত ${bn(sToday.p)}/${bn(sToday.n)}`:`ছেলে ${bn(boys)} · মেয়ে ${bn(girls)}`}</span></button>`; })()}
     </div>
@@ -740,7 +740,7 @@ function teacherSheet(id){
 
 /* ---------- students: add many names at once ---------- */
 function nextRoll(cls, section){
-  const r = DB.students.filter(x => x.cls===cls && (x.section||'')===(section||'')).map(x => parseInt(toEn(x.roll))||0);
+  const r = activeStudents().filter(x => x.cls===cls && (x.section||'')===(section||'')).map(x => parseInt(toEn(x.roll))||0);
   return (r.length ? Math.max(...r) : 0) + 1;
 }
 function bulkSheet(){
@@ -774,7 +774,7 @@ function bulkSheet(){
     const list = names(), clsV = f.elements.b_cls.value, sec = f.elements.b_section.value.trim();
     const start = parseInt(toEn(f.elements.b_roll.value)) || 1;
     if (!list.length) { err.textContent = 'অন্তত একজনের নাম লিখুন।'; err.style.display = 'block'; return; }
-    const taken = new Set(DB.students.filter(x => x.cls===clsV && (x.section||'')===sec).map(x => toEn(x.roll)));
+    const taken = new Set(activeStudents().filter(x => x.cls===clsV && (x.section||'')===sec).map(x => toEn(x.roll)));
     const clash = list.map((_, i) => String(start + i)).filter(r => taken.has(r));
     if (clash.length) { err.textContent = `রোল ${clash.map(bn).join(', ')} আগে থেকেই আছে। শুরুর রোল ${bn(nextRoll(clsV, sec))} দিন।`; err.style.display = 'block'; return; }
     const now = Date.now();
@@ -785,10 +785,20 @@ function bulkSheet(){
 }
 
 /* ---------- students ---------- */
+// Former students keep their whole profile with an `alumni` record: {year, reason, date, note, cls, roll, section}
+const ALUMNI_REASONS = {pass5:'৫ম শ্রেণি পাস', tc:'ছাড়পত্র নিয়েছে', transfer:'অন্য বিদ্যালয়ে গেছে', drop:'ঝরে পড়েছে', other:'অন্যান্য'};
+const isActive = s => !s.alumni;
+const activeStudents = () => DB.students.filter(isActive);
+const alumniList = () => DB.students.filter(s => s.alumni);
+function makeAlumni(s, reason, date, note){
+  s.alumni = {reason, date, year: (date || todayISO()).slice(0,4), note: (note || '').trim(), cls: s.cls, roll: s.roll || '', section: s.section || ''};
+  s.updated = Date.now();
+}
 const GENDERS = ['ছেলে','মেয়ে','অন্যান্য'];
 function students(){
+  if (UI.stuView === 'old') return alumniPage();
   const q = UI.stuQuery.trim().toLowerCase();
-  const all = DB.students;
+  const all = activeStudents(), old = alumniList().length, c5 = all.filter(s => s.cls === '5').length;
   const list = all.filter(s => (UI.stuClass==='all' || s.cls===UI.stuClass) && (!q || [s.name,s.roll,bn(s.roll||''),s.father,s.mother,s.phone].join(' ').toLowerCase().includes(q)))
     .sort((a,b) => (a.cls+'').localeCompare(b.cls+'') || (parseInt(toEn(a.roll))||999) - (parseInt(toEn(b.roll))||999));
   const cnt = c => all.filter(s => s.cls===c).length;
@@ -798,6 +808,8 @@ function students(){
       <button class="btn solid big" data-stu-new>${ic('plus',20)} একজন যোগ</button>
       <button class="btn big" data-stu-bulk>${ic('list',20)} অনেক নাম একসাথে</button>
     </div>
+    ${stuViewTabs(all.length, old)}
+    ${c5 && (UI.stuClass === '5' || UI.stuClass === 'all') ? `<button class="btn big full" data-alumni-bulk style="border-color:#C27C0E;color:#8A5600">${ic('cert',20)} ৫ম শ্রেণি পাস — পুরাতন তালিকায় সংরক্ষণ (${bn(c5)} জন)</button>` : ''}
     <label class="search">${ic('search',20)}<input id="stuSearch" type="search" placeholder="নাম, রোল বা অভিভাবকের নাম খুঁজুন" value="${esc(UI.stuQuery)}" aria-label="শিক্ষার্থী খুঁজুন"></label>
     <div class="chips" role="tablist" aria-label="শ্রেণি অনুযায়ী">
       <button class="${UI.stuClass==='all'?'on':''}" data-stu-class="all">সব (${bn(all.length)})</button>
@@ -806,8 +818,85 @@ function students(){
     <div id="stuList">${stuListHtml(list)}</div>
   </div>`;
 }
+function stuViewTabs(nAct, nOld){
+  return `<div class="tabs2" role="tablist"><button role="tab" class="${UI.stuView!=='old'?'on':''}" data-stu-view="cur">বর্তমান (${bn(nAct)})</button><button role="tab" class="${UI.stuView==='old'?'on':''}" data-stu-view="old">পুরাতন শিক্ষার্থী (${bn(nOld)})</button></div>`;
+}
+function alumniPage(){
+  const all = alumniList(), q = toEn(UI.alQuery || '').trim().toLowerCase();
+  const years = [...new Set(all.map(s => s.alumni.year))].sort().reverse();
+  if (UI.alYear && UI.alYear !== 'all' && !years.includes(UI.alYear)) UI.alYear = 'all';
+  const yr = UI.alYear || 'all';
+  return innerHeader('শিক্ষার্থী তালিকা','profile','#D23F74') + `
+  <div class="sec" style="padding-top:16px">
+    ${stuViewTabs(activeStudents().length, all.length)}
+    ${all.length ? `<label class="search">${ic('search',20)}<input id="alSearch" type="search" placeholder="নাম, পিতার নাম বা সাল দিয়ে খুঁজুন" value="${esc(UI.alQuery || '')}" aria-label="পুরাতন শিক্ষার্থী খুঁজুন"></label>
+    <div class="chips" role="tablist" aria-label="সাল"><button class="${yr==='all'?'on':''}" data-al-year="all">সব (${bn(all.length)})</button>${years.map(y => `<button class="${yr===y?'on':''}" data-al-year="${y}">${bn(y)} (${bn(all.filter(s => s.alumni.year === y).length)})</button>`).join('')}</div>` : ''}
+    <div id="alList">${alumniListHtml(yr, q)}</div>
+    <p class="hint">পুরাতন শিক্ষার্থীদের পুরো প্রোফাইল, ছবি, ফলাফল ও হাজিরার ইতিহাস সংরক্ষিত থাকে; হাজিরা ও শ্রেণির তালিকায় আসে না। যেকোনো সময় তাদের প্রত্যয়নপত্র বা ছাড়পত্র দেওয়া যায়।</p>
+  </div>`;
+}
+function alumniListHtml(yr, q){
+  const all = alumniList();
+  if (!all.length) return `<div class="card empty"><span class="ib" style="background:#C27C0E">${S(P.cert)}</span><h2 style="font-size:17px">এখনও কোনো পুরাতন শিক্ষার্থী নেই</h2><p class="t2" style="font-size:14px;line-height:1.6">বর্তমান তালিকায় "৫ম শ্রেণি পাস — পুরাতন তালিকায় সংরক্ষণ" চাপলে পাস করা শিক্ষার্থীরা এখানে চলে আসবে। কোনো একজনকে পাঠাতে তার প্রোফাইলে "পুরাতন তালিকায় পাঠান" চাপুন।</p></div>`;
+  const list = all.filter(s => (yr === 'all' || s.alumni.year === yr) && (!q || toEn([s.name, s.father, s.mother, s.alumni.year, s.phone].join(' ')).toLowerCase().includes(q)))
+    .sort((a,b) => b.alumni.year.localeCompare(a.alumni.year) || (parseInt(toEn(a.alumni.roll))||9999) - (parseInt(toEn(b.alumni.roll))||9999) || a.name.localeCompare(b.name,'bn'));
+  if (!list.length) return `<div class="card empty"><p class="t2" style="font-size:14px">এই খোঁজে কাউকে পাওয়া যায়নি।</p></div>`;
+  return `<div class="list">${list.map(s => `<button class="mem tap" data-alumni="${s.id}">
+    ${avatar(s.id, s.name, s.gender==='মেয়ে'?'#D23F74':s.gender==='ছেলে'?'#2563C9':'#7C4DCC')}
+    <span class="grow"><span class="t1" style="font-weight:600">${esc(s.name)}</span><span class="t2">${CLASS_NAME[s.alumni.cls]||''}${s.alumni.roll ? ' · রোল ' + esc(bn(s.alumni.roll)) : ''}${s.father ? ' · পিতা: ' + esc(s.father) : ''}</span>
+      <span class="st" style="background:#FFF1D6;color:#7A4A00">${ALUMNI_REASONS[s.alumni.reason] || ''} · ${esc(bn(s.alumni.year))}</span></span>
+    <span style="color:var(--mute)">${ic('chev',20)}</span></button>`).join('')}</div>`;
+}
+function alumniSheet(id){
+  const s = DB.students.find(x => x.id === id); if (!s || !s.alumni) return;
+  const A = s.alumni, row = (k, v) => v ? `<dt>${k}</dt><dd>${esc(v)}</dd>` : '';
+  openSheet(`<div style="display:flex;gap:12px;align-items:center;margin-bottom:10px">${avatar(s.id, s.name, '#C27C0E', 60)}<span><h2 style="font-size:18px">${esc(s.name)}</h2><span class="st" style="background:#FFF1D6;color:#7A4A00">${ALUMNI_REASONS[A.reason] || ''} · ${esc(bn(A.year))}</span></span></div>
+    <dl class="kv">${row('শেষ শ্রেণি', (CLASS_NAME[A.cls] || '') + (A.section ? ' (' + A.section + ')' : ''))}${row('রোল', A.roll && bn(A.roll))}${row('বিদায়ের তারিখ', A.date && fmtDate(A.date))}${row('মন্তব্য', A.note)}
+      ${row('পিতা', s.father)}${row('মাতা', s.mother)}${row('জন্ম তারিখ', s.dob && fmtDate(s.dob))}${row('জন্ম নিবন্ধন', s.birthreg && bn(s.birthreg))}${row('মোবাইল', s.phone)}${row('ঠিকানা', s.address)}</dl>
+    <div class="row2" style="margin-top:12px"><button class="btn big solid" data-al-cert="${s.id}" data-type="study">${ic('cert',18)} প্রত্যয়নপত্র</button><button class="btn big solid" data-al-cert="${s.id}" data-type="tc">${ic('cert',18)} ছাড়পত্র</button></div>
+    <div class="row2"><button class="btn big" data-al-edit="${s.id}">${ic('edit',18)} তথ্য সম্পাদনা</button><button class="btn big" data-al-restore="${s.id}">বর্তমান তালিকায় ফেরত</button></div>
+    <button class="btn danger ghost full" data-stu-del="${s.id}">${ic('trash',18)} স্থায়ীভাবে মুছুন</button>`);
+}
+function alumniBulkSheet(){
+  const list = sortedStudents('5'); if (!list.length) return;
+  openSheet(`<form class="f" id="alBulk">
+    <h2 style="font-size:18px">৫ম শ্রেণি পাস শিক্ষার্থী সংরক্ষণ</h2>
+    <p class="t2" style="font-size:13.5px;line-height:1.6">টিক দেওয়া শিক্ষার্থীরা বর্তমান তালিকা ও হাজিরা থেকে সরে "পুরাতন শিক্ষার্থী" তালিকায় যাবে। তাদের সব তথ্য, ছবি ও ফলাফল সংরক্ষিত থাকবে।</p>
+    <div class="row2">${field('al_date','বিদায়ের তারিখ', inp('al_date', todayISO(), 'type="date" required'), true)}${field('al_note','মন্তব্য (ঐচ্ছিক)', inp('al_note', '', 'maxlength="80" placeholder="যেমন: বার্ষিক পরীক্ষায় উত্তীর্ণ"'))}</div>
+    <label style="display:flex;gap:10px;align-items:center;font-size:14px;font-weight:600"><input type="checkbox" id="alAll" checked style="width:22px;height:22px"> সবাইকে বাছাই (${bn(list.length)} জন)</label>
+    <div class="list" style="max-height:42vh;overflow:auto">${list.map(s => `<label class="mem" style="cursor:pointer"><input type="checkbox" name="al_pick" value="${s.id}" checked style="width:22px;height:22px;flex:none"><span class="rollb">${s.roll ? esc(bn(s.roll)) : '–'}</span><span class="grow"><span class="t1" style="font-weight:600">${esc(s.name)}</span>${s.father ? `<span class="t2">পিতা: ${esc(s.father)}</span>` : ''}</span></label>`).join('')}</div>
+    <p class="hint">অনুত্তীর্ণ বা থেকে যাওয়া শিক্ষার্থীর টিক তুলে দিন।</p>
+    <div class="row2"><button type="button" class="btn big" data-close>বাতিল</button><button type="submit" class="btn big solid">সংরক্ষণ</button></div>
+  </form>`);
+  const f = document.getElementById('alBulk'), boxes = () => [...f.querySelectorAll('[name="al_pick"]')];
+  document.getElementById('alAll').addEventListener('change', e => boxes().forEach(b => b.checked = e.target.checked));
+  f.addEventListener('submit', e => {
+    e.preventDefault();
+    const ids = boxes().filter(b => b.checked).map(b => b.value), date = f.elements.al_date.value || todayISO();
+    if (!ids.length) return toast('অন্তত একজনকে বাছাই করুন');
+    ids.forEach(id => { const s = DB.students.find(x => x.id === id); if (s) makeAlumni(s, 'pass5', date, f.elements.al_note.value); });
+    if (save()) toast(`${bn(ids.length)} জন পুরাতন শিক্ষার্থী তালিকায় সংরক্ষিত হয়েছে`);
+    UI.stuView = 'old'; UI.alYear = date.slice(0,4); closeSheet(); render();
+  });
+}
+function alumniOneSheet(id){
+  const s = DB.students.find(x => x.id === id); if (!s) return;
+  openSheet(`<form class="f" id="alOne">
+    <h2 style="font-size:18px">পুরাতন তালিকায় পাঠান</h2>
+    <p class="t2" style="font-size:14px">${esc(s.name)} — ${CLASS_NAME[s.cls] || ''}${s.roll ? ', রোল ' + bn(s.roll) : ''}</p>
+    ${field('al_reason','কারণ', sel('al_reason', Object.entries(ALUMNI_REASONS), s.cls === '5' ? 'pass5' : 'tc'), true)}
+    <div class="row2">${field('al_date','তারিখ', inp('al_date', todayISO(), 'type="date" required'), true)}${field('al_note','মন্তব্য (ঐচ্ছিক)', inp('al_note', '', 'maxlength="80"'))}</div>
+    <div class="row2"><button type="button" class="btn big" data-close>বাতিল</button><button type="submit" class="btn big solid">সংরক্ষণ</button></div>
+  </form>`);
+  document.getElementById('alOne').addEventListener('submit', e => {
+    e.preventDefault(); const f = e.target;
+    makeAlumni(s, f.elements.al_reason.value, f.elements.al_date.value || todayISO(), f.elements.al_note.value);
+    if (save()) toast('পুরাতন শিক্ষার্থী তালিকায় সংরক্ষিত হয়েছে');
+    closeSheet(); render();
+  });
+}
 function stuListHtml(list){
-  if (!DB.students.length) return `<div class="card empty"><span class="ib" style="background:#D23F74">${S(P.profile)}</span><h2 style="font-size:17px">এখনও কোনো শিক্ষার্থী নেই</h2><p class="t2" style="font-size:14px;line-height:1.6">"একজন যোগ" দিয়ে প্রোফাইল তৈরি করুন, অথবা "অনেক নাম একসাথে" দিয়ে পুরো শ্রেণির নাম একবারে যোগ করুন। সব তথ্য এই ফোনেই সংরক্ষিত থাকবে।</p></div>`;
+  if (!activeStudents().length) return `<div class="card empty"><span class="ib" style="background:#D23F74">${S(P.profile)}</span><h2 style="font-size:17px">এখনও কোনো শিক্ষার্থী নেই</h2><p class="t2" style="font-size:14px;line-height:1.6">"একজন যোগ" দিয়ে প্রোফাইল তৈরি করুন, অথবা "অনেক নাম একসাথে" দিয়ে পুরো শ্রেণির নাম একবারে যোগ করুন। সব তথ্য এই ফোনেই সংরক্ষিত থাকবে।</p></div>`;
   if (!list.length) return `<div class="card empty"><p class="t2" style="font-size:14px">এই খোঁজে কোনো শিক্ষার্থী পাওয়া যায়নি।</p></div>`;
   return `<div class="list">${list.map((s,i) => `<button class="mem tap" data-stu="${s.id}">
     ${avatar(s.id, s.name, s.gender==='মেয়ে'?'#D23F74':s.gender==='ছেলে'?'#2563C9':'#7C4DCC')}
@@ -846,6 +935,7 @@ function studentSheet(id){
     ${field('s_notes','বিশেষ মন্তব্য', ta('s_notes', s.notes, 2, 'maxlength="300" placeholder="স্বাস্থ্য, বিশেষ চাহিদা ইত্যাদি"'))}
     <p class="hint" id="stuErr" style="color:var(--red);display:none"></p>
     <div class="row2"><button type="button" class="btn big" data-close>বাতিল</button><button type="submit" class="btn big solid">সংরক্ষণ</button></div>
+    ${id && !s.alumni ? `<button type="button" class="btn full" data-alumni-one="${id}" style="border-color:#C27C0E;color:#8A5600">${ic('cert',18)} পুরাতন তালিকায় পাঠান (পাস/ছাড়পত্র)</button>` : ''}
     ${id?`<button type="button" class="btn danger full" data-stu-del="${id}">${ic('trash',18)} প্রোফাইল মুছুন</button>`:''}
   </form>`);
   const getPhoto = bindPhotoPicker();
@@ -856,7 +946,7 @@ function studentSheet(id){
     if (!d.s_name.trim()) { err.textContent = 'শিক্ষার্থীর নাম লিখুন।'; err.style.display='block'; document.getElementById('s_name').focus(); return; }
     const rec = {name:d.s_name.trim(), cls:d.s_cls, section:d.s_section.trim(), roll:toEn(d.s_roll.trim()), gender:d.s_gender, dob:d.s_dob, blood:d.s_blood,
       birthreg:d.s_birthreg.trim(), father:d.s_father.trim(), mother:d.s_mother.trim(), phone:d.s_phone.trim(), address:d.s_address.trim(), stipend:d.s_stipend, religion:d.s_religion, notes:d.s_notes.trim(), updated:Date.now()};
-    if (rec.roll && DB.students.some(x => x.id !== id && x.cls === rec.cls && (x.section||'') === rec.section && toEn(x.roll) === rec.roll)) {
+    if (rec.roll && !s.alumni && activeStudents().some(x => x.id !== id && x.cls === rec.cls && (x.section||'') === rec.section && toEn(x.roll) === rec.roll)) {
       err.textContent = `${CLASS_NAME[rec.cls]}-এ রোল ${bn(rec.roll)} আগে থেকেই আছে।`; err.style.display='block'; return;
     }
     const sid = id || uid();
@@ -1042,8 +1132,8 @@ function longDate(iso){ try { return new Date(iso + 'T00:00:00').toLocaleDateStr
 function monthName(ym){ try { return new Date(ym + '-01T00:00:00').toLocaleDateString('bn-BD',{month:'long',year:'numeric'}); } catch(e){ return ym; } }
 const isFriday = iso => new Date(iso + 'T00:00:00').getDay() === 5;
 const pill = (txt, fg, bg) => `<span style="color:${fg};background:${bg}">${txt}</span>`;
-function sortedStudents(cls){ return DB.students.filter(x => x.cls === cls).sort((a,b) => (parseInt(toEn(a.roll))||9999) - (parseInt(toEn(b.roll))||9999) || (a.section||'').localeCompare(b.section||'') || a.name.localeCompare(b.name,'bn')); }
-function classesWithStudents(){ return CLASSES.filter(([k]) => DB.students.some(x => x.cls === k)); }
+function sortedStudents(cls){ return activeStudents().filter(x => x.cls === cls).sort((a,b) => (parseInt(toEn(a.roll))||9999) - (parseInt(toEn(b.roll))||9999) || (a.section||'').localeCompare(b.section||'') || a.name.localeCompare(b.name,'bn')); }
+function classesWithStudents(){ return CLASSES.filter(([k]) => activeStudents().some(x => x.cls === k)); }
 
 function dateBar(){
   const d = curDate(), t = todayISO();
@@ -1230,6 +1320,9 @@ function certInner(c, st){
        ${c.passed ? `<p>সে ${v(c.passed)} উত্তীর্ণ হয়েছে।</p>` : ''}
        <p>${esc(c.reason || 'অভিভাবকের অনুরোধে')} তাকে এই ছাড়পত্র প্রদান করা হলো। বিদ্যালয়ে তার নিকট কোনো পাওনা নেই। অধ্যয়নকালে তার আচরণ সন্তোষজনক ছিল।</p>
        <p>আমি তার উজ্জ্বল ভবিষ্যৎ কামনা করি।</p>`
+    : st.alumni ? `<p>এই মর্মে প্রত্যয়ন করা যাচ্ছে যে, ${who}, অত্র বিদ্যালয়ের একজন প্রাক্তন শিক্ষার্থী। ${st.alumni.reason === 'pass5' ? `সে ${v(bn(st.alumni.year))} সালে অত্র বিদ্যালয় থেকে পঞ্চম শ্রেণি পাস করেছে।` : `সে ${v(bn(st.alumni.year))} সাল পর্যন্ত অত্র বিদ্যালয়ে ${CLASS_IN[st.alumni.cls || st.cls] || ''} অধ্যয়নরত ছিল।`} তার রোল নম্বর ছিল ${v((st.alumni.roll || st.roll) && bn(st.alumni.roll || st.roll))}। বিদ্যালয়ের ভর্তি রেজিস্টার অনুযায়ী তার জন্ম তারিখ ${v(dob && bn(dob))}${st.birthreg ? `, জন্ম নিবন্ধন নম্বর ${v(bn(st.birthreg))}` : ''}।</p>
+       <p>অধ্যয়নকালে তার স্বভাব-চরিত্র ভালো ছিল। আমার জানামতে সে রাষ্ট্র বা সমাজবিরোধী কোনো কাজে জড়িত ছিল না।</p>
+       <p>আমি তার সর্বাঙ্গীণ মঙ্গল কামনা করি।</p>`
     : `<p>এই মর্মে প্রত্যয়ন করা যাচ্ছে যে, ${who}, অত্র বিদ্যালয়ের ${CLASS_OF[st.cls] || ''} একজন নিয়মিত শিক্ষার্থী। তার রোল নম্বর ${v(st.roll && bn(st.roll))}। বিদ্যালয়ের ভর্তি রেজিস্টার অনুযায়ী তার জন্ম তারিখ ${v(dob && bn(dob))}${st.birthreg ? `, জন্ম নিবন্ধন নম্বর ${v(bn(st.birthreg))}` : ''}।</p>
        <p>আমার জানামতে তার স্বভাব-চরিত্র ভালো। সে রাষ্ট্র বা সমাজবিরোধী কোনো কাজে জড়িত নয়।</p>
        <p>আমি তার সর্বাঙ্গীণ মঙ্গল কামনা করি।</p>`;
@@ -1266,11 +1359,11 @@ function certificates(){
   const st = certStudent();
   if (!st) {
     const cl = classesWithStudents();
-    if (!c.cls || !cl.some(([k]) => k === c.cls)) c.cls = cl[0][0];
+    if (!c.cls || !(cl.some(([k]) => k === c.cls) || (c.cls === 'old' && alumniList().length))) c.cls = cl.length ? cl[0][0] : 'old';
     return head + `<div class="sec" style="padding-top:16px">${tabs}
       <h2 style="font-size:17px">কার ${CERT_TYPES[c.type]} দেবেন?</h2>
       <label class="search">${ic('search',20)}<input id="certSearch" type="search" placeholder="নাম বা রোল দিয়ে খুঁজুন" value="${esc(c.q)}" aria-label="শিক্ষার্থী খুঁজুন"></label>
-      <div class="chips" role="tablist" aria-label="শ্রেণি">${cl.map(([k,l]) => `<button class="${k===c.cls?'on':''}" data-cert-class="${k}">${l}</button>`).join('')}</div>
+      <div class="chips" role="tablist" aria-label="শ্রেণি">${cl.map(([k,l]) => `<button class="${k===c.cls?'on':''}" data-cert-class="${k}">${l}</button>`).join('')}${alumniList().length ? `<button class="${c.cls==='old'?'on':''}" data-cert-class="old">পুরাতন শিক্ষার্থী</button>` : ''}</div>
       <div id="certList">${certListHtml()}</div>
       ${certLogHtml()}
     </div>`;
@@ -1301,10 +1394,10 @@ function certificates(){
 }
 function certListHtml(){
   const c = UI.cert, q = toEn(c.q.trim()).toLowerCase();
-  const list = (q ? DB.students.filter(s => (s.name + ' ' + toEn(s.roll||'')).toLowerCase().includes(q)) : sortedStudents(c.cls))
-    .sort((a,b) => (a.cls+'').localeCompare(b.cls+'') || (parseInt(toEn(a.roll))||9999) - (parseInt(toEn(b.roll))||9999));
+  const list = (q ? DB.students.filter(s => (s.name + ' ' + toEn(s.roll||'') + ' ' + (s.alumni ? s.alumni.year : '')).toLowerCase().includes(q)) : c.cls === 'old' ? alumniList() : sortedStudents(c.cls))
+    .sort((a,b) => (!!a.alumni - !!b.alumni) || (a.alumni && b.alumni ? b.alumni.year.localeCompare(a.alumni.year) : 0) || (a.cls+'').localeCompare(b.cls+'') || (parseInt(toEn(a.roll))||9999) - (parseInt(toEn(b.roll))||9999));
   if (!list.length) return '<div class="card empty"><p class="t2" style="font-size:14px">কোনো শিক্ষার্থী পাওয়া যায়নি।</p></div>';
-  return `<div class="list">${list.map(s => `<button class="mem tap" data-cert-pick="${s.id}"><span class="rollb">${s.roll ? esc(bn(s.roll)) : '–'}</span><span class="grow"><span class="t1" style="font-weight:600">${esc(s.name)}</span><span class="t2">${CLASS_NAME[s.cls]||''}${s.father ? ' · পিতা: ' + esc(s.father) : ''}</span></span><span style="color:var(--mute)">${ic('chev',20)}</span></button>`).join('')}</div>`;
+  return `<div class="list">${list.map(s => `<button class="mem tap" data-cert-pick="${s.id}"><span class="rollb">${s.roll ? esc(bn(s.roll)) : '–'}</span><span class="grow"><span class="t1" style="font-weight:600">${esc(s.name)}</span><span class="t2">${CLASS_NAME[s.cls]||''}${s.alumni ? ` · পুরাতন (${ALUMNI_REASONS[s.alumni.reason] || ''}, ${bn(s.alumni.year)})` : ''}${s.father ? ' · পিতা: ' + esc(s.father) : ''}</span></span><span style="color:var(--mute)">${ic('chev',20)}</span></button>`).join('')}</div>`;
 }
 function certLogHtml(){
   const log = (DB.certs || []).slice(-8).reverse();
@@ -2123,7 +2216,7 @@ function settings(){
     <div class="card">
       <h2 style="font-size:16px">তথ্য সংরক্ষণ</h2>
       <p class="t2" style="font-size:14px;line-height:1.6">সব তথ্য শুধু এই ফোনে সংরক্ষিত থাকে। অ্যাপ মুছে ফেললে বা ফোন বদলালে তথ্য হারিয়ে যাবে, তাই মাঝে মাঝে ব্যাকআপ নিন।</p>
-      <dl class="kv"><dt>শিক্ষক</dt><dd>${bn(DB.teachers.length)} জন</dd><dt>শিক্ষার্থী</dt><dd>${bn(DB.students.length)} জন</dd><dt>পাঠ পরিকল্পনা</dt><dd>${bn(DB.plans.length)}টি</dd><dt>কমিটি সদস্য</dt><dd>${bn(Object.values(DB.committees).reduce((a,b)=>a+b.length,0))} জন</dd></dl>
+      <dl class="kv"><dt>শিক্ষক</dt><dd>${bn(DB.teachers.length)} জন</dd><dt>শিক্ষার্থী</dt><dd>${bn(activeStudents().length)} জন${alumniList().length ? ` (পুরাতন ${bn(alumniList().length)} জন)` : ''}</dd><dt>পাঠ পরিকল্পনা</dt><dd>${bn(DB.plans.length)}টি</dd><dt>কমিটি সদস্য</dt><dd>${bn(Object.values(DB.committees).reduce((a,b)=>a+b.length,0))} জন</dd></dl>
       ${canStore?'':'<p class="hint" style="color:var(--red)">এই ব্রাউজারে সংরক্ষণ বন্ধ আছে; তথ্য পেজ বন্ধ করলে হারিয়ে যাবে।</p>'}
       <p class="hint">ছবিগুলো ব্যাকআপের লেখায় থাকে না; নতুন ফোনে ছবি আবার যোগ করতে হবে।</p>
       <button class="btn big full" data-backup>${ic('copy',20)} ব্যাকআপ কপি করুন</button>
@@ -2308,7 +2401,7 @@ function lvApply(L){
   const ty = LV_TYPES[L.type], n = lvDays(L.from, L.to), t = DB.teachers.find(x => x.id === L.tid);
   const isStu = L.type === 'student', yr = (L.from || todayISO()).slice(0,4);
   const used = ty[2] ? lvUsed(L.tid, L.type, yr) : 0;
-  const stuOpts = DB.students.length ? [['', '— শিক্ষার্থী বেছে নিন —'], ...[...DB.students].sort((a,b) => (a.cls+'').localeCompare(b.cls+'') || (parseInt(toEn(a.roll))||9999) - (parseInt(toEn(b.roll))||9999)).map(s => [s.id, `${s.name} — ${CLASS_NAME[s.cls] || ''}${s.roll ? ', রোল ' + bn(s.roll) : ''}`])] : [['', 'শিক্ষার্থী তালিকা খালি']];
+  const stuOpts = activeStudents().length ? [['', '— শিক্ষার্থী বেছে নিন —'], ...activeStudents().sort((a,b) => (a.cls+'').localeCompare(b.cls+'') || (parseInt(toEn(a.roll))||9999) - (parseInt(toEn(b.roll))||9999)).map(s => [s.id, `${s.name} — ${CLASS_NAME[s.cls] || ''}${s.roll ? ', রোল ' + bn(s.roll) : ''}`])] : [['', 'শিক্ষার্থী তালিকা খালি']];
   const warn = [];
   if (L.type === 'casual' && n > 10) warn.push('একবারে ১০ দিনের বেশি নৈমিত্তিক ছুটি নেওয়া যায় না।');
   if (ty[2] && used + n > ty[2]) warn.push(`এ বছরে ${ty[0]} ${bn(ty[2])} দিন পর্যন্ত; আগে ${bn(used)} দিন নেওয়া হয়েছে।`);
@@ -2459,11 +2552,13 @@ function bindView(r){
     certFit(); bindLogo();
   }
   if (r === 'students') {
+    const a = document.getElementById('alSearch');
+    if (a) a.addEventListener('input', () => { UI.alQuery = a.value; document.getElementById('alList').innerHTML = alumniListHtml(UI.alYear || 'all', toEn(a.value).trim().toLowerCase()); });
     const s = document.getElementById('stuSearch');
-    s.addEventListener('input', () => {
+    if (s) s.addEventListener('input', () => {
       UI.stuQuery = s.value;
       const q = s.value.trim().toLowerCase();
-      const list = DB.students.filter(x => (UI.stuClass==='all' || x.cls===UI.stuClass) && (!q || [x.name,x.roll,bn(x.roll||''),x.father,x.mother,x.phone].join(' ').toLowerCase().includes(q)));
+      const list = activeStudents().filter(x => (UI.stuClass==='all' || x.cls===UI.stuClass) && (!q || [x.name,x.roll,bn(x.roll||''),x.father,x.mother,x.phone].join(' ').toLowerCase().includes(q)));
       document.getElementById('stuList').innerHTML = stuListHtml(list);
     });
   }
@@ -2570,6 +2665,15 @@ document.addEventListener('click', e => {
   // certificates
   if (ds.certType) { UI.cert.type = ds.certType; return render(); }
   if ('logoDel' in ds) return confirmSheet('লোগো মুছবেন?', 'সনদ, আবেদন ও প্রতিবেদন থেকে লোগো ও জলছাপ সরে যাবে।', 'মুছুন', () => { setPhoto(LOGO_ID, null); });
+  if (ds.stuView) { UI.stuView = ds.stuView; return render(); }
+  if (ds.alYear) { UI.alYear = ds.alYear; return render(); }
+  if ('alumniBulk' in ds) return alumniBulkSheet();
+  if (ds.alumniOne) { closeSheet(); return alumniOneSheet(ds.alumniOne); }
+  if (ds.alumni) return alumniSheet(ds.alumni);
+  if (ds.alEdit) { closeSheet(); return studentSheet(ds.alEdit); }
+  if (ds.alRestore) { const s = DB.students.find(x => x.id === ds.alRestore); if (s) { const A = s.alumni; delete s.alumni; s.updated = Date.now();
+      if (A && A.reason === 'pass5' && s.cls === '5') toast('বর্তমান তালিকায় ফেরত এসেছে (৫ম শ্রেণি)'); else toast('বর্তমান তালিকায় ফেরত এসেছে'); save(); } closeSheet(); return render(); }
+  if (ds.alCert) { const s = DB.students.find(x => x.id === ds.alCert); if (s) { closeSheet(); Object.assign(UI.cert, {sid: s.id, type: ds.type || 'study', q:''}); go('certificates'); } return; }
   if (ds.certOrient) { UI.cert.orient = ds.certOrient; return render(); }
   if (ds.certClass) { UI.cert.cls = ds.certClass; UI.cert.q = ''; return render(); }
   if (ds.certPick) { UI.cert.sid = ds.certPick; window.scrollTo(0,0); return render(); }
