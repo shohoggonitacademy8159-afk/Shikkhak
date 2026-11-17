@@ -246,7 +246,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '3.7';
+const WEB_VERSION = '3.8';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -888,7 +888,7 @@ function students(){
     </div>
     ${stuViewTabs(all.length, old)}
     ${all.length ? `<button class="mem tap" data-common-addr style="border:1px solid var(--line);border-radius:14px"><span class="ib sm" style="background:#0E8C82">${S(P.home)}</span><span class="grow"><span class="t1" style="font-weight:600;font-size:14px">সবার ঠিকানা</span><span class="t2 clamp">${commonAddr() ? esc(commonAddr()) + ` · ${bn(all.filter(x => !(x.address || '').trim()).length)} জনের জন্য` : 'একবার লিখে সব শিক্ষার্থীর জন্য একই ঠিকানা দিন'}</span></span><span style="color:var(--mute)">${ic('edit',18)}</span></button>` : ''}
-    ${all.length ? `<button class="btn big full" data-promote style="border-color:#C27C0E;color:#8A5600">${ic('cert',20)} বছর শেষে শ্রেণি উন্নয়ন ও ৫ম শ্রেণি পাস</button>` : ''}
+    ${all.length ? `<button class="btn big full" data-promote style="border-color:#C27C0E;color:#8A5600">${ic('cert',20)} পরবর্তী শ্রেণির রোল ও শ্রেণি উন্নয়ন</button>` : ''}
     <label class="search">${ic('search',20)}<input id="stuSearch" type="search" placeholder="নাম, রোল বা অভিভাবকের নাম খুঁজুন" value="${esc(UI.stuQuery)}" aria-label="শিক্ষার্থী খুঁজুন"></label>
     <div class="chips" role="tablist" aria-label="শ্রেণি অনুযায়ী">
       <button class="${UI.stuClass==='all'?'on':''}" data-stu-class="all">সব (${bn(all.length)})</button>
@@ -972,41 +972,86 @@ function commonAddrSheet(){
     closeSheet(); render();
   });
 }
+// Result used for next-class rolls: final term if marked, else the latest term with marks.
+function yearResult(st, year){
+  for (const t of ['t3','t2','t1']) { const r = termResult(st, year, t); if (r.done.length) return {...r, term:t}; }
+  return null;
+}
+const rollNum = s => parseInt(toEn(s.roll)) || 9999;
+// Year-end: passed students go up one class, class-5 passers move to the former-students list, the rest stay as repeaters.
+// The roll for the next class can be typed beside the present roll (kept as s.nextRoll), or filled from the results.
 function promoteSheet(){
   const groups = CLASSES.map(([k, l]) => [k, l, sortedStudents(k)]).filter(g => g[2].length);
   if (!groups.length) return;
+  const resYear = String(new Date().getMonth() < 3 ? new Date().getFullYear() - 1 : new Date().getFullYear());
   openSheet(`<form class="f" id="promoForm">
-    <h2 style="font-size:18px">বছর শেষে শ্রেণি উন্নয়ন</h2>
-    <p class="t2" style="font-size:13px;line-height:1.6">টিক দেওয়া শিক্ষার্থীরা পরের শ্রেণিতে উঠবে। <b>৫ম শ্রেণির টিক দেওয়ারা পুরাতন শিক্ষার্থী তালিকায়</b> নিচের পাসের সালে চলে যাবে। টিক তুলে দিলে সে একই শ্রেণিতে <b>রিপিটার</b> হিসেবে থেকে যাবে এবং নিচের শ্রেণি থেকে আসা শিক্ষার্থীদের সঙ্গে থাকবে।</p>
-    <div class="row2">${field('pr_year','৫ম শ্রেণির পাসের সাল', sel('pr_year', yearOpts(new Date().getFullYear() - 3), passYearDefault()), true)}
-      <label style="display:flex;gap:8px;align-items:center;font-size:13.5px;line-height:1.4"><input type="checkbox" id="pr_renum" checked style="width:22px;height:22px;flex:none"> নতুন শ্রেণিতে রোল ১ থেকে নতুন করে সাজান</label></div>
+    <h2 style="font-size:18px">বছর শেষে শ্রেণি উন্নয়ন ও নতুন রোল</h2>
+    <p class="t2" style="font-size:13px;line-height:1.6">টিক দেওয়া শিক্ষার্থীরা পরের শ্রেণিতে উঠবে; <b>৫ম শ্রেণির টিক দেওয়ারা পুরাতন শিক্ষার্থী তালিকায়</b> যাবে। টিক তুলে দিলে সে একই শ্রেণিতে <b>রিপিটার</b> থাকবে। প্রত্যেকের বর্তমান রোলের পাশের ঘরে <b>পরবর্তী শ্রেণির রোল</b> লিখুন, অথবা নিচের বোতামে ফলাফল অনুযায়ী নিজে থেকে বসান। লেখা রোল সঙ্গে সঙ্গে সংরক্ষিত থাকে, তাই ধীরে ধীরেও পূরণ করা যায়।</p>
+    ${field('pr_year','৫ম শ্রেণির পাসের সাল', sel('pr_year', yearOpts(new Date().getFullYear() - 3), passYearDefault()), true)}
+    <div class="card" style="gap:8px;padding:12px;background:#F7FAF8;box-shadow:none"><b style="font-size:14.5px">পরবর্তী শ্রেণির রোল নিজে থেকে বসান</b>
+      <div class="row2"><button type="button" class="btn" data-pr-auto="result">${ic('list',18)} ফলাফল অনুযায়ী</button><button type="button" class="btn" data-pr-auto="roll">বর্তমান রোলের ক্রমে</button></div>
+      <button type="button" class="btn ghost" data-pr-auto="clear" style="min-height:36px">সব নতুন রোল মুছুন</button>
+      <span class="hint">ফলাফল অনুযায়ী: ${bn(resYear)} সালের চূড়ান্ত প্রান্তিকের (না থাকলে সর্বশেষ প্রান্তিকের) শতকরা নম্বরে মেধাক্রম; উত্তীর্ণরা আগে, রিপিটাররা পরে। যাদের নম্বর নেই তারা বর্তমান রোলের ক্রমে শেষে। বসানোর পর যেকোনো রোল হাতে বদলানো যায়।</span></div>
     ${groups.map(([k, l, list]) => `<div class="card" style="gap:6px;padding:12px">
       <label style="display:flex;gap:10px;align-items:center;font-weight:700;font-size:15px"><input type="checkbox" data-pr-all="${k}" checked style="width:22px;height:22px"> ${l} → ${k === '5' ? 'পাস করে বিদায়' : CLASS_NAME[NEXT_CLASS[k]]} <span class="t2" style="font-weight:400">(${bn(list.length)} জন)</span></label>
-      <div class="list" style="max-height:30vh;overflow:auto">${list.map(s => `<label class="mem" style="cursor:pointer;padding:8px 10px"><input type="checkbox" name="pr_pick" data-cls="${k}" value="${s.id}" checked style="width:20px;height:20px;flex:none"><span class="rollb">${s.roll ? esc(bn(s.roll)) : '–'}</span><span class="grow"><span class="t1" style="font-weight:600;font-size:14px">${esc(s.name)}</span>${repPill(s)}</span></label>`).join('')}</div></div>`).join('')}
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--mute);padding:0 6px"><span>বর্তমান রোল · নাম</span><span>নতুন রোল</span></div>
+      <div class="list" style="max-height:34vh;overflow:auto">${list.map(s => `<div class="mem" style="padding:6px 8px;gap:8px"><label style="display:flex;gap:8px;align-items:center;flex:1;min-width:0;cursor:pointer"><input type="checkbox" name="pr_pick" data-cls="${k}" value="${s.id}" checked style="width:20px;height:20px;flex:none"><span class="rollb">${s.roll ? esc(bn(s.roll)) : '–'}</span><span class="grow" style="min-width:0"><span class="t1" style="font-weight:600;font-size:14px">${esc(s.name)}</span>${repPill(s)}<span class="t2" data-pr-res="${s.id}"></span></span></label>
+        <input data-nr="${s.id}" data-cls="${k}" inputmode="numeric" maxlength="4" value="${esc(s.nextRoll ? bn(s.nextRoll) : '')}" aria-label="${esc(s.name)} — পরবর্তী শ্রেণির রোল" placeholder="–" style="width:62px;text-align:center;flex:none;padding:8px 4px"></div>`).join('')}</div></div>`).join('')}
+    <p class="hint" id="prErr" style="color:var(--red);display:none"></p>
     <p class="hint" id="prSum" role="status"></p>
     <div class="row2"><button type="button" class="btn big" data-close>বাতিল</button><button type="submit" class="btn big solid">সম্পন্ন করুন</button></div>
   </form>`);
   const f = document.getElementById('promoForm'), picks = () => [...f.querySelectorAll('[name="pr_pick"]')];
-  const sum = () => { const up = picks().filter(b => b.checked), out = up.filter(b => b.dataset.cls === '5').length;
-    document.getElementById('prSum').textContent = `উঠবে ${bn(up.length - out)} জন · পাস করে পুরাতন তালিকায় ${bn(out)} জন · রিপিটার ${bn(picks().length - up.length)} জন`; };
-  f.querySelectorAll('[data-pr-all]').forEach(a => a.addEventListener('change', () => { picks().filter(b => b.dataset.cls === a.dataset.prAll).forEach(b => b.checked = a.checked); sum(); }));
-  picks().forEach(b => b.addEventListener('change', sum)); sum();
+  const nrIn = id => f.querySelector(`[data-nr="${id}"]`), byId = id => DB.students.find(x => x.id === id);
+  // destination class of each student under the current ticks (null = leaves school)
+  const dest = b => b.checked ? (b.dataset.cls === '5' ? null : NEXT_CLASS[b.dataset.cls]) : b.dataset.cls;
+  const sync = () => {
+    picks().forEach(b => { const inp = nrIn(b.value); inp.style.visibility = dest(b) ? 'visible' : 'hidden'; });
+    const up = picks().filter(b => b.checked), out = up.filter(b => b.dataset.cls === '5').length;
+    document.getElementById('prSum').textContent = `উঠবে ${bn(up.length - out)} জন · পাস করে পুরাতন তালিকায় ${bn(out)} জন · রিপিটার ${bn(picks().length - up.length)} জন`;
+  };
+  const keep = inp => { const st = byId(inp.dataset.nr); if (!st) return; const v = toEn(inp.value).replace(/\D/g, ''); if (v) st.nextRoll = v; else delete st.nextRoll; save(); };
+  f.querySelectorAll('[data-nr]').forEach(inp => inp.addEventListener('change', () => keep(inp)));
+  f.querySelectorAll('[data-pr-all]').forEach(a => a.addEventListener('change', () => { picks().filter(b => b.dataset.cls === a.dataset.prAll).forEach(b => b.checked = a.checked); sync(); }));
+  picks().forEach(b => b.addEventListener('change', sync)); sync();
+  f.querySelectorAll('[data-pr-auto]').forEach(btn => btn.addEventListener('click', () => {
+    const mode = btn.dataset.prAuto;
+    if (mode === 'clear') { f.querySelectorAll('[data-nr]').forEach(inp => { inp.value = ''; keep(inp); }); f.querySelectorAll('[data-pr-res]').forEach(x => x.textContent = ''); return toast('নতুন রোল মুছে ফেলা হয়েছে'); }
+    const byDest = {};
+    picks().forEach(b => { const d = dest(b); if (d) (byDest[d] = byDest[d] || []).push({b, st: byId(b.value), promoted: b.checked}); });
+    let noRes = 0;
+    Object.values(byDest).forEach(arr => {
+      arr.forEach(x => { x.res = mode === 'result' ? yearResult(x.st, resYear) : null; if (mode === 'result' && !x.res) noRes++; });
+      arr.sort((a, b) => (b.promoted - a.promoted) || (mode === 'result' ? ((!!b.res - !!a.res) || (a.res && b.res ? b.res.pct - a.res.pct || b.res.tot - a.res.tot : 0)) : 0) || rollNum(a.st) - rollNum(b.st));
+      arr.forEach((x, i) => { const inp = nrIn(x.st.id); inp.value = bn(i + 1); keep(inp);
+        const tag = f.querySelector(`[data-pr-res="${x.st.id}"]`); if (tag) tag.textContent = x.res ? ` ${bn(Math.round(x.res.pct))}% (${TERM_NAME[x.res.term]})` : ''; });
+    });
+    toast(mode === 'result' ? (noRes ? `ফলাফল অনুযায়ী রোল বসেছে; ${bn(noRes)} জনের নম্বর না থাকায় তারা শেষে` : 'ফলাফল অনুযায়ী রোল বসেছে') : 'বর্তমান রোলের ক্রমে রোল বসেছে');
+  }));
   f.addEventListener('submit', e => {
     e.preventDefault();
-    const yr = f.elements.pr_year.value, now = todayISO(), cur = String(new Date().getFullYear());
-    const byId = id => DB.students.find(x => x.id === id), moved = {};
-    // go from the top class down so nobody is moved twice
+    const err = document.getElementById('prErr'); err.style.display = 'none';
+    // check typed rolls for clashes inside each destination class
+    const seen = {}, clash = [];
+    picks().forEach(b => { const d = dest(b), v = toEn(nrIn(b.value).value).replace(/\D/g, ''); if (!d || !v) return; const key = d + ':' + v;
+      if (seen[key]) clash.push(`${CLASS_NAME[d]}: রোল ${bn(v)} (${seen[key]} ও ${byId(b.value).name})`); else seen[key] = byId(b.value).name; });
+    if (clash.length) { err.textContent = 'একই রোল দুজনের: ' + clash.join('; ') + '। ঠিক করে আবার চাপুন।'; err.style.display = 'block'; if (err.scrollIntoView) err.scrollIntoView({block:'center'}); return; }
+    const yr = f.elements.pr_year.value, cur = String(new Date().getFullYear()), moved = {};
     ['5','4','3','2','1','pre'].forEach(k => picks().filter(b => b.dataset.cls === k).forEach(b => {
       const st = byId(b.value); if (!st || st.alumni) return;
-      if (!b.checked) { st.repeat = {year: cur, cls: k}; st.updated = Date.now(); (moved[k] = moved[k] || {stay:[], up:[]}).stay.push(st); return; }
-      if (k === '5') { makeAlumni(st, 'pass5', `${yr}-12-31`, '', yr); return; }
-      delete st.repeat; st.cls = NEXT_CLASS[k]; st.updated = Date.now(); (moved[st.cls] = moved[st.cls] || {stay:[], up:[]}).up.push(st);
+      const nr = toEn(nrIn(b.value).value).replace(/\D/g, '');
+      if (!b.checked) { st.repeat = {year: cur, cls: k}; st.updated = Date.now(); (moved[k] = moved[k] || []).push({st, nr, promoted:false}); return; }
+      if (k === '5') { makeAlumni(st, 'pass5', `${yr}-12-31`, '', yr); delete st.nextRoll; return; }
+      delete st.repeat; st.cls = NEXT_CLASS[k]; st.updated = Date.now(); (moved[st.cls] = moved[st.cls] || []).push({st, nr, promoted:true});
     }));
-    if (document.getElementById('pr_renum').checked) Object.values(moved).forEach(g => {
-      [...g.up.sort((a,b) => (parseInt(toEn(a.roll))||9999) - (parseInt(toEn(b.roll))||9999)), ...g.stay.sort((a,b) => (parseInt(toEn(a.roll))||9999) - (parseInt(toEn(b.roll))||9999))]
-        .forEach((st, i) => { st.roll = String(i + 1); });
+    // typed rolls are used as they are; anyone left blank gets the next free roll after them
+    Object.values(moved).forEach(arr => {
+      const used = new Set(arr.filter(x => x.nr).map(x => +x.nr)); let n = 1;
+      arr.filter(x => x.nr).forEach(x => { x.st.roll = x.nr; });
+      arr.filter(x => !x.nr).sort((a, b) => (b.promoted - a.promoted) || rollNum(a.st) - rollNum(b.st)).forEach(x => { while (used.has(n)) n++; x.st.roll = String(n); used.add(n); });
+      arr.forEach(x => delete x.st.nextRoll);
     });
-    if (save()) toast('শ্রেণি উন্নয়ন সম্পন্ন হয়েছে');
+    if (save()) toast('শ্রেণি উন্নয়ন সম্পন্ন হয়েছে, নতুন রোল বসেছে');
     UI.stuClass = 'all'; closeSheet(); render();
   });
 }
@@ -1041,7 +1086,7 @@ function stuListHtml(list){
   if (!list.length) return `<div class="card empty"><p class="t2" style="font-size:14px">এই খোঁজে কোনো শিক্ষার্থী পাওয়া যায়নি।</p></div>`;
   return `<div class="list">${list.map((s,i) => `<button class="mem tap" data-stu="${s.id}">
     ${avatar(s.id, s.name, s.gender==='মেয়ে'?'#D23F74':s.gender==='ছেলে'?'#2563C9':'#7C4DCC')}
-    <span class="grow"><span class="t1" style="font-weight:600">${esc(s.name)}</span><span class="t2">${CLASS_NAME[s.cls]||''}${s.section?' ('+esc(s.section)+')':''}${s.roll?' · রোল '+esc(bn(s.roll)):''}${s.phone?' · '+esc(s.phone):''}</span>${repPill(s)}</span>
+    <span class="grow"><span class="t1" style="font-weight:600">${esc(s.name)}</span><span class="t2">${CLASS_NAME[s.cls]||''}${s.section?' ('+esc(s.section)+')':''}${s.roll?' · রোল '+esc(bn(s.roll)):''}${s.nextRoll?' → পরের রোল '+esc(bn(s.nextRoll)):''}${s.phone?' · '+esc(s.phone):''}</span>${repPill(s)}</span>
     <span style="color:var(--mute)">${ic('chev',20)}</span></button>`).join('')}</div>`;
 }
 function studentSheet(id){
@@ -1057,7 +1102,7 @@ function studentSheet(id){
       ${field('s_section','শাখা', inp('s_section', s.section, 'maxlength="10" placeholder="যেমন: ক"'))}
     </div>
     <div class="row2">
-      ${field('s_roll','রোল', inp('s_roll', s.roll, 'inputmode="numeric" maxlength="5"'))}
+      ${field('s_roll','রোল', inp('s_roll', s.roll, 'inputmode="numeric" maxlength="5"'))}${s.alumni ? '' : field('s_nextroll','পরবর্তী শ্রেণির রোল', inp('s_nextroll', s.nextRoll ? bn(s.nextRoll) : '', 'inputmode="numeric" maxlength="4" placeholder="ঐচ্ছিক"'))}
       ${field('s_gender','লিঙ্গ', sel('s_gender', [['','নির্বাচন করুন'],...GENDERS.map(g=>[g,g])], s.gender||''))}
     </div>
     <div class="row2">
@@ -1094,6 +1139,7 @@ function studentSheet(id){
     const sid = id || uid();
     if (!id && UI.newAlumni && d.s_alyear) UI.newAlumni = d.s_alyear;
     if (id && s.alumni && d.s_alyear) Object.assign(s.alumni, {year: d.s_alyear, reason: d.s_alreason || s.alumni.reason, cls: s.alumni.reason === 'pass5' ? '5' : rec.cls, roll: rec.roll});
+    if (!s.alumni && 's_nextroll' in d) { const v = toEn(d.s_nextroll || '').replace(/\D/g, ''); if (v) rec.nextRoll = v; else if (id) delete s.nextRoll; }
     if (id) Object.assign(s, rec); else if (UI.newAlumni) { const st = {id:sid, created:Date.now(), ...rec}; makeAlumni(st, 'pass5', `${UI.newAlumni}-12-31`, '', UI.newAlumni); DB.students.push(st); UI.alYear = UI.newAlumni; }
     else DB.students.push({id:sid, created:Date.now(), ...rec});
     UI.newAlumni = null;
