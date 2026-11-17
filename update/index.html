@@ -261,7 +261,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '4.1';
+const WEB_VERSION = '4.2';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -2544,6 +2544,11 @@ function lvState(){
 const lvDays = (a, b) => { const d = Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 864e5) + 1; return isFinite(d) && d > 0 ? d : 0; };
 const addDays = (iso, n) => { const d = new Date(iso + 'T00:00:00'); d.setDate(d.getDate() + n); return new Date(d - d.getTimezoneOffset()*60000).toISOString().slice(0,10); };
 const dFmt = iso => iso ? bn(longDate(iso).replace(/^[^,]+,\s*/, '')) : '..........';
+const BAR = ['রবিবার','সোমবার','মঙ্গলবার','বুধবার','বৃহস্পতিবার','শুক্রবার','শনিবার'];
+const barOf = iso => { const d = dParse(iso); return d ? BAR[d.getDay()] : ''; };
+// One day: the date and weekday; more than one day: both dates.
+const lvRange = (a, b) => (!a || !b || a === b) ? `${dFmt(a)} তারিখ ${barOf(a)}` : `${dFmt(a)} তারিখ থেকে ${dFmt(b)} তারিখ পর্যন্ত`;
+const lvRangeShort = (a, b) => (!a || !b || a === b) ? `${dFmt(a)} (${barOf(a)})` : `${dFmt(a)} – ${dFmt(b)}`;
 const lvWhy = R => R ? (/(কারণে|কাজে|জন্য|হওয়ায়|থাকায়|প্রয়োজনে|উপলক্ষে|উদ্দেশ্যে)$/.test(R) ? esc(R) : esc(R) + ' কারণে') : '.......................... কারণে';
 const lvUsedTxt = (tid, type, yr, nm) => { const u = lvUsed(tid, type, yr); return u ? `চলতি বছরে আমি ইতোমধ্যে ${bn(u)} দিন ${nm} ভোগ করেছি।` : `চলতি বছরে আমি এখনো কোনো ${nm} ভোগ করিনি।`; };
 const isHeadT = t => /প্রধান শিক্ষক/.test((t && t.designation) || '');
@@ -2554,7 +2559,7 @@ function lvLetter(L){
   const T = DB.teacher, t = DB.teachers.find(x => x.id === L.tid) || {name: T.name, designation: T.designation};
   const head = isHeadT(t), n = lvDays(L.from, L.to), nm = LV_TYPES[L.type][0], R = (L.reason || '').trim();
   const r = x => x ? esc(x) : '..........................';
-  const span = `আগামী ${dFmt(L.from)} তারিখ থেকে ${dFmt(L.to)} তারিখ পর্যন্ত মোট ${bn(n)} দিন`;
+  const span = n === 1 ? `আগামী ${lvRange(L.from, L.to)} ১ (এক) দিন` : `আগামী ${lvRange(L.from, L.to)} মোট ${bn(n)} দিন`;
   const me = head ? `আমি ${esc(T.school)}-এ প্রধান শিক্ষক পদে কর্মরত আছি।` : `আমি অত্র বিদ্যালয়ে ${esc(t.designation || 'সহকারী শিক্ষক')} পদে কর্মরত আছি।`;
   const addr = L.addr.trim() ? `<p>ছুটিকালীন আমার ঠিকানা: ${esc(L.addr.trim())}।</p>` : '';
   let to = HT_ADDR(), via = '', subject = '', body = '', pray = '', sign = [esc(t.name), esc(t.designation || ''), esc(T.school)];
@@ -2570,7 +2575,7 @@ function lvLetter(L){
       pray = `উক্ত ঐচ্ছিক ছুটি মঞ্জুর করে বাধিত করবেন।`; break;
     case 'earned': to = UEO(); via = viaHT; subject = `${bn(n)} দিনের অর্জিত ছুটি (গড় বেতনে) মঞ্জুরের জন্য আবেদন।`;
       body = `<p>${me} ${lvWhy(R)} ${span} আমার অর্জিত ছুটি প্রয়োজন। আমার হিসাবে পর্যাপ্ত অর্জিত ছুটি পাওনা আছে।</p>${addr}`;
-      pray = `${dFmt(L.from)} থেকে ${dFmt(L.to)} পর্যন্ত ${bn(n)} দিনের অর্জিত ছুটি (গড় বেতনে) মঞ্জুর করে বাধিত করবেন।`; break;
+      pray = `${lvRange(L.from, L.to)} ${bn(n)} দিনের অর্জিত ছুটি (গড় বেতনে) মঞ্জুর করে বাধিত করবেন।`; break;
     case 'medical': to = UEO(); via = viaHT; subject = `চিকিৎসাজনিত কারণে ${bn(n)} দিনের অর্জিত ছুটি মঞ্জুরের জন্য আবেদন।`;
       body = `<p>${me} বর্তমানে আমি ${r(R)} রোগে আক্রান্ত হয়ে চিকিৎসাধীন আছি। চিকিৎসকের পরামর্শ অনুযায়ী ${span} আমার সম্পূর্ণ বিশ্রাম প্রয়োজন। চিকিৎসা সনদপত্র এই সঙ্গে সংযুক্ত করা হলো।</p>${addr}`;
       pray = `চিকিৎসাজনিত কারণে উক্ত ${bn(n)} দিনের অর্জিত ছুটি মঞ্জুর করে বাধিত করবেন।`; break;
@@ -2584,7 +2589,7 @@ function lvLetter(L){
       body = `<p>${me} ${lvWhy(R)} ${span} আমার কর্মস্থল ত্যাগ করা প্রয়োজন।</p>${addr}`;
       pray = `উক্ত সময়ে কর্মস্থল ত্যাগের অনুমতি প্রদান করে বাধিত করবেন।`; break;
     case 'joining': to = head ? UEO() : HT_ADDR(); subject = `ছুটি শেষে কাজে যোগদানপত্র।`;
-      body = `<p>${me} আমি ${dFmt(L.from)} তারিখ থেকে ${dFmt(L.to)} তারিখ পর্যন্ত মোট ${bn(n)} দিনের ${r(R)} ভোগ করেছি। ছুটি শেষে আজ ${dFmt(L.date)} তারিখ পূর্বাহ্নে আমি কাজে যোগদান করলাম।</p>`;
+      body = `<p>${me} আমি ${lvRange(L.from, L.to)} ${n === 1 ? '১ (এক)' : 'মোট ' + bn(n)} দিনের ${r(R)} ভোগ করেছি। ছুটি শেষে আজ ${dFmt(L.date)} তারিখ ${barOf(L.date)} পূর্বাহ্নে আমি কাজে যোগদান করলাম।</p>`;
       pray = `আমার এই যোগদানপত্র গ্রহণ করে বাধিত করবেন।`; break;
     case 'student': {
       to = HT_ADDR(); subject = `${bn(n)} দিনের ছুটির জন্য আবেদন।`;
@@ -2683,7 +2688,7 @@ function lvRecord(L){
       <span class="sumrow">${pill(`নৈমিত্তিক ${bn(c.casual)}/২০`, c.casual > 20 ? '#B42318' : '#17663F', c.casual > 20 ? '#FDE8E6' : '#E3F4EA')}${pill(`বাকি ${bn(Math.max(0, 20 - c.casual))}`,'#1F4E8C','#E6EFFA')}${pill(`ঐচ্ছিক ${bn(c.optional)}/৩`,'#7A4A00','#FFF1D6')}
         ${['earned','medical','maternity','rnr'].filter(k => c[k]).map(k => pill(`${LV_TYPES[k][0].replace(/ \(.*\)/,'').replace(' ও ভাতা','')} ${bn(c[k])}`,'#6D3FB8','#F0EAFB')).join('')}</span></div>`).join('')}</div>
     <h2 style="font-size:17px;margin-top:8px">ছুটির তালিকা (${bn(L.year)})</h2>
-    ${list.length ? `<div class="list">${list.map(l => { const t = DB.teachers.find(x => x.id === l.tid); return `<div class="mem"><span class="grow"><span class="t1" style="font-weight:600;font-size:14px">${esc(t ? t.name : 'মুছে ফেলা শিক্ষক')} — ${LV_TYPES[l.type] ? LV_TYPES[l.type][0] : l.type}</span><span class="t2">${dFmt(l.from)} – ${dFmt(l.to)} · ${bn(l.days)} দিন${l.reason ? ' · ' + esc(l.reason) : ''}</span></span><button class="btn" aria-label="মুছুন" data-lv-del="${l.id}">${ic('trash',18)}</button></div>`; }).join('')}</div>`
+    ${list.length ? `<div class="list">${list.map(l => { const t = DB.teachers.find(x => x.id === l.tid); return `<div class="mem"><span class="grow"><span class="t1" style="font-weight:600;font-size:14px">${esc(t ? t.name : 'মুছে ফেলা শিক্ষক')} — ${LV_TYPES[l.type] ? LV_TYPES[l.type][0] : l.type}</span><span class="t2">${lvRangeShort(l.from, l.to)} · ${bn(l.days)} দিন${l.reason ? ' · ' + esc(l.reason) : ''}</span></span><button class="btn" aria-label="মুছুন" data-lv-del="${l.id}">${ic('trash',18)}</button></div>`; }).join('')}</div>`
       : '<div class="card empty"><p class="t2" style="font-size:14px;line-height:1.6">এ বছরে কোনো ছুটির হিসাব নেই। "আবেদন তৈরি" থেকে আবেদন প্রিন্ট বা "হিসাবে যোগ" করলে এখানে আসবে।</p></div>'}
     <div class="card" style="gap:6px;padding:14px"><b style="font-size:15px">প্রধান ছুটির নিয়ম</b>
       <p class="t2" style="font-size:13px;line-height:1.7">নৈমিত্তিক ছুটি বছরে ২০ দিন, একবারে সর্বোচ্চ ১০ দিন। ঐচ্ছিক ছুটি বছরে ৩ দিন। মাতৃত্বকালীন ছুটি ৬ মাস, চাকরিজীবনে দুইবার। শ্রান্তি বিনোদন ছুটি প্রতি ৩ বছরে ১৫ দিন, সঙ্গে এক মাসের মূল বেতনের সমান ভাতা। প্রাথমিক বিদ্যালয় অবকাশ বিভাগ হওয়ায় অর্জিত ছুটির হিসাব সার্ভিস বইয়ে দেখে নিন।</p></div>`;
