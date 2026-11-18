@@ -273,7 +273,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '4.8';
+const WEB_VERSION = '4.9';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -2275,7 +2275,8 @@ const REPORT_CSS = LOGO_CSS + `
 .rep .ttl span{display:inline-block;font-size:17px;font-weight:700;border:1.5px solid #12284A;border-radius:6px;padding:1px 16px}
 .rep .info{display:flex;gap:12px;align-items:flex-start;margin-bottom:10px}
 .rep .info table{flex:1}
-.rep .info td{padding:2px 6px 2px 0;border:0;text-align:left}
+.rep .info td{padding:2px 6px 2px 0;border:0;text-align:left;vertical-align:top;word-break:normal;overflow-wrap:anywhere}
+.rep .info td:first-child{white-space:nowrap;width:1%}
 .rep .ph{width:78px;height:78px;border:1px solid #999;border-radius:6px;object-fit:cover}
 .rep table.m{width:100%;border-collapse:collapse;margin:6px 0 10px}
 .rep table.m th,.rep table.m td{border:1px solid #888;padding:4px 6px;text-align:center}
@@ -2286,6 +2287,16 @@ const REPORT_CSS = LOGO_CSS + `
 .rep .sg{display:flex;justify-content:space-between;gap:12px;margin-top:44px;font-size:12px;text-align:center}
 .rep .sg div{flex:1;border-top:1px solid #111;padding-top:4px}
 .rep .f{color:#B42318;font-weight:700}
+.rep table,.rep .sum,.rep .rm,.rep .sg,.rep .info{page-break-inside:avoid;break-inside:avoid}
+.rep tr{page-break-inside:avoid;break-inside:avoid}
+/* one A4 page: compact sizes; .dense when there are many rows */
+.rep.a4{font-size:12.5px;line-height:1.45;padding:16px 18px}
+.rep.a4 .h{padding-bottom:6px;margin-bottom:8px}.rep.a4 .ttl{margin:2px 0 8px}
+.rep.a4 table.m{margin:4px 0 8px}.rep.a4 table.m th,.rep.a4 table.m td{padding:3px 5px}
+.rep.a4 .sum{margin:4px 0 8px}.rep.a4 .sg{margin-top:36px}
+.rep.a4.dense{font-size:11.5px;line-height:1.35;padding:12px 14px}.rep.a4.dense table.m th,.rep.a4.dense table.m td{padding:2px 4px}
+.rep.a4.xd{font-size:10.5px;line-height:1.25}.rep.a4.xd table.m th,.rep.a4.xd table.m td{padding:1px 3px}
+.rep.a4.dense .ph{width:66px;height:66px}.rep.a4.dense .lg{height:42px}.rep.a4.dense .sg{margin-top:28px}.rep.a4.dense .rm{min-height:30px}
 `;
 function reportInner(st, year, term){
   const T = DB.teacher, r = termResult(st, year, term);
@@ -2295,12 +2306,14 @@ function reportInner(st, year, term){
   const sub = [T.upazila && 'উপজেলা: ' + T.upazila, T.district && 'জেলা: ' + T.district].filter(Boolean).join(', ');
   const f1 = x => bn(Math.round(x * 10) / 10);
   const remark = ((DB.remarks[year] || {})[term] || {})[st.id] || '';
-  return `<div class="rep">${logoWm()}
+  const rowsN = r.rows.length + (others.length > 1 ? studentSubjects(st).length + 2 : 0) + (remark.length > 120 ? 2 : 0);
+  return `<div class="rep a4${rowsN > 30 ? ' dense xd' : rowsN > 16 ? ' dense' : ''}">${logoWm()}
     <div class="h">${logoHead()}<div class="s">${esc(T.school)}</div>${sub ? `<div class="sub">${esc(sub)}</div>` : ''}</div>
     <div class="ttl"><span>শিক্ষার্থীর অগ্রগতি প্রতিবেদন</span></div>
     <div class="info"><table><tr><td>নাম:</td><td><b>${esc(st.name)}</b></td></tr>
       <tr><td>শ্রেণি:</td><td>${CLASS_NAME[st.cls]||''}${st.section ? ' (' + esc(st.section) + ')' : ''} · রোল: ${st.roll ? esc(bn(st.roll)) : '–'}</td></tr>
-      ${st.father || st.mother ? `<tr><td>পিতা/মাতা:</td><td>${esc(st.father||'–')} / ${esc(st.mother||'–')}</td></tr>` : ''}
+      <tr><td>পিতার নাম:</td><td>${st.father ? esc(st.father) : '................................'}</td></tr>
+      <tr><td>মাতার নাম:</td><td>${st.mother ? esc(st.mother) : '................................'}</td></tr>
       <tr><td>মূল্যায়ন:</td><td>${TERM_NAME[term]}, শিক্ষাবর্ষ ${bn(year)}</td></tr></table>
       ${PHOTOS[st.id] ? `<img class="ph" src="${PHOTOS[st.id]}" alt="">` : ''}</div>
     <table class="m"><thead><tr><th class="l">বিষয়</th><th>ধারাবাহিক</th><th>সামষ্টিক</th><th>মোট (১০০)</th><th>গ্রেড</th></tr></thead><tbody>
@@ -2335,7 +2348,12 @@ function reportCardView(st){
 function reportDoc(st, year, term){
   return `<!DOCTYPE html><html lang="bn"><head><meta charset="utf-8"><title>অগ্রগতি প্রতিবেদন - ${esc(st.name)}</title>
   <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;600;700&display=swap" rel="stylesheet">
-  <style>@page{size:A4;margin:12mm}html,body{margin:0;background:#fff}${REPORT_CSS}</style></head><body>${reportInner(st, year, term)}</body></html>`;
+  <style>@page{size:A4 portrait;margin:8mm}html,body{margin:0;padding:0;background:#fff}
+  body{max-width:194mm;margin:0 auto}${REPORT_CSS}
+  /* height kept a little under the 281 mm printable area, so extra printer margins never push it to a 2nd page */
+  .rep{width:100%;min-height:268mm;display:flex;flex-direction:column;page-break-inside:avoid;break-inside:avoid}
+  .rep .sg{margin-top:auto;padding-top:30px}
+  @media print{.noprint,nav,header.hdr,button{display:none!important}}</style></head><body>${reportInner(st, year, term)}</body></html>`;
 }
 function reportText(st, year, term){
   const r = termResult(st, year, term), {ranked} = classResults(st.cls, year, term), me = ranked.find(x => x.st.id === st.id);
