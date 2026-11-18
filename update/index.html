@@ -309,7 +309,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '5.7';
+const WEB_VERSION = '5.8';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -1500,7 +1500,7 @@ function stuListHtml(list){
   if (!list.length) return `<div class="card empty"><p class="t2" style="font-size:14px">এই খোঁজে কোনো শিক্ষার্থী পাওয়া যায়নি।</p></div>`;
   return `<div class="list">${list.map((s,i) => `<button class="mem tap" data-stu="${s.id}">
     ${avatar(s.id, s.name, s.gender==='মেয়ে'?'#D23F74':s.gender==='ছেলে'?'#2563C9':'#7C4DCC')}
-    <span class="grow"><span class="t1" style="font-weight:600">${esc(s.name)}</span><span class="t2">${CLASS_NAME[s.cls]||''}${s.section?' ('+esc(s.section)+')':''}${s.roll?' · রোল '+esc(bn(s.roll)):''}${s.nextRoll?' → পরের রোল '+esc(bn(s.nextRoll)):''}${s.phone?' · '+esc(s.phone):''}</span>${repPill(s)}</span>
+    <span class="grow"><span class="t1" style="font-weight:600">${esc(s.name)}</span><span class="t2">${CLASS_NAME[s.cls]||''}${s.section?' ('+esc(s.section)+')':''}${s.roll?' · রোল '+esc(bn(s.roll)):''}${s.phone?' · '+esc(s.phone):''}</span>${repPill(s)}</span>
     <span style="color:var(--mute)">${ic('chev',20)}</span></button>`).join('')}</div>`;
 }
 function studentSheet(id){
@@ -1516,7 +1516,7 @@ function studentSheet(id){
       ${field('s_section','শাখা', inp('s_section', s.section, 'maxlength="10" placeholder="যেমন: ক"'))}
     </div>
     <div class="row2">
-      ${field('s_roll','রোল', inp('s_roll', s.roll, 'inputmode="numeric" maxlength="5"'))}${s.alumni ? '' : field('s_nextroll','পরবর্তী শ্রেণির রোল', inp('s_nextroll', s.nextRoll ? bn(s.nextRoll) : '', 'inputmode="numeric" maxlength="4" placeholder="ঐচ্ছিক"'))}
+      ${field('s_roll','রোল', inp('s_roll', s.roll, 'inputmode="numeric" maxlength="5"'))}${s.alumni || !id ? '' : field('s_nextroll','পরবর্তী শ্রেণির রোল', inp('s_nextroll', s.nextRoll ? bn(s.nextRoll) : '', 'inputmode="numeric" maxlength="4" placeholder="ঐচ্ছিক"'))}
       ${field('s_gender','লিঙ্গ', sel('s_gender', [['','নির্বাচন করুন'],...GENDERS.map(g=>[g,g])], s.gender||''))}
     </div>
     <div class="row2">
