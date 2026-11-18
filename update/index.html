@@ -273,7 +273,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '5.0';
+const WEB_VERSION = '5.1';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -443,6 +443,10 @@ function imgSourceMenu(inputId){
   m.querySelector('#imCam').addEventListener('click', () => {
     closeImgMenu();
     if (camOk()) { UI.camKey = inputId; AppBridge.takePhoto(inputId); return; }
+    // An older Android app (before APK 4.8) has no reliable camera: ask for the new APK instead of failing quietly.
+    if (BR) { openSheet(`<h2 style="font-size:18px">অ্যাপের নতুন সংস্করণ লাগবে</h2>
+      <p class="t2" style="font-size:14px;line-height:1.7;margin:8px 0 12px">আপনার ফোনে অ্যাপের পুরোনো সংস্করণ (APK ${esc(String(appInfo().apk || '?'))}) আছে, যাতে ক্যামেরার ছবি যুক্ত হয় না। নতুন সংস্করণ ইনস্টল করলে ক্যামেরা দিয়ে তোলা ছবি সরাসরি বসবে; আগের সব তথ্য থাকবে।</p>
+      <button class="btn solid big full" data-apk-get>নতুন সংস্করণ নামান</button><button class="btn big full" data-close style="margin-top:8px">পরে</button>`); return; }
     // browser: a temporary file box that asks the phone to open its camera
     const c = document.createElement('input'); c.type = 'file'; c.accept = 'image/*'; c.setAttribute('capture', 'environment'); c.className = 'vh';
     document.body.appendChild(c);
@@ -3455,6 +3459,7 @@ document.addEventListener('click', e => {
   if ('certChange' in ds) { UI.cert.sid = null; UI.cert.q = ''; return render(); }
   if ('certPrint' in ds) return printCert();
   if (ds.imgPick) return imgSourceMenu(ds.imgPick);
+  if ('apkGet' in ds) { closeSheet(); try { if (BR.openUrl) BR.openUrl('https://github.com/shohoggonitacademy8159-afk/Shikkhak/releases/latest/download/app-debug.apk'); else checkUpdate(true); } catch(e) { checkUpdate(true); } return; }
   if ('camPending' in ds) { const p = UI.pendingCam; UI.pendingCam = null; if (p && !giveFile(p.key, p.file)) toast('ছবিটি বসানো যায়নি'); el.remove(); return; }
   if (ds.tbClass) { UI.tbClass = ds.tbClass; return render(); }
   if (ds.tbKind) { UI.tbKind = ds.tbKind; return render(); }
