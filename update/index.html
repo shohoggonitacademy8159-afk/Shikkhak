@@ -229,6 +229,10 @@ img.ma{object-fit:cover;background:#E8EEF5}
 .psin{font:inherit;font-size:14px;color:var(--ink);border:1px solid #CBD6E2;border-radius:10px;padding:8px 10px;min-height:40px;width:100%;box-sizing:border-box}
 .psmsg{font-size:13.5px;line-height:1.6;background:#F3F8F6;border-radius:12px;padding:8px 10px;color:var(--ink);word-break:break-word}
 .psmsg.off{opacity:.55}
+.pschk{flex:none;width:30px;height:30px;border-radius:8px;border:2px solid #9FB0C4;background:#fff;font-size:18px;font-weight:800;color:#fff;line-height:1;cursor:pointer}
+.pschk.on{background:#0F766E;border-color:#0F766E}
+.pschk:disabled{opacity:.35;cursor:not-allowed}
+.psrow.picked{background:#F2FAF8}
 .pstab{border:1px solid #9FB0C4;border-radius:12px;overflow:hidden;background:#fff}
 .pstab table{width:100%;border-collapse:collapse;table-layout:fixed}
 .pstab th{font-size:11.5px;line-height:1.25;font-weight:700;color:var(--ink);background:#EEF4F2;border:1px solid #C5D2DE;padding:5px 2px;text-align:center}
@@ -298,7 +302,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '5.5';
+const WEB_VERSION = '5.6';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -3421,6 +3425,9 @@ function psSentBefore(P){ // sid → true if already sent for this report & peri
   DB.smsLog.forEach(j => { if (j.key === k) j.items.forEach(it => { if (it.st === 'sent') out[it.sid] = true; }); });
   return out;
 }
+/* Manual pick: only the students the teacher ticks are sent to; ticked ones without a valid number are skipped. */
+const psSel = P => P.sel || (P.sel = {});
+const psChosen = P => { const sel = psSel(P); return psBuild(P).filter(x => x.ok && sel[x.sid]); };
 function psBuild(P){
   psData();
   const list = activeStudents().filter(s => P.scope === 'all' || s.cls === P.scope)
@@ -3583,7 +3590,8 @@ function psLearnView(cl){
 function psSendView(cl){
   const P = UI.ps, C = DB.smsCfg;
   if (P.scope !== 'all' && !cl.some(([k]) => k === P.scope)) P.scope = 'all';
-  const items = psBuild(P), ok = items.filter(x => x.ok), segs = ok.reduce((a, x) => a + x.seg, 0), dups = items.filter(x => x.dup).length;
+  const items = psBuild(P), sel = psSel(P), picked = items.filter(x => sel[x.sid] && x.txt), ok = picked.filter(x => x.ok), segs = ok.reduce((a, x) => a + x.seg, 0), dups = items.filter(x => x.dup).length;
+  const pickable = items.filter(x => x.txt && !x.dup), noNum = picked.filter(x => !x.ph).length, skipDup = picked.filter(x => x.dup).length;
   let sims = [];
   if (smsOk()) { if (!SQ.sims) SQ.sims = psSmsStatus(); sims = (SQ.sims && SQ.sims.sims) || [];
     if (sims.length > 1 && !sims.some(x => +x.id === +C.sim)) { C.sim = sims[0].id; save(); } }
@@ -3601,17 +3609,18 @@ function psSendView(cl){
       <div class="field"><label for="psSign">শেষে বিদ্যালয়ের নাম</label><input id="psSign" maxlength="25" value="${esc(C.sign)}" placeholder="যেমন: চরপাড়া সপ্রাবি"></div>
       ${sims.length > 1 ? `<div class="field"><label for="psSim">কোন সিম থেকে</label><select id="psSim">${sims.map(x => `<option value="${x.id}" ${+C.sim === +x.id ? 'selected' : ''}>${esc(x.label)}</option>`).join('')}</select></div>` : '<div></div>'}</div>`;
   const sum = `<div class="card" style="gap:10px">
-      <div class="sumrow">${pill('পাঠানো যাবে ' + bn(ok.length) + ' জন', '#17663F', '#E3F4EA')}${pill('মোট ' + bn(segs) + ' SMS কাটবে', '#0F766E', '#E0F2EF')}${pill('বাদ ' + bn(items.length - ok.length), '#3E5070', '#EEF1F6')}</div>
+      <div class="row2"><button class="btn" data-ps-pickall ${pickable.length ? '' : 'disabled'}>সবাইকে নির্বাচন</button><button class="btn" data-ps-picknone ${picked.length ? '' : 'disabled'}>নির্বাচন বাতিল</button></div>
+      <div class="sumrow">${pill('নির্বাচিত ' + bn(picked.length) + ' জন', '#1F4E8C', '#E6EFFA')}${pill('যাবে ' + bn(ok.length) + ' জন · ' + bn(segs) + ' SMS', '#17663F', '#E3F4EA')}${noNum ? pill('নম্বর নেই ' + bn(noNum) + ' জন — যাবে না', '#B42318', '#FDE8E6') : ''}${skipDup ? pill('আগে পাঠানো ' + bn(skipDup) + ' জন — যাবে না', '#3E5070', '#EEF1F6') : ''}</div>
       ${dups ? `<label style="display:flex;gap:8px;align-items:center;font-size:13px"><input type="checkbox" id="psResend" ${P.resend ? 'checked' : ''} style="width:20px;height:20px"> ${bn(dups)} জনকে এই রিপোর্ট আগেই পাঠানো হয়েছে — আবারও পাঠাতে চাই</label>` : ''}
-      <button class="btn big solid full" data-ps-send ${ok.length && smsOk() && !SQ.running ? '' : 'disabled'}>${ic('mega', 20)} ${bn(ok.length)} জন অভিভাবককে পাঠান</button>
+      <button class="btn big solid full" data-ps-send ${ok.length && smsOk() && !SQ.running ? '' : 'disabled'}>${ic('mega', 20)} ${ok.length ? `নির্বাচিত ${bn(ok.length)} জনকে পাঠান` : 'নিচের তালিকা থেকে নির্বাচন করুন'}</button>
       <p class="hint">মেসেজ যাবে আপনার ফোনের সিম থেকে, সিমের SMS প্যাক থেকে কাটবে। বাংলা মেসেজে প্রতি ৭০ অক্ষরে ১টি SMS ধরা হয়।</p></div>`;
-  const prev = `<div class="list">${items.map(it => `<div class="psrow">
-      <div style="display:flex;align-items:center;gap:10px"><span class="rollb">${it.roll ? esc(bn(it.roll)) : '–'}</span>
+  const prev = `<div class="list">${items.map(it => { const on = !!sel[it.sid] && !!it.txt; return `<div class="psrow${on ? ' picked' : ''}">
+      <div style="display:flex;align-items:center;gap:10px"><button class="pschk${on ? ' on' : ''}" data-ps-pick="${it.sid}" aria-pressed="${on}" aria-label="${esc(it.name)} নির্বাচন" ${it.txt ? '' : 'disabled'}>${on ? '✓' : ''}</button><span class="rollb">${it.roll ? esc(bn(it.roll)) : '–'}</span>
         <span class="grow"><span class="t1" style="font-weight:600;font-size:14px">${esc(it.name)}</span><span class="t2" style="font-size:12px">${PS_CLS[it.cls] || ''} শ্রেণি · ${it.ph ? esc(bn(it.ph)) : 'নম্বর নেই'}</span></span>
         ${it.ok ? `<span class="sumrow">${pill(bn(it.seg) + ' SMS', '#0F766E', '#E0F2EF')}</span>` : ''}</div>
       ${it.txt ? `<div class="psmsg ${it.ok ? '' : 'off'}">${esc(it.txt)}</div>` : ''}
-      ${it.why ? `<span style="font-size:12px;font-weight:600;color:${it.dup ? '#3E5070' : '#B42318'}">${it.why}</span>` : ''}
-    </div>`).join('')}</div>`;
+      ${it.why ? `<span style="font-size:12px;font-weight:600;color:${it.dup ? '#3E5070' : '#B42318'}">${it.why}${on && !it.ok ? ' — নির্বাচিত হলেও যাবে না' : ''}</span>` : ''}
+    </div>`; }).join('')}</div>`;
   return `${need}<div id="psProg">${psProgHtml()}</div>${typeChips}${when}${opts}${sum}${items.length ? prev : ''}${psLogHtml()}`;
 }
 function psLogHtml(){
@@ -3641,8 +3650,8 @@ function psWithPerm(fn){
     <div class="row2"><button class="btn big" data-close>পরে</button><button class="btn big solid" data-ps-perm>অনুমতি দিন</button></div>`);
 }
 function psConfirmSend(){
-  const P = UI.ps, items = psBuild(P).filter(x => x.ok);
-  if (!items.length) return toast('পাঠানোর মতো কোনো মেসেজ নেই');
+  const P = UI.ps, items = psChosen(P);
+  if (!items.length) return toast('যাদের পাঠাবেন তাদের নির্বাচন করুন');
   const segs = items.reduce((a, x) => a + x.seg, 0), sims = (SQ.sims && SQ.sims.sims) || [];
   const sim = sims.length > 1 ? (sims.find(x => +x.id === +DB.smsCfg.sim) || sims[0]) : null;
   const mins = Math.max(1, Math.round(items.length * 5 / 60));
@@ -3652,11 +3661,11 @@ function psConfirmSend(){
     <div class="row2"><button class="btn big" data-close>বাতিল</button><button class="btn big solid" data-ps-go>পাঠান</button></div>`);
 }
 function psCreateJob(){
-  const P = UI.ps, items = psBuild(P).filter(x => x.ok);
+  const P = UI.ps, items = psChosen(P);
   const job = {id:uid(), at:Date.now(), type:P.type, period:psPeriod(P), key:psJobKey(P), scope:P.scope,
     items:items.map(x => ({sid:x.sid, name:x.name, ph:x.ph, txt:x.txt, seg:x.seg, st:'pending', err:''}))};
   DB.smsLog.unshift(job); if (DB.smsLog.length > 40) DB.smsLog.length = 40;
-  P.resend = false;
+  P.resend = false; P.sel = {};
   return job;
 }
 function psClick(ds){
@@ -3669,6 +3678,9 @@ function psClick(ds){
   if (ds.psH) { const r = psRecW(P.date, P.cls), x = r.s[ds.psH] = r.s[ds.psH] || {}; if (x.h === ds.v) delete x.h; else x.h = ds.v; save(); return render(); }
   if ('psAllok' in ds) { const r = psRecW(P.date, P.cls); sortedStudents(P.cls).forEach(s => { const x = r.s[s.id] = r.s[s.id] || {}; if (psAtt(P.date, s.id) === 'a' || psAtt(P.date, s.id) === 'l') return; if (x.l == null) x.l = 1; if (!x.h) x.h = 'done'; }); save(); toast('অনুপস্থিত ছাড়া বাকি সবার ঘরে ✓ দেওয়া হয়েছে'); return render(); }
   if (ds.psLv) { const M = DB.learn[P.ym] = DB.learn[P.ym] || {}, x = M[ds.psLv] = M[ds.psLv] || {}; if (x[P.subj] === ds.v) delete x[P.subj]; else x[P.subj] = ds.v; save(); return render(); }
+  if (ds.psPick) { const sel = psSel(P); if (sel[ds.psPick]) delete sel[ds.psPick]; else sel[ds.psPick] = true; return render(); }
+  if ('psPickall' in ds) { const sel = psSel(P); psBuild(P).forEach(x => { if (x.txt && !x.dup) sel[x.sid] = true; }); return render(); }
+  if ('psPicknone' in ds) { P.sel = {}; return render(); }
   if (ds.psRm) return psRemarkSheet(ds.psRm);
   if (ds.psRmsave) { const t = document.getElementById('psRmIn'), r = psRecW(P.date, P.cls), x = r.s[ds.psRmsave] = r.s[ds.psRmsave] || {}; const v = (t && t.value || '').trim(); if (v) x.r = v; else delete x.r; save(); closeSheet(); return render(); }
   if ('psPrint' in ds) return printDoc(`দৈনিক রিপোর্ট - ${CLASS_NAME[P.cls]} - ${psDM(P.date)}`, psDailyDoc(P.cls, P.date));
