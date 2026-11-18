@@ -286,7 +286,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '5.3';
+const WEB_VERSION = '5.4';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -1181,8 +1181,18 @@ function rollShift(cls, section, start, count, excludeId){
     .forEach(x => { const r = parseInt(toEn(x.roll))||0; const to = Math.max(r, prev + 1); if (to !== r) out.push({s:x, from:r, to}); prev = to; });
   return out;
 }
+/* A student leaves roll `from` (roll changed, or moved to another class/section): the students right after it move up one roll. */
+function closeGap(cls, section, from, excludeId){
+  const sec = section || '', out = [];
+  let k = from + 1;
+  activeStudents().filter(x => x.id !== excludeId && x.cls === cls && (x.section||'') === sec && (parseInt(toEn(x.roll))||0) > from)
+    .sort((a,b) => (parseInt(toEn(a.roll))||0) - (parseInt(toEn(b.roll))||0))
+    .some(x => { if ((parseInt(toEn(x.roll))||0) !== k) return true; out.push({s:x, from:k, to:k - 1}); k++; return false; });
+  return out;
+}
+function revertRollShift(plan){ plan.forEach(p => { p.s.roll = String(p.from); }); }
 function applyRollShift(plan){ const now = Date.now(); plan.forEach(p => { p.s.roll = String(p.to); p.s.updated = now; }); }
-const shiftMsg = (plan) => plan.length ? ` · পরের ${bn(plan.length)} জনের রোল এক ধাপ পিছিয়েছে` : '';
+const shiftMsg = (plan) => { const n = new Set(plan.map(p => p.s.id)).size; return n ? ` · ${bn(n)} জনের রোল ক্রম অনুযায়ী বদলেছে` : ''; };
 const stuSort = (a,b) => CLASSES.findIndex(c => c[0]===a.cls) - CLASSES.findIndex(c => c[0]===b.cls) || (a.section||'').localeCompare(b.section||'') || (parseInt(toEn(a.roll))||999) - (parseInt(toEn(b.roll))||999) || a.name.localeCompare(b.name,'bn');
 function nextRoll(cls, section){
   const r = activeStudents().filter(x => x.cls===cls && (x.section||'')===(section||'')).map(x => parseInt(toEn(x.roll))||0);
@@ -1515,14 +1525,27 @@ function studentSheet(id){
     const rec = {name:d.s_name.trim(), cls:d.s_cls, section:d.s_section.trim(), roll:toEn(d.s_roll.trim()), gender:d.s_gender, dob:d.s_dob, blood:d.s_blood,
       birthreg:d.s_birthreg.trim(), father:d.s_father.trim(), mother:d.s_mother.trim(), phone:d.s_phone.trim(), address:d.s_address.trim(), stipend:d.s_stipend, religion:d.s_religion, notes:d.s_notes.trim(), updated:Date.now()};
     let plan = [];
+    const f = e.target, choice = f.dataset.shift;
+    const oldRoll = id && !s.alumni ? parseInt(toEn(s.roll || '')) || 0 : 0;
+    const moved = oldRoll && (toEn(rec.roll) !== toEn(s.roll) || rec.cls !== s.cls || rec.section !== (s.section||''));
+    const gap = moved ? closeGap(s.cls, s.section||'', oldRoll, id) : [];
+    applyRollShift(gap); // tentatively, so the clash check below sees the closed gap
     const owner = rec.roll && !s.alumni && activeStudents().find(x => x.id !== id && x.cls === rec.cls && (x.section||'') === rec.section && toEn(x.roll) === rec.roll);
-    if (owner) {
-      const f = e.target;
-      if (!f.dataset.shift) { err.innerHTML = `${CLASS_NAME[rec.cls]}-এ রোল ${bn(rec.roll)} আগে থেকেই ${esc(owner.name)}-এর।<button type="button" class="btn full" id="stuShift" style="margin-top:8px">এই শিক্ষার্থীকে রোল ${bn(rec.roll)}-এ বসান, পরেরদের রোল পিছিয়ে দিন</button>`; err.style.display='block';
-        document.getElementById('stuShift').addEventListener('click', () => { f.dataset.shift = '1'; f.requestSubmit(); }); return; }
-      delete f.dataset.shift;
-      plan = rollShift(rec.cls, rec.section, parseInt(rec.roll), 1, id); applyRollShift(plan);
+    if ((owner || gap.length) && !choice) {
+      revertRollShift(gap);
+      const owner0 = rec.roll && !s.alumni && activeStudents().find(x => x.id !== id && x.cls === rec.cls && (x.section||'') === rec.section && toEn(x.roll) === rec.roll);
+      const msg = owner0 ? `${CLASS_NAME[rec.cls]}-এ রোল ${bn(rec.roll)} আগে থেকেই ${esc(owner0.name)}-এর।` : `রোল ${bn(oldRoll)} খালি হয়ে যাবে।`;
+      err.innerHTML = msg + `<button type="button" class="btn solid full" data-shift-choice="1" style="margin-top:8px">${owner || owner0 ? `রোল ${bn(rec.roll)}-এ বসান, অন্যদের রোল ক্রম অনুযায়ী সাজান` : `পরেরদের রোল এক ধাপ এগিয়ে ফাঁক বন্ধ করুন`}</button>`
+        + (owner || owner0 ? '' : `<button type="button" class="btn full" data-shift-choice="0" style="margin-top:8px">ফাঁক রেখেই সংরক্ষণ করুন</button>`);
+      err.style.display = 'block';
+      err.querySelectorAll('[data-shift-choice]').forEach(b => b.addEventListener('click', () => { f.dataset.shift = b.dataset.shiftChoice; f.requestSubmit(); }));
+      return;
     }
+    delete f.dataset.shift;
+    if (choice === '0') { revertRollShift(gap); gap.length = 0;
+      if (rec.roll && !s.alumni && activeStudents().some(x => x.id !== id && x.cls === rec.cls && (x.section||'') === rec.section && toEn(x.roll) === rec.roll)) { err.textContent = `রোল ${bn(rec.roll)} আগে থেকেই আছে।`; err.style.display = 'block'; return; } }
+    if (owner && choice !== '0') { plan = rollShift(rec.cls, rec.section, parseInt(rec.roll), 1, id); applyRollShift(plan); }
+    plan = [...gap, ...plan];
     const sid = id || uid();
     if (!id && UI.newAlumni && d.s_alyear) UI.newAlumni = d.s_alyear;
     if (id && s.alumni && d.s_alyear) Object.assign(s.alumni, {year: d.s_alyear, reason: d.s_alreason || s.alumni.reason, cls: s.alumni.reason === 'pass5' ? '5' : rec.cls, roll: rec.roll});
