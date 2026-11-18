@@ -229,6 +229,13 @@ img.ma{object-fit:cover;background:#E8EEF5}
 .psin{font:inherit;font-size:14px;color:var(--ink);border:1px solid #CBD6E2;border-radius:10px;padding:8px 10px;min-height:40px;width:100%;box-sizing:border-box}
 .psmsg{font-size:13.5px;line-height:1.6;background:#F3F8F6;border-radius:12px;padding:8px 10px;color:var(--ink);word-break:break-word}
 .psmsg.off{opacity:.55}
+.pssub{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.pssub button{min-height:50px;border-radius:12px;border:1px solid #C5D2DE;background:#fff;font:inherit;font-weight:700;font-size:14px;color:var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.25;cursor:pointer}
+.pssub button small{font-size:11.5px;font-weight:600;color:var(--mute)}
+.pssub button.on{background:#0F766E;border-color:#0F766E;color:#fff}.pssub button.on small{color:#E0F2EF}
+.pssum{padding:9px 12px;border-top:1px solid #EDF2EF;font-size:13.5px}.pssum:first-child{border-top:0}
+.pssum div{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.pschip{font-size:11.5px;font-weight:700;padding:2px 9px;border-radius:99px}
 .pschk{flex:none;width:30px;height:30px;border-radius:8px;border:2px solid #9FB0C4;background:#fff;font-size:18px;font-weight:800;color:#fff;line-height:1;cursor:pointer}
 .pschk.on{background:#0F766E;border-color:#0F766E}
 .pschk:disabled{opacity:.35;cursor:not-allowed}
@@ -302,7 +309,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '5.6';
+const WEB_VERSION = '5.7';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -3362,39 +3369,78 @@ function psSubjects(cls){
   return list;
 }
 const psSubjName = (cls, id) => PS_SUBJ_SHORT[id] || ((psSubjects(cls).find(x => x[0] === id) || [])[1]) || id;
-const psRec = (date, cls) => ((DB.daily[date] || {})[cls]) || null;
-function psRecW(date, cls){ DB.daily[date] = DB.daily[date] || {}; const r = DB.daily[date][cls] = DB.daily[date][cls] || {hw:'', s:{}}; r.s = r.s || {}; return r; }
+/* Daily tracker is per subject: 1st–2nd class 3 subjects, 3rd–5th class 6 subjects, pre-primary one overall row.
+   DB.daily[date][cls] = {hw, s:{sid:{r}}, m:{subj:{sid:{l:1|0, h:'done'|'part'|'no'}}}} */
+const PS_DSUB_LOW = [['bangla','বাংলা'],['english','ইংরেজি'],['math','গণিত']];
+const PS_DSUB_HIGH = [...PS_DSUB_LOW, ['science','বিজ্ঞান'],['bgs','বাওবি'],['religion','ধর্ম']];
+function psRecNorm(r){
+  if (!r) return r;
+  r.s = r.s || {}; r.m = r.m || {};
+  // data saved before subjects existed (v5.2–5.6) becomes the "সার্বিক" column
+  Object.entries(r.s).forEach(([sid, x]) => { if (x && (x.l != null || x.h)) { const a = r.m.all = r.m.all || {}; a[sid] = Object.assign({}, a[sid], x.l != null ? {l:x.l} : {}, x.h ? {h:x.h} : {}); delete x.l; delete x.h; } });
+  return r;
+}
+const psRec = (date, cls) => psRecNorm(((DB.daily[date] || {})[cls]) || null);
+function psRecW(date, cls){ DB.daily[date] = DB.daily[date] || {}; const r = DB.daily[date][cls] = DB.daily[date][cls] || {hw:'', s:{}, m:{}}; return psRecNorm(r); }
+function psDailySubs(cls, rec){
+  const base = cls === 'pre' ? [['all','সার্বিক']] : (cls === '1' || cls === '2') ? PS_DSUB_LOW : PS_DSUB_HIGH;
+  const extra = rec && rec.m && cls !== 'pre' && Object.keys(rec.m.all || {}).length ? [['all','সার্বিক']] : [];
+  return [...base, ...extra];
+}
+const psMark = (rec, subj, sid) => ((((rec || {}).m || {})[subj] || {})[sid]) || {};
 const psAtt = (date, sid) => ((DB.attendance.students[date] || {})[sid]) || null;
 
 /* ---- report text (one per student) ---- */
 function psDaily(s, date){
-  const rec = psRec(date, s.cls), st = (rec && rec.s && rec.s[s.id]) || {}, att = psAtt(date, s.id), hw = rec && rec.hw ? rec.hw.trim() : '';
-  if (!att && st.l == null && !st.h && !st.r && !hw) return null;
+  const rec = psRec(date, s.cls), att = psAtt(date, s.id), hw = rec && rec.hw ? rec.hw.trim() : '', st = (rec && rec.s && rec.s[s.id]) || {};
+  const subs = psDailySubs(s.cls, rec), en = subs.map(([k, n]) => [k, n, psMark(rec, k, s.id)]).filter(([, , x]) => x.l != null || x.h);
+  if (!att && !en.length && !st.r && !hw) return null;
   const head = `${psName(s)} (${PS_CLS[s.cls] || ''}, রোল ${bn(s.roll || '–')}) ${psDM(date)}:`;
   const a = att === 'a' ? 'আজ অনুপস্থিত।' : att === 'l' ? 'আজ ছুটিতে।' : att === 'p' ? 'উপস্থিত।' : '';
-  const l = st.l === 1 ? 'পড়া দিয়েছে।' : st.l === 0 ? 'পড়া পারেনি।' : '';
-  const h = st.h ? `বাড়ির কাজ ${PS_HW[st.h][1]}।` : '';
-  const sg = psSign();
+  const sg = psSign(), hwT = hw && `আজকের কাজ: ${psClip(hw, 60)}।`, hwS = hw && `কাজ: ${psClip(hw, 30)}।`, rm = st.r && `মন্তব্য: ${psClip(st.r, 50)}`;
+  let detail = [], counts = '';
+  if (subs.length === 1 || (en.length === 1 && en[0][0] === 'all')) {
+    const x = en.length ? en[0][2] : {};
+    detail = [x.l === 1 ? 'পড়া দিয়েছে।' : x.l === 0 ? 'পড়া পারেনি।' : '', x.h ? `বাড়ির কাজ ${PS_HW[x.h][1]}।` : ''];
+    counts = detail.join(' ');
+  } else if (en.length) {
+    const nm = ([k, n]) => k === 'all' ? 'সার্বিক' : n, list = f => en.filter(f).map(nm).join(', ');
+    const notL = list(([, , x]) => x.l === 0), part = list(([, , x]) => x.h === 'part'), no = list(([, , x]) => x.h === 'no');
+    const okAll = !notL && !part && !no;
+    if (okAll) detail = [en.length === subs.length ? 'সব বিষয়ে পড়া দিয়েছে ও বাড়ির কাজ জমা দিয়েছে।' : `${list(() => true)}-এ পড়া ও কাজ ঠিক আছে।`];
+    else detail = [notL && `পড়া পারেনি: ${notL}।`, part && `কাজ অসম্পূর্ণ: ${part}।`, no && `কাজ জমা দেয়নি: ${no}।`,
+      en.some(([, , x]) => x.l !== 0 && x.h !== 'part' && x.h !== 'no') ? 'বাকি বিষয়ে ঠিক আছে।' : ''];
+    const lN = en.filter(([, , x]) => x.l != null), hN = en.filter(([, , x]) => x.h);
+    counts = [lN.length && `পড়া দিয়েছে ${bn(lN.filter(([, , x]) => x.l === 1).length)}/${bn(lN.length)} বিষয়ে।`, hN.length && `কাজ জমা ${bn(hN.filter(([, , x]) => x.h === 'done').length)}/${bn(hN.length)} বিষয়ে।`].filter(Boolean).join(' ');
+  }
   return psFit([
-    [head, a, l, h, hw && `আজকের কাজ: ${psClip(hw, 60)}।`, st.r && `মন্তব্য: ${psClip(st.r, 50)}`, sg],
-    [head, a, l, h, hw && `আজকের কাজ: ${psClip(hw, 60)}।`, sg],
-    [head, a, l, h, hw && `কাজ: ${psClip(hw, 30)}।`, sg],
-    [head, a, l, h, sg], [head, a, l, h]], DB.smsCfg.maxSeg);
+    [head, a, ...detail, hwT, rm, sg], [head, a, ...detail, hwT, sg], [head, a, ...detail, hwS, sg], [head, a, ...detail, sg],
+    [head, a, counts, sg], [head, a, counts]], DB.smsCfg.maxSeg);
 }
 function psWeekly(s, end){
   const days = []; for (let i = 6; i >= 0; i--) days.push(shiftDate(end, -i));
-  let marked = 0, p = 0, lv = 0, learned = 0, lessonDays = 0, hwDone = 0, hwDays = 0, remark = '';
+  let marked = 0, p = 0, lv = 0, remark = '', lT = 0, lOk = 0, hT = 0, hOk = 0; const weak = {};
+  let subsUsed = 1;
   days.forEach(d => { const a = psAtt(d, s.id); if (a) { marked++; if (a === 'p') p++; if (a === 'l') lv++; }
-    const r = psRec(d, s.cls), st = (r && r.s && r.s[s.id]) || {};
-    if (st.l != null) { lessonDays++; if (st.l === 1) learned++; }
-    if (st.h) { hwDays++; if (st.h === 'done') hwDone++; }
-    if (st.r) remark = st.r; });
-  if (!marked && !lessonDays && !hwDays && !remark) return null;
+    const r = psRec(d, s.cls); if (!r) return;
+    const subs = psDailySubs(s.cls, r); subsUsed = Math.max(subsUsed, subs.length);
+    subs.forEach(([k, n]) => { const x = psMark(r, k, s.id);
+      if (x.l != null) { lT++; if (x.l === 1) lOk++; else weak[n] = (weak[n] || 0) + 1; }
+      if (x.h) { hT++; if (x.h === 'done') hOk++; else weak[n] = (weak[n] || 0) + 1; } });
+    if (r.s[s.id] && r.s[s.id].r) remark = r.s[s.id].r; });
+  if (!marked && !lT && !hT && !remark) return null;
   const head = `${psName(s)} (${PS_CLS[s.cls] || ''}, রোল ${bn(s.roll || '–')}) সাপ্তাহিক ${psDM(days[0])}-${psDM(end)}:`;
-  const parts = [];
+  const parts = [], pct = (a, b) => bn(Math.round(a * 100 / b)) + '%';
   if (marked) parts.push(`উপস্থিত ${bn(p)}/${bn(marked)} দিন${lv ? `, ছুটি ${bn(lv)} দিন` : ''}।`);
-  if (lessonDays) parts.push(`পড়া দিয়েছে ${bn(learned)}/${bn(lessonDays)} দিন।`);
-  if (hwDays) parts.push(`বাড়ির কাজ জমা ${bn(hwDone)}/${bn(hwDays)} দিন।`);
+  if (subsUsed === 1) {
+    if (lT) parts.push(`পড়া দিয়েছে ${bn(lOk)}/${bn(lT)} দিন।`);
+    if (hT) parts.push(`বাড়ির কাজ জমা ${bn(hOk)}/${bn(hT)} দিন।`);
+  } else {
+    if (lT) parts.push(`পড়া দিয়েছে ${pct(lOk, lT)}।`);
+    if (hT) parts.push(`বাড়ির কাজ জমা ${pct(hOk, hT)}।`);
+    const w = Object.entries(weak).filter(([, c]) => c >= 2).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([n]) => n);
+    if (w.length) parts.push(`${w.join(', ')}-এ বেশি মনোযোগ দরকার।`);
+  }
   const sg = psSign();
   return psFit([[head, ...parts, remark && `মন্তব্য: ${psClip(remark, 50)}`, sg], [head, ...parts, sg], [head, ...parts]], DB.smsCfg.maxSeg);
 }
@@ -3523,26 +3569,43 @@ function psCell(attr, sid, k, v, cur){
   const on = cur === k;
   return `<td><button class="pck${on ? ' on' : ''}" ${attr}="${sid}" data-v="${k}" aria-pressed="${on}" aria-label="${v[1]}"${on ? ` style="background:${v[3]};color:${v[2]}"` : ''}>${on ? '✓' : ''}</button></td>`;
 }
+function psTone(x){ // colour of one subject for one student
+  if (x.l == null && !x.h) return null;
+  if (x.l === 0 || x.h === 'no') return ['#B42318', '#FDE8E6'];
+  if (x.h === 'part') return ['#7A4A00', '#FFF1D6'];
+  return ['#17663F', '#E3F4EA'];
+}
 function psDailyView(cl){
-  const P = UI.ps, d = P.date, list = sortedStudents(P.cls), rec = psRec(d, P.cls) || {hw:'', s:{}}, S0 = rec.s || {};
-  const filled = list.filter(s => { const x = S0[s.id]; return x && (x.l != null || x.h); }).length;
+  const P = UI.ps, d = P.date, list = sortedStudents(P.cls), rec = psRec(d, P.cls) || {hw:'', s:{}, m:{}};
+  const subs = psDailySubs(P.cls, rec);
+  if (!subs.some(([k]) => k === P.dsub)) P.dsub = subs[0][0];
+  const sub = subs.find(([k]) => k === P.dsub), M = (rec.m || {})[P.dsub] || {};
+  const here = list.filter(s => { const a = psAtt(d, s.id); return a !== 'a' && a !== 'l'; }), total = here.length;
+  const filledIn = k => here.filter(s => { const x = ((rec.m || {})[k] || {})[s.id]; return x && (x.l != null || x.h); }).length;
+  const filled = filledIn(P.dsub);
   const wd = new Date(d + 'T00:00:00').toLocaleDateString('bn-BD', {weekday:'long'});
+  const subBtns = subs.length > 1 ? `<div class="pssub" role="tablist" aria-label="বিষয়">${subs.map(([k, n]) => { const f = filledIn(k);
+      return `<button role="tab" class="${k === P.dsub ? 'on' : ''}" data-ps-dsub="${k}" aria-selected="${k === P.dsub}"><span>${esc(n)}</span><small>${total && f >= total ? '✓ ' : ''}${bn(f)}/${bn(total)}</small></button>`; }).join('')}</div>` : '';
+  const summary = list.map((s, i) => { const chips = subs.map(([k, n]) => { const t = psTone(((rec.m || {})[k] || {})[s.id] || {}); return t ? `<span class="pschip" style="color:${t[0]};background:${t[1]}">${esc(n)}</span>` : ''; }).join('');
+      return chips ? `<div class="pssum"><b>${esc(bn(s.roll || (i + 1)))}. ${esc(s.name)}</b><div>${chips}</div></div>` : ''; }).join('');
   return `${psChips(cl)}
     <div class="row2"><div class="field"><label for="psDate">তারিখ</label><input type="date" id="psDate" value="${d}" max="${todayISO()}"></div>
       <div class="field"><label>&nbsp;</label><button class="btn" data-ps-print style="min-height:48px">${ic('doc', 18)} ছক প্রিন্ট / PDF</button></div></div>
     <div class="field"><label for="psHw">আজকের বাড়ির কাজ (পুরো শ্রেণির জন্য, ঐচ্ছিক)</label><textarea id="psHw" rows="2" maxlength="200" placeholder="যেমন: বাংলা বই পৃ. ২৫ পড়া, গণিত অনুশীলনী ৩.২">${esc(rec.hw || '')}</textarea></div>
-    <div class="top" style="margin:2px 2px 0"><b style="font-size:15px">${CLASS_NAME[P.cls]} · ${psDM(d)} ${wd}</b><span class="t2" style="font-size:13px">পূরণ ${bn(filled)}/${bn(list.length)}</span></div>
+    ${subs.length > 1 ? `<div style="font-weight:700;font-size:14px;margin:2px 2px -4px">বিষয় <span class="t2" style="font-weight:400;font-size:12px">(নিচে কতজনের পূরণ হয়েছে)</span></div>` : ''}${subBtns}
+    <div class="top" style="margin:2px 2px 0"><b style="font-size:15px">${CLASS_NAME[P.cls]}${subs.length > 1 ? ' · ' + esc(sub[1]) : ''} · ${psDM(d)} ${wd}</b><span class="t2" style="font-size:13px">পূরণ ${bn(filled)}/${bn(total)}${total < list.length ? ` (অনুপস্থিত ${bn(list.length - total)})` : ''}</span></div>
     <div class="pstab"><table>
       <thead><tr><th rowspan="2" class="l">শিক্ষার্থীর নাম</th><th colspan="2">পড়া</th><th colspan="3">বাড়ির কাজ</th></tr>
       <tr><th>দিয়েছে</th><th>পারেনি</th><th>জমা দিয়েছে</th><th>অসম্পূর্ণ</th><th>জমা দেয়নি</th></tr></thead>
-      <tbody>${list.map((s, i) => { const x = S0[s.id] || {}, a = psAtt(d, s.id), off = a === 'a' || a === 'l';
+      <tbody>${list.map((s, i) => { const x = M[s.id] || {}, a = psAtt(d, s.id), off = a === 'a' || a === 'l', r = (rec.s[s.id] || {}).r;
         const l = x.l == null ? null : x.l ? 'y' : 'n';
         return `<tr class="${off ? 'off' : ''}"><td class="l"><button class="psnm" data-ps-rm="${s.id}"><span>${esc(bn(s.roll || (i + 1)))}. ${esc(s.name)}</span>
-          ${off ? `<small style="color:#B42318">${PS_ATT[a]}</small>` : ''}${x.r ? `<small>✎ ${esc(x.r)}</small>` : ''}${psPhone(s.phone) ? '' : '<small style="color:#9A6B00">নম্বর নেই</small>'}</button></td>
+          ${off ? `<small style="color:#B42318">${PS_ATT[a]}</small>` : ''}${r ? `<small>✎ ${esc(r)}</small>` : ''}${psPhone(s.phone) ? '' : '<small style="color:#9A6B00">নম্বর নেই</small>'}</button></td>
           ${Object.entries(PS_YN).map(([k, v]) => psCell('data-ps-l', s.id, k, v, l)).join('')}
           ${Object.entries(PS_HW).map(([k, v]) => psCell('data-ps-h', s.id, k, v, x.h || null)).join('')}</tr>`; }).join('')}</tbody></table></div>
-    <button class="btn full" data-ps-allok ${filled < list.length ? '' : 'disabled'}>বাকি সবাই: পড়া দিয়েছে ও কাজ জমা দিয়েছে</button>
-    <p class="hint" style="text-align:center">ঘরে চাপলে ✓ হয়, আবার চাপলে মুছে যায়। নামে চাপলে মন্তব্য লেখা যায়। অনুপস্থিতি আসে "শিক্ষার্থী উপস্থিতি" থেকে।</p>`;
+    <button class="btn full" data-ps-allok ${filled < total ? '' : 'disabled'}>বাকি সবাই${subs.length > 1 ? ` (${esc(sub[1])})` : ''}: পড়া দিয়েছে ও কাজ জমা দিয়েছে</button>
+    ${subs.length > 1 && summary ? `<div style="font-weight:700;font-size:14px;margin:6px 2px -4px">আজকের সারসংক্ষেপ <span class="t2" style="font-weight:400;font-size:12px">(সবুজ = ঠিক আছে, হলুদ = কাজ অসম্পূর্ণ, লাল = পড়া পারেনি / কাজ জমা দেয়নি)</span></div><div class="list">${summary}</div>` : ''}
+    <p class="hint" style="text-align:center">ঘরে চাপলে ✓ হয়, আবার চাপলে মুছে যায়। নামে চাপলে মন্তব্য লেখা যায় (সব বিষয়ের জন্য একটি)। অনুপস্থিতি আসে "শিক্ষার্থী উপস্থিতি" থেকে।</p>`;
 }
 function psRemarkSheet(sid){
   const P = UI.ps, s = DB.students.find(x => x.id === sid); if (!s) return;
@@ -3553,24 +3616,32 @@ function psRemarkSheet(sid){
   setTimeout(() => { const t = document.getElementById('psRmIn'); if (t) t.focus(); }, 50);
 }
 function psDailyDoc(cls, d){
-  const T = DB.teacher, list = sortedStudents(cls), rec = psRec(d, cls) || {hw:'', s:{}}, S0 = rec.s || {};
+  const T = DB.teacher, list = sortedStudents(cls), rec = psRec(d, cls) || {hw:'', s:{}, m:{}}, subs = psDailySubs(cls, rec);
   const wd = new Date(d + 'T00:00:00').toLocaleDateString('bn-BD', {weekday:'long'});
-  const [y, m, dd] = d.split('-'), hasR = list.some(s => (S0[s.id] || {}).r);
-  const tick = on => on ? '✓' : '';
+  const [y, m, dd] = d.split('-'), hasR = list.some(s => (rec.s[s.id] || {}).r);
+  const many = subs.length > 1, tiny = subs.length > 3, tick = on => on ? '✓' : '';
+  const sub2 = tiny ? '<th>দি</th><th>পা</th><th>জ</th><th>অ</th><th>না</th>' : '<th>দিয়েছে</th><th>পারেনি</th><th>জমা দিয়েছে</th><th>অসম্পূর্ণ</th><th>জমা দেয়নি</th>';
+  const head = many
+    ? `<tr><th rowspan="3" class="l nm">শিক্ষার্থীর নাম</th>${subs.map(([, n]) => `<th colspan="5" class="sj">${esc(n)}</th>`).join('')}${hasR ? '<th rowspan="3" class="rm">মন্তব্য</th>' : ''}</tr>
+       <tr>${subs.map(() => '<th colspan="2" class="b">পড়া</th><th colspan="3">বাড়ির কাজ</th>').join('')}</tr><tr>${subs.map(() => sub2.replace('<th>', '<th class="b">')).join('')}</tr>`
+    : `<tr><th rowspan="2" class="l nm">শিক্ষার্থীর নাম</th><th colspan="2">পড়া</th><th colspan="3">বাড়ির কাজ</th>${hasR ? '<th rowspan="2" class="rm">মন্তব্য</th>' : ''}</tr><tr>${sub2}</tr>`;
   return `<!DOCTYPE html><html lang="bn"><head><meta charset="utf-8"><title>দৈনিক রিপোর্ট - ${CLASS_NAME[cls]}</title>
   <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;600;700&display=swap" rel="stylesheet">
-  <style>@page{size:A4 portrait;margin:10mm}html,body{margin:0}body{font-family:'Hind Siliguri','Noto Sans Bengali',sans-serif;color:#000}
-  .h{text-align:center;margin-bottom:8px}.s{font-size:20px;font-weight:700}.sub{font-size:14px;margin-top:2px}.hw{font-size:13px;margin:6px 0 8px}
-  table{width:100%;border-collapse:collapse}th,td{border:1px solid #000;padding:4px 5px;font-size:13px;text-align:center}th{font-weight:700;background:#F1F1F1}
-  td.l,th.l{text-align:left}td.c{font-size:16px;font-weight:700;width:12%}tr{break-inside:avoid;page-break-inside:avoid}.ab{font-size:11px}
-  .sg{display:flex;justify-content:flex-end;margin-top:40px;font-size:13px}.sg div{border-top:1px solid #000;padding-top:3px;min-width:160px;text-align:center}</style></head><body>
+  <style>@page{size:A4 ${many ? 'landscape' : 'portrait'};margin:9mm}html,body{margin:0}body{font-family:'Hind Siliguri','Noto Sans Bengali',sans-serif;color:#000}
+  .h{text-align:center;margin-bottom:6px}.s{font-size:19px;font-weight:700}.sub{font-size:13.5px;margin-top:2px}.hw,.key{font-size:12.5px;margin:4px 0 6px}
+  table{width:100%;border-collapse:collapse}th,td{border:1px solid #000;padding:3px 3px;font-size:12.5px;text-align:center}th{font-weight:700;background:#F1F1F1}th.sj{background:#E2E2E2;font-size:13px;border-left:2px solid #000}
+  td.l,th.l{text-align:left;padding-left:5px}th.nm{width:${many ? '19%' : '34%'}}th.rm{width:${many ? '12%' : '22%'}}td.c{font-size:15px;font-weight:700;height:22px}.b{border-left:2px solid #000}
+  ${tiny ? 'th{font-size:10.5px;padding:2px 1px}th.sj{font-size:12px}td.c{font-size:12.5px}td.l{font-size:11.5px}' : ''}
+  tr{break-inside:avoid;page-break-inside:avoid}.ab{font-size:10.5px}
+  .sg{display:flex;justify-content:flex-end;margin-top:34px;font-size:13px}.sg div{border-top:1px solid #000;padding-top:3px;min-width:160px;text-align:center}</style></head><body>
   <div class="h"><div class="s">${esc(T.school || '')}</div><div class="sub">দৈনিক রিপোর্ট — ${CLASS_NAME[cls]} · তারিখ: ${bn(+dd)}/${bn(+m)}/${bn(y)} (${wd})</div></div>
+  ${tiny ? '<div class="key">সংকেত — পড়া: দি = দিয়েছে, পা = পারেনি · বাড়ির কাজ: জ = জমা দিয়েছে, অ = অসম্পূর্ণ, না = জমা দেয়নি</div>' : ''}
   ${rec.hw ? `<div class="hw"><b>আজকের বাড়ির কাজ:</b> ${esc(rec.hw)}</div>` : ''}
-  <table><thead><tr><th rowspan="2" class="l">শিক্ষার্থীর নাম</th><th colspan="2">পড়া</th><th colspan="3">বাড়ির কাজ</th>${hasR ? '<th rowspan="2">মন্তব্য</th>' : ''}</tr>
-  <tr><th>দিয়েছে</th><th>পারেনি</th><th>জমা দিয়েছে</th><th>অসম্পূর্ণ</th><th>জমা দেয়নি</th></tr></thead><tbody>
-  ${list.map((s, i) => { const x = S0[s.id] || {}, a = psAtt(d, s.id);
-    return `<tr><td class="l">${esc(bn(s.roll || (i + 1)))}. ${esc(s.name)}${a === 'a' || a === 'l' ? ` <span class="ab">(${PS_ATT[a]})</span>` : ''}</td>
-    <td class="c">${tick(x.l === 1)}</td><td class="c">${tick(x.l === 0)}</td><td class="c">${tick(x.h === 'done')}</td><td class="c">${tick(x.h === 'part')}</td><td class="c">${tick(x.h === 'no')}</td>${hasR ? `<td class="l" style="font-size:12px">${esc(x.r || '')}</td>` : ''}</tr>`; }).join('')}
+  <table><thead>${head}</thead><tbody>
+  ${list.map((s, i) => { const a = psAtt(d, s.id);
+    const cells = subs.map(([k]) => { const x = psMark(rec, k, s.id);
+      return [x.l === 1, x.l === 0, x.h === 'done', x.h === 'part', x.h === 'no'].map((on, q) => `<td class="c${many && q === 0 ? ' b' : ''}">${tick(on)}</td>`).join(''); }).join('');
+    return `<tr><td class="l">${esc(bn(s.roll || (i + 1)))}. ${esc(s.name)}${a === 'a' || a === 'l' ? ` <span class="ab">(${PS_ATT[a]})</span>` : ''}</td>${cells}${hasR ? `<td class="l" style="font-size:11.5px">${esc((rec.s[s.id] || {}).r || '')}</td>` : ''}</tr>`; }).join('')}
   </tbody></table><div class="sg"><div>শ্রেণি শিক্ষকের স্বাক্ষর</div></div></body></html>`;
 }
 function psLearnView(cl){
@@ -3671,12 +3742,13 @@ function psCreateJob(){
 function psClick(ds){
   const P = psState();
   if (ds.psTab) { P.tab = ds.psTab; window.scrollTo(0, 0); return render(); }
-  if (ds.psCls) { P.cls = ds.psCls; return render(); }
+  if (ds.psCls) { P.cls = ds.psCls; P.dsub = null; return render(); }
   if (ds.psSubj) { P.subj = ds.psSubj; return render(); }
   if (ds.psType) { P.type = ds.psType; P.resend = false; return render(); }
-  if (ds.psL) { const r = psRecW(P.date, P.cls), x = r.s[ds.psL] = r.s[ds.psL] || {}; const v = ds.v === 'y' ? 1 : 0; if (x.l === v) delete x.l; else x.l = v; save(); return render(); }
-  if (ds.psH) { const r = psRecW(P.date, P.cls), x = r.s[ds.psH] = r.s[ds.psH] || {}; if (x.h === ds.v) delete x.h; else x.h = ds.v; save(); return render(); }
-  if ('psAllok' in ds) { const r = psRecW(P.date, P.cls); sortedStudents(P.cls).forEach(s => { const x = r.s[s.id] = r.s[s.id] || {}; if (psAtt(P.date, s.id) === 'a' || psAtt(P.date, s.id) === 'l') return; if (x.l == null) x.l = 1; if (!x.h) x.h = 'done'; }); save(); toast('অনুপস্থিত ছাড়া বাকি সবার ঘরে ✓ দেওয়া হয়েছে'); return render(); }
+  if (ds.psDsub) { P.dsub = ds.psDsub; return render(); }
+  if (ds.psL) { const r = psRecW(P.date, P.cls), mm = r.m[P.dsub] = r.m[P.dsub] || {}, x = mm[ds.psL] = mm[ds.psL] || {}; const v = ds.v === 'y' ? 1 : 0; if (x.l === v) delete x.l; else x.l = v; save(); return render(); }
+  if (ds.psH) { const r = psRecW(P.date, P.cls), mm = r.m[P.dsub] = r.m[P.dsub] || {}, x = mm[ds.psH] = mm[ds.psH] || {}; if (x.h === ds.v) delete x.h; else x.h = ds.v; save(); return render(); }
+  if ('psAllok' in ds) { const r = psRecW(P.date, P.cls), mm = r.m[P.dsub] = r.m[P.dsub] || {}; sortedStudents(P.cls).forEach(s => { const x = mm[s.id] = mm[s.id] || {}; if (psAtt(P.date, s.id) === 'a' || psAtt(P.date, s.id) === 'l') return; if (x.l == null) x.l = 1; if (!x.h) x.h = 'done'; }); save(); toast('অনুপস্থিত ছাড়া বাকি সবার ঘরে ✓ দেওয়া হয়েছে'); return render(); }
   if (ds.psLv) { const M = DB.learn[P.ym] = DB.learn[P.ym] || {}, x = M[ds.psLv] = M[ds.psLv] || {}; if (x[P.subj] === ds.v) delete x[P.subj]; else x[P.subj] = ds.v; save(); return render(); }
   if (ds.psPick) { const sel = psSel(P); if (sel[ds.psPick]) delete sel[ds.psPick]; else sel[ds.psPick] = true; return render(); }
   if ('psPickall' in ds) { const sel = psSel(P); psBuild(P).forEach(x => { if (x.txt && !x.dup) sel[x.sid] = true; }); return render(); }
