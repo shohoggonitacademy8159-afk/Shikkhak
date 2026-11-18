@@ -219,6 +219,19 @@ img.ma{object-fit:cover;background:#E8EEF5}
 .upd .btn{border-color:#fff;color:#12284A;background:#fff;min-height:40px;font-size:13px;flex-shrink:0}
 .upd .x{background:transparent;border:0;color:#fff;width:36px;height:36px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border-radius:10px}
 .updline{font-size:13px;color:var(--mute);min-height:20px}
+.psrow{display:flex;flex-direction:column;gap:8px;padding:12px;border-top:1px solid #EDF2EF}
+.psrow:first-child{border-top:0}
+.psrow .grow{display:flex;flex-direction:column;min-width:0}
+.psbtns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.psbtns.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.psbtns.four{grid-template-columns:repeat(4,minmax(0,1fr))}
+.psbtns button{min-height:40px;border-radius:10px;border:1px solid #CBD6E2;background:#fff;font-size:13px;font-weight:700;color:var(--mute);padding:0 4px}
+.psin{font:inherit;font-size:14px;color:var(--ink);border:1px solid #CBD6E2;border-radius:10px;padding:8px 10px;min-height:40px;width:100%;box-sizing:border-box}
+.psmsg{font-size:13.5px;line-height:1.6;background:#F3F8F6;border-radius:12px;padding:8px 10px;color:var(--ink);word-break:break-word}
+.psmsg.off{opacity:.55}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+button.psrow.pslog{flex-direction:row;align-items:center;width:100%;background:#fff;border:0;border-top:1px solid #EDF2EF;font:inherit;color:inherit;cursor:pointer}
+button.psrow.pslog:first-child{border-top:0}
 </style>
 </head>
 <body>
@@ -273,7 +286,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '5.1';
+const WEB_VERSION = '5.2';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -843,6 +856,7 @@ const FEATURES_A = [
   ['student-profile','profile','#D23F74','শিক্ষার্থী তালিকা','নাম ও প্রোফাইল যোগ'],
   ['teacher-att','teacher','#1E8A55','শিক্ষক উপস্থিতি','দৈনিক হাজিরা ও আগমন-প্রস্থান'],
   ['student-att','students','#2563C9','শিক্ষার্থী উপস্থিতি','শ্রেণিভিত্তিক দৈনিক হাজিরা'],
+  ['parent-sms','mega','#0F766E','দৈনিক আপডেট ও অভিভাবক SMS','বাড়ির কাজ, শিখন অবস্থা ও SMS'],
   ['leave','leave','#E0701A','ছুটি ও আবেদন','আবেদন ও ছুটির হিসাব'],
   ['lesson-plan','plan','#7C4DCC','পাঠ পরিকল্পনা','সকল শ্রেণি ও বিষয়'],
   ['textbooks','book','#0E8C82','পাঠ্যবই','বই ও শিক্ষক সহায়িকা'],
@@ -3233,17 +3247,371 @@ function placeholder(id){
 
 /* ---------- router ---------- */
 const NAV = [['home','হোম','home'],['routine','রুটিন','clock'],['reports','রিপোর্ট','report'],['profile','প্রোফাইল','user'],['settings','সেটিংস','gear']];
+/* ---------- দৈনিক আপডেট, শিখন অবস্থা ও অভিভাবকদের SMS (ফোনের সিম থেকে) ---------- */
+const smsOk = () => !!(BR && BR.sendSms && BR.smsStatus);
+const PS_LVL = {ex:['অতি উত্তম','অতি উত্তম','#17663F','#E3F4EA'], g:['উত্তম','উত্তম','#1F4E8C','#E6EFFA'], d:['চলমান','অগ্রগতি হচ্ছে','#7A4A00','#FFF1D6'], s:['সহায়তা','সহায়তা দরকার','#B42318','#FDE8E6']};
+const PS_LVL_ORDER = ['s','d','g','ex'];
+const PS_HW = {done:['কাজ জমা','জমা দিয়েছে','#17663F','#E3F4EA'], part:['আংশিক','আংশিক জমা দিয়েছে','#7A4A00','#FFF1D6'], no:['জমা দেয়নি','জমা দেয়নি','#B42318','#FDE8E6']};
+const PS_CLS = {pre:'প্রাক', '1':'১ম', '2':'২য়', '3':'৩য়', '4':'৪র্থ', '5':'৫ম'};
+const PS_SUBJ_SHORT = {bangla:'বাংলা', english:'ইংরেজি', math:'গণিত', science:'বিজ্ঞান', bgs:'বাওবি', religion:'ধর্ম', pe:'শারীরিক শিক্ষা', arts:'শিল্পকলা', art:'চারুকলা', 'pre-lang':'ভাষা', 'pre-math':'গণিত', 'pre-env':'পরিবেশ', all:'সার্বিক'};
+const PS_ATT = {p:'উপস্থিত', a:'অনুপস্থিত', l:'ছুটি'};
+
+function psData(){
+  if (!DB.daily || typeof DB.daily !== 'object') DB.daily = {};
+  if (!DB.learn || typeof DB.learn !== 'object') DB.learn = {};
+  if (!Array.isArray(DB.smsLog)) DB.smsLog = [];
+  if (!DB.smsCfg || typeof DB.smsCfg !== 'object') DB.smsCfg = {};
+  const c = DB.smsCfg; if (!(c.maxSeg >= 1)) c.maxSeg = 2; if (c.sign === undefined) c.sign = ''; if (c.sim === undefined) c.sim = -1;
+  return DB;
+}
+function psState(){
+  if (!UI.ps) UI.ps = {tab:'daily', cls:null, date:todayISO(), ym:todayISO().slice(0,7), subj:'all', type:'daily', scope:'all', sdate:todayISO(), sym:todayISO().slice(0,7), resend:false};
+  return UI.ps;
+}
+/* phone: any Bangladeshi mobile format → 01XXXXXXXXX, or null */
+function psPhone(p){
+  let s = toEn(String(p || '')).replace(/\D/g, '');
+  if (s.startsWith('880')) s = s.slice(2);
+  if (s.length === 10 && s[0] === '1') s = '0' + s;
+  return /^01[3-9]\d{8}$/.test(s) ? s : null;
+}
+/* SMS length: any Bangla → Unicode (70 / 67 chars per SMS); English only → 160 / 153 */
+function psSeg(t){
+  const gsm = /^[A-Za-z0-9 \n\r@£$¥!"#%&'()*+,\-./:;<=>?_]*$/.test(t);
+  const n = t.length;
+  return gsm ? (n <= 160 ? 1 : Math.ceil(n / 153)) : (n <= 70 ? 1 : Math.ceil(n / 67));
+}
+const psName = s => (s.name || '').trim().split(/\s+/).slice(0, 2).join(' ');
+const psDM = iso => { const [y, m, d] = iso.split('-'); return bn(+d) + '/' + bn(+m); };
+const psClip = (s, n) => !s ? '' : s.length > n ? s.slice(0, n - 1) + '…' : s;
+const psSign = () => { const s = (DB.smsCfg.sign || '').trim(); return s ? '-' + s : ''; };
+function psFit(variants, maxSeg){
+  let last = '';
+  for (const v of variants) { const t = v.filter(Boolean).join(' ').replace(/\s+/g, ' ').trim(); last = t; if (psSeg(t) <= maxSeg) return t; }
+  return last;
+}
+function psSubjects(cls){
+  const list = [];
+  let rel = false;
+  assessSubjectsFor(cls).forEach(([id, name]) => { if (RELIGION_SUBJ[id]) rel = true; else list.push([id, name]); });
+  if (rel) list.splice(Math.min(list.length, 5), 0, ['religion', 'ধর্ম ও নৈতিক শিক্ষা']);
+  return list;
+}
+const psSubjName = (cls, id) => PS_SUBJ_SHORT[id] || ((psSubjects(cls).find(x => x[0] === id) || [])[1]) || id;
+const psRec = (date, cls) => ((DB.daily[date] || {})[cls]) || null;
+function psRecW(date, cls){ DB.daily[date] = DB.daily[date] || {}; const r = DB.daily[date][cls] = DB.daily[date][cls] || {hw:'', s:{}}; r.s = r.s || {}; return r; }
+const psAtt = (date, sid) => ((DB.attendance.students[date] || {})[sid]) || null;
+
+/* ---- report text (one per student) ---- */
+function psDaily(s, date){
+  const rec = psRec(date, s.cls), st = (rec && rec.s && rec.s[s.id]) || {}, att = psAtt(date, s.id), hw = rec && rec.hw ? rec.hw.trim() : '';
+  if (!att && st.l == null && !st.h && !st.r && !hw) return null;
+  const head = `${psName(s)} (${PS_CLS[s.cls] || ''}, রোল ${bn(s.roll || '–')}) ${psDM(date)}:`;
+  const a = att === 'a' ? 'আজ অনুপস্থিত।' : att === 'l' ? 'আজ ছুটিতে।' : att === 'p' ? 'উপস্থিত।' : '';
+  const l = st.l === 1 ? 'পড়া শিখেছে।' : st.l === 0 ? 'পড়া শেখেনি।' : '';
+  const h = st.h ? `বাড়ির কাজ ${PS_HW[st.h][1]}।` : '';
+  const sg = psSign();
+  return psFit([
+    [head, a, l, h, hw && `আজকের কাজ: ${psClip(hw, 60)}।`, st.r && `মন্তব্য: ${psClip(st.r, 50)}`, sg],
+    [head, a, l, h, hw && `আজকের কাজ: ${psClip(hw, 60)}।`, sg],
+    [head, a, l, h, hw && `কাজ: ${psClip(hw, 30)}।`, sg],
+    [head, a, l, h, sg], [head, a, l, h]], DB.smsCfg.maxSeg);
+}
+function psWeekly(s, end){
+  const days = []; for (let i = 6; i >= 0; i--) days.push(shiftDate(end, -i));
+  let marked = 0, p = 0, lv = 0, learned = 0, lessonDays = 0, hwDone = 0, hwDays = 0, remark = '';
+  days.forEach(d => { const a = psAtt(d, s.id); if (a) { marked++; if (a === 'p') p++; if (a === 'l') lv++; }
+    const r = psRec(d, s.cls), st = (r && r.s && r.s[s.id]) || {};
+    if (st.l != null) { lessonDays++; if (st.l === 1) learned++; }
+    if (st.h) { hwDays++; if (st.h === 'done') hwDone++; }
+    if (st.r) remark = st.r; });
+  if (!marked && !lessonDays && !hwDays && !remark) return null;
+  const head = `${psName(s)} (${PS_CLS[s.cls] || ''}, রোল ${bn(s.roll || '–')}) সাপ্তাহিক ${psDM(days[0])}-${psDM(end)}:`;
+  const parts = [];
+  if (marked) parts.push(`উপস্থিত ${bn(p)}/${bn(marked)} দিন${lv ? `, ছুটি ${bn(lv)} দিন` : ''}।`);
+  if (lessonDays) parts.push(`পড়া শিখেছে ${bn(learned)}/${bn(lessonDays)} দিন।`);
+  if (hwDays) parts.push(`বাড়ির কাজ জমা ${bn(hwDone)}/${bn(hwDays)} দিন।`);
+  const sg = psSign();
+  return psFit([[head, ...parts, remark && `মন্তব্য: ${psClip(remark, 50)}`, sg], [head, ...parts, sg], [head, ...parts]], DB.smsCfg.maxSeg);
+}
+function psMonthly(s, ym){
+  const c = {p:0, a:0, l:0}; let marked = 0;
+  Object.keys(DB.attendance.students).forEach(d => { if (!d.startsWith(ym)) return; const v = DB.attendance.students[d][s.id]; if (c[v] !== undefined) { c[v]++; marked++; } });
+  const L = ((DB.learn[ym] || {})[s.id]) || {};
+  const subj = Object.entries(L).filter(([k, v]) => k !== 'all' && PS_LVL[v]);
+  if (!marked && !subj.length && !L.all) return null;
+  const [y, m] = ym.split('-');
+  let mon = ym; try { mon = new Date(ym + '-01T00:00:00').toLocaleDateString('bn-BD', {month:'long'}); } catch(e) {}
+  const head = `${psName(s)} (${PS_CLS[s.cls] || ''}, রোল ${bn(s.roll || '–')}) ${mon} ${bn(y)}:`;
+  const att = marked ? `উপস্থিত ${bn(c.p)}/${bn(marked)}, অনুপস্থিত ${bn(c.a)}, ছুটি ${bn(c.l)} দিন।` : '';
+  subj.sort((a, b) => PS_LVL_ORDER.indexOf(a[1]) - PS_LVL_ORDER.indexOf(b[1]));
+  const detail = subj.length ? 'শিখন: ' + subj.map(([k, v]) => `${psSubjName(s.cls, k)}-${PS_LVL[v][1]}`).join(', ') + '।' : '';
+  const weak = subj.filter(([, v]) => v === 's').map(([k]) => psSubjName(s.cls, k));
+  let overall = '';
+  if (L.all) overall = `সার্বিক শিখন: ${PS_LVL[L.all][1]}।`;
+  else if (subj.length) { const cnt = {}; subj.forEach(([, v]) => cnt[v] = (cnt[v] || 0) + 1); const top = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a] || PS_LVL_ORDER.indexOf(b) - PS_LVL_ORDER.indexOf(a))[0]; overall = `সার্বিক শিখন ${PS_LVL[top][1]}।`; }
+  const care = weak.length ? `${weak.join(', ')}-এ বাড়তি যত্ন প্রয়োজন।` : '';
+  const sg = psSign();
+  return psFit([[head, att, detail, care || overall, sg], [head, att, care || overall, sg], [head, att, care || overall], [head, att]], DB.smsCfg.maxSeg);
+}
+function psPeriod(P){ return P.type === 'monthly' ? P.sym : P.sdate; }
+function psJobKey(P){ return `${P.type}|${psPeriod(P)}`; }
+function psSentBefore(P){ // sid → true if already sent for this report & period
+  const k = psJobKey(P), out = {};
+  DB.smsLog.forEach(j => { if (j.key === k) j.items.forEach(it => { if (it.st === 'sent') out[it.sid] = true; }); });
+  return out;
+}
+function psBuild(P){
+  psData();
+  const list = activeStudents().filter(s => P.scope === 'all' || s.cls === P.scope)
+    .sort((a, b) => CLASSES.findIndex(c => c[0] === a.cls) - CLASSES.findIndex(c => c[0] === b.cls) || (parseInt(toEn(a.roll)) || 9999) - (parseInt(toEn(b.roll)) || 9999));
+  const sent = psSentBefore(P);
+  return list.map(s => {
+    const txt = P.type === 'daily' ? psDaily(s, P.sdate) : P.type === 'weekly' ? psWeekly(s, P.sdate) : psMonthly(s, P.sym);
+    const ph = psPhone(s.phone), it = {sid:s.id, name:s.name, cls:s.cls, roll:s.roll, ph, txt:txt || '', seg:txt ? psSeg(txt) : 0, ok:false, why:''};
+    if (!txt) it.why = 'এই সময়ের কোনো তথ্য দেওয়া হয়নি';
+    else if (!ph) it.why = s.phone ? 'মোবাইল নম্বর সঠিক নয়' : 'প্রোফাইলে মোবাইল নম্বর নেই';
+    else if (sent[s.id] && !P.resend) { it.why = 'এই রিপোর্ট আগেই পাঠানো হয়েছে'; it.dup = true; }
+    else it.ok = true;
+    return it;
+  });
+}
+
+/* ---- sending queue (one SMS at a time, with a short gap) ---- */
+const SQ = {job:null, running:false, timer:null, wait:null, sims:null, gap:4000};
+const PS_ERR = {'1':'পাঠানো যায়নি (সাধারণ ত্রুটি)', '2':'ফোনের নেটওয়ার্ক বন্ধ (এয়ারপ্লেন মোড?)', '3':'মেসেজ তৈরি করা যায়নি', '4':'নেটওয়ার্ক পাওয়া যাচ্ছে না', '5':'Android অনুমতি দেয়নি (বেশি SMS) — Always allow দিন', '6':'নম্বরটি ফোনের অনুমোদিত তালিকায় নেই (FDN)', 'perm':'SMS পাঠানোর অনুমতি নেই', 'timeout':'সাড়া পাওয়া যায়নি — পৌঁছেছে কিনা নিশ্চিত নয়', 'nosim':'সিম পাওয়া যায়নি'};
+function psSmsStatus(){ try { return JSON.parse(BR.smsStatus()); } catch(e) { return {perm:false, sims:[]}; } }
+function psStart(job){
+  SQ.job = job; SQ.running = true; psSave(); psTick();
+}
+function psSave(){ save(); }
+function psNext(){ return SQ.job ? SQ.job.items.findIndex(it => it.st === 'pending') : -1; }
+function psTick(){
+  clearTimeout(SQ.timer);
+  if (!SQ.running || !SQ.job) return psProgress();
+  const i = psNext();
+  if (i < 0) { SQ.running = false; const j = SQ.job; j.done = Date.now(); psSave(); psProgress();
+    const ok = j.items.filter(x => x.st === 'sent').length, bad = j.items.filter(x => x.st === 'failed').length;
+    toast(bad ? `${bn(ok)}টি পাঠানো হয়েছে, ${bn(bad)}টি ব্যর্থ` : `সব ${bn(ok)}টি মেসেজ পাঠানো হয়েছে`, 4000);
+    if (location.hash.slice(1) === 'parent-sms') render(); return; }
+  const it = SQ.job.items[i], key = SQ.job.id + ':' + i;
+  SQ.wait = key; it.at = Date.now();
+  try { BR.sendSms(key, it.ph, it.txt, +(DB.smsCfg.sim ?? -1)); }
+  catch(e) { return window.onSmsSent(key, false, '1'); }
+  SQ.timer = setTimeout(() => window.onSmsSent(key, false, 'timeout'), 90000);
+  psProgress();
+}
+window.onSmsSent = (key, ok, code) => {
+  if (!SQ.job || key !== SQ.wait) return;
+  SQ.wait = null; clearTimeout(SQ.timer);
+  const it = SQ.job.items[+key.split(':')[1]];
+  if (it) { it.st = ok ? 'sent' : 'failed'; it.err = ok ? '' : (PS_ERR[String(code)] || ('ত্রুটি ' + code)); }
+  psSave();
+  if (!ok && (code === 'perm' || code === 'nosim' || code === '2' || code === '5')) { SQ.running = false; toast(PS_ERR[code] + ' — পাঠানো থামানো হয়েছে', 5000); psProgress(); if (location.hash.slice(1) === 'parent-sms') render(); return; }
+  psProgress();
+  SQ.timer = setTimeout(psTick, ok ? SQ.gap : Math.min(SQ.gap, 2000));
+};
+window.onSmsPermission = granted => {
+  if (!granted) { toast('অনুমতি ছাড়া ফোন থেকে SMS পাঠানো যাবে না', 4000); return; }
+  SQ.sims = null; toast('অনুমতি পাওয়া গেছে'); if (location.hash.slice(1) === 'parent-sms') render();
+  if (UI.psAfterPerm) { const f = UI.psAfterPerm; UI.psAfterPerm = null; f(); }
+};
+function psProgress(){
+  const el = document.getElementById('psProg'); if (el) el.innerHTML = psProgHtml();
+}
+function psProgHtml(){
+  const j = SQ.job && (SQ.running || psNext() >= 0) ? SQ.job : DB.smsLog.find(x => x.items.some(it => it.st === 'pending'));
+  if (!j) return '';
+  const n = j.items.length, sent = j.items.filter(x => x.st === 'sent').length, bad = j.items.filter(x => x.st === 'failed').length, left = n - sent - bad;
+  const pct = n ? Math.round((sent + bad) * 100 / n) : 0;
+  const run = SQ.running && SQ.job === j;
+  return `<div class="card" style="gap:10px;border:2px solid ${run ? '#0F766E' : '#E0701A'}">
+    <div class="top"><b style="font-size:15px">${run ? 'SMS পাঠানো হচ্ছে…' : 'অসমাপ্ত পাঠানো'}</b><b style="font-size:15px">${bn(sent + bad)}/${bn(n)}</b></div>
+    <div style="height:10px;border-radius:99px;background:#E8EEF5;overflow:hidden"><div style="height:100%;width:${pct}%;background:#0F766E"></div></div>
+    <div class="sumrow">${pill('পাঠানো ' + bn(sent), '#17663F', '#E3F4EA')}${pill('ব্যর্থ ' + bn(bad), '#B42318', '#FDE8E6')}${pill('বাকি ' + bn(left), '#3E5070', '#EEF1F6')}</div>
+    ${run ? `<p class="hint">অ্যাপটি খোলা রাখুন। প্রতিটি মেসেজের মাঝে কয়েক সেকেন্ড বিরতি থাকে।</p><button class="btn danger full" data-ps-stop>থামান</button>`
+      : `<button class="btn solid full" data-ps-resume="${j.id}">বাকি ${bn(left)}টি পাঠান</button>`}
+  </div>`;
+}
+
+/* ---- view ---- */
+function parentSms(){
+  psData(); const P = psState();
+  const head = innerHeader('দৈনিক আপডেট ও অভিভাবক SMS', 'mega', '#0F766E');
+  const tabs = `<div class="tabs2" style="grid-template-columns:repeat(3,minmax(0,1fr))" role="tablist">${[['daily','দৈনিক আপডেট'],['learn','শিখন অবস্থা'],['send','SMS পাঠান']].map(([k, l]) => `<button role="tab" class="${P.tab === k ? 'on' : ''}" data-ps-tab="${k}">${l}</button>`).join('')}</div>`;
+  const cl = classesWithStudents();
+  if (!cl.length) return head + `<div class="sec" style="padding-top:16px"><div class="card empty"><p class="t2" style="font-size:14px;line-height:1.6">আগে শিক্ষার্থী তালিকায় শিক্ষার্থীদের নাম ও অভিভাবকের মোবাইল নম্বর যোগ করুন।</p><button class="btn solid" data-go="students">শিক্ষার্থী তালিকা খুলুন</button></div></div>`;
+  if (!P.cls || !cl.some(([k]) => k === P.cls)) P.cls = cl[0][0];
+  const body = P.tab === 'learn' ? psLearnView(cl) : P.tab === 'send' ? psSendView(cl) : psDailyView(cl);
+  return head + `<div class="sec" style="padding-top:16px">${tabs}${body}</div>`;
+}
+function psChips(cl){
+  return `<div class="chips" role="tablist" aria-label="শ্রেণি">${cl.map(([k, l]) => `<button class="${k === UI.ps.cls ? 'on' : ''}" data-ps-cls="${k}">${l}</button>`).join('')}</div>`;
+}
+function psBtns(attr, sid, map, cur){
+  return Object.entries(map).map(([k, v]) => `<button ${attr}="${sid}" data-v="${k}" aria-pressed="${cur === k}" style="${cur === k ? `background:${v[3]};color:${v[2]};border-color:${v[2]}` : ''}">${v[0]}</button>`).join('');
+}
+function psDailyView(cl){
+  const P = UI.ps, d = P.date, list = sortedStudents(P.cls), rec = psRec(d, P.cls) || {hw:'', s:{}}, S0 = rec.s || {};
+  const filled = list.filter(s => { const x = S0[s.id]; return x && (x.l != null || x.h); }).length;
+  const yn = {y:['পড়া শিখেছে','পড়া শিখেছে','#17663F','#E3F4EA'], n:['শেখেনি','পড়া শেখেনি','#B42318','#FDE8E6']};
+  return `${psChips(cl)}
+    <div class="field"><label for="psDate">তারিখ</label><input type="date" id="psDate" value="${d}" max="${todayISO()}"></div>
+    <div class="field"><label for="psHw">আজকের বাড়ির কাজ (পুরো শ্রেণির জন্য)</label><textarea id="psHw" rows="2" maxlength="200" placeholder="যেমন: বাংলা বই পৃ. ২৫ পড়া, গণিত অনুশীলনী ৩.২">${esc(rec.hw || '')}</textarea></div>
+    <div class="card" style="gap:10px"><div class="top"><b style="font-size:15px">${CLASS_NAME[P.cls]} · ${bn(list.length)} জন</b><span class="t2" style="font-size:13px">তথ্য দেওয়া ${bn(filled)} জন</span></div>
+      <button class="btn" data-ps-allok ${filled < list.length ? '' : 'disabled'}>বাকি সবাই: পড়া শিখেছে ও কাজ জমা</button></div>
+    <div class="list">${list.map(s => { const x = S0[s.id] || {}, a = psAtt(d, s.id);
+      return `<div class="psrow">
+        <div style="display:flex;align-items:center;gap:10px"><span class="rollb">${s.roll ? esc(bn(s.roll)) : '–'}</span>
+          <span class="grow"><span class="t1" style="font-weight:600;font-size:14px">${esc(s.name)}</span><span class="t2" style="font-size:12px">${a ? 'হাজিরা: ' + PS_ATT[a] : 'হাজিরা নেওয়া হয়নি'}${psPhone(s.phone) ? '' : ' · <b style="color:#B42318">নম্বর নেই</b>'}</span></span></div>
+        <div class="psbtns" role="group" aria-label="পড়া">${psBtns('data-ps-l', s.id, yn, x.l == null ? null : x.l ? 'y' : 'n')}</div>
+        <div class="psbtns three" role="group" aria-label="বাড়ির কাজ">${psBtns('data-ps-h', s.id, PS_HW, x.h || null)}</div>
+        <input class="psin" data-ps-r="${s.id}" value="${esc(x.r || '')}" maxlength="80" placeholder="মন্তব্য (ঐচ্ছিক)" aria-label="${esc(s.name)}-এর মন্তব্য">
+      </div>`; }).join('')}</div>
+    <p class="hint" style="text-align:center">হাজিরা আসে "শিক্ষার্থী উপস্থিতি" থেকে। আবার চাপলে বাছাই বাতিল হয়। সব পরিবর্তন সাথে সাথে সংরক্ষিত হয়।</p>`;
+}
+function psLearnView(cl){
+  const P = UI.ps, subs = [['all', 'সার্বিক'], ...psSubjects(P.cls)];
+  if (!subs.some(x => x[0] === P.subj)) P.subj = 'all';
+  const list = sortedStudents(P.cls), M = DB.learn[P.ym] || {};
+  const done = list.filter(s => (M[s.id] || {})[P.subj]).length;
+  return `${psChips(cl)}
+    <div class="field"><label for="psYm">মাস</label><input type="month" id="psYm" value="${P.ym}" max="${todayISO().slice(0,7)}"></div>
+    <div class="chips" role="tablist" aria-label="বিষয়">${subs.map(([k, l]) => `<button class="${k === P.subj ? 'on' : ''}" data-ps-subj="${k}">${esc(l)}</button>`).join('')}</div>
+    <div class="card" style="gap:6px"><b style="font-size:15px">${esc(subs.find(x => x[0] === P.subj)[1])} · ${monthName(P.ym)}</b><span class="t2" style="font-size:13px">মূল্যায়ন দেওয়া ${bn(done)}/${bn(list.length)} জন। যোগ্যতাভিত্তিক অবস্থা: অতি উত্তম, উত্তম, চলমান (অগ্রগতি হচ্ছে), সহায়তা দরকার।</span></div>
+    <div class="list">${list.map(s => { const v = (M[s.id] || {})[P.subj] || null;
+      return `<div class="psrow"><div style="display:flex;align-items:center;gap:10px"><span class="rollb">${s.roll ? esc(bn(s.roll)) : '–'}</span><span class="grow t1" style="font-weight:600;font-size:14px">${esc(s.name)}</span></div>
+        <div class="psbtns four" role="group" aria-label="শিখন অবস্থা">${psBtns('data-ps-lv', s.id, PS_LVL, v)}</div></div>`; }).join('')}</div>
+    <p class="hint" style="text-align:center">মাসিক SMS-এ বিষয়ভিত্তিক অবস্থা যায়; "সহায়তা দরকার" থাকলে সেই বিষয়ে বাড়তি যত্নের কথা লেখা হয়।</p>`;
+}
+function psSendView(cl){
+  const P = UI.ps, C = DB.smsCfg;
+  if (P.scope !== 'all' && !cl.some(([k]) => k === P.scope)) P.scope = 'all';
+  const items = psBuild(P), ok = items.filter(x => x.ok), segs = ok.reduce((a, x) => a + x.seg, 0), dups = items.filter(x => x.dup).length;
+  let sims = [];
+  if (smsOk()) { if (!SQ.sims) SQ.sims = psSmsStatus(); sims = (SQ.sims && SQ.sims.sims) || [];
+    if (sims.length > 1 && !sims.some(x => +x.id === +C.sim)) { C.sim = sims[0].id; save(); } }
+  const need = !smsOk() ? `<div class="card" style="gap:10px;border:2px solid #E0701A"><b style="font-size:15px">${BR ? 'নতুন সংস্করণের অ্যাপ (APK) লাগবে' : 'অ্যান্ড্রয়েড অ্যাপ থেকে পাঠাতে হবে'}</b>
+      <p class="t2" style="font-size:13px;line-height:1.6">ফোনের সিম থেকে SMS পাঠানোর সুবিধা নতুন APK-তে আছে। ${BR ? 'নিচের বোতাম চেপে নতুন APK নামিয়ে ইনস্টল করুন — আগের সব তথ্য থাকবে।' : 'এখানে শুধু মেসেজগুলো দেখে নেওয়া যাবে।'}</p>
+      ${BR ? '<button class="btn solid" data-apk-get>নতুন APK নামান</button>' : ''}</div>` : '';
+  const typeChips = `<div class="chips" role="tablist" aria-label="রিপোর্টের ধরন">${[['daily','দৈনিক'],['weekly','সাপ্তাহিক'],['monthly','মাসিক']].map(([k, l]) => `<button class="${P.type === k ? 'on' : ''}" data-ps-type="${k}">${l} রিপোর্ট</button>`).join('')}</div>`;
+  const when = P.type === 'monthly'
+    ? `<div class="field"><label for="psSym">মাস</label><input type="month" id="psSym" value="${P.sym}" max="${todayISO().slice(0,7)}"></div>`
+    : `<div class="field"><label for="psSdate">${P.type === 'weekly' ? 'সপ্তাহের শেষ দিন (আগের ৭ দিনের হিসাব)' : 'তারিখ'}</label><input type="date" id="psSdate" value="${P.sdate}" max="${todayISO()}"></div>`;
+  const opts = `<div class="row2">
+      <div class="field"><label for="psScope">শ্রেণি</label><select id="psScope"><option value="all">সব শ্রেণি</option>${cl.map(([k, l]) => `<option value="${k}" ${P.scope === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+      <div class="field"><label for="psMax">মেসেজের দৈর্ঘ্য</label><select id="psMax">${[1, 2, 3].map(n => `<option value="${n}" ${C.maxSeg === n ? 'selected' : ''}>সর্বোচ্চ ${bn(n)} SMS</option>`).join('')}</select></div></div>
+    <div class="row2">
+      <div class="field"><label for="psSign">শেষে বিদ্যালয়ের নাম</label><input id="psSign" maxlength="25" value="${esc(C.sign)}" placeholder="যেমন: চরপাড়া সপ্রাবি"></div>
+      ${sims.length > 1 ? `<div class="field"><label for="psSim">কোন সিম থেকে</label><select id="psSim">${sims.map(x => `<option value="${x.id}" ${+C.sim === +x.id ? 'selected' : ''}>${esc(x.label)}</option>`).join('')}</select></div>` : '<div></div>'}</div>`;
+  const sum = `<div class="card" style="gap:10px">
+      <div class="sumrow">${pill('পাঠানো যাবে ' + bn(ok.length) + ' জন', '#17663F', '#E3F4EA')}${pill('মোট ' + bn(segs) + ' SMS কাটবে', '#0F766E', '#E0F2EF')}${pill('বাদ ' + bn(items.length - ok.length), '#3E5070', '#EEF1F6')}</div>
+      ${dups ? `<label style="display:flex;gap:8px;align-items:center;font-size:13px"><input type="checkbox" id="psResend" ${P.resend ? 'checked' : ''} style="width:20px;height:20px"> ${bn(dups)} জনকে এই রিপোর্ট আগেই পাঠানো হয়েছে — আবারও পাঠাতে চাই</label>` : ''}
+      <button class="btn big solid full" data-ps-send ${ok.length && smsOk() && !SQ.running ? '' : 'disabled'}>${ic('mega', 20)} ${bn(ok.length)} জন অভিভাবককে পাঠান</button>
+      <p class="hint">মেসেজ যাবে আপনার ফোনের সিম থেকে, সিমের SMS প্যাক থেকে কাটবে। বাংলা মেসেজে প্রতি ৭০ অক্ষরে ১টি SMS ধরা হয়।</p></div>`;
+  const prev = `<div class="list">${items.map(it => `<div class="psrow">
+      <div style="display:flex;align-items:center;gap:10px"><span class="rollb">${it.roll ? esc(bn(it.roll)) : '–'}</span>
+        <span class="grow"><span class="t1" style="font-weight:600;font-size:14px">${esc(it.name)}</span><span class="t2" style="font-size:12px">${PS_CLS[it.cls] || ''} শ্রেণি · ${it.ph ? esc(bn(it.ph)) : 'নম্বর নেই'}</span></span>
+        ${it.ok ? `<span class="sumrow">${pill(bn(it.seg) + ' SMS', '#0F766E', '#E0F2EF')}</span>` : ''}</div>
+      ${it.txt ? `<div class="psmsg ${it.ok ? '' : 'off'}">${esc(it.txt)}</div>` : ''}
+      ${it.why ? `<span style="font-size:12px;font-weight:600;color:${it.dup ? '#3E5070' : '#B42318'}">${it.why}</span>` : ''}
+    </div>`).join('')}</div>`;
+  return `${need}<div id="psProg">${psProgHtml()}</div>${typeChips}${when}${opts}${sum}${items.length ? prev : ''}${psLogHtml()}`;
+}
+function psLogHtml(){
+  if (!DB.smsLog.length) return '';
+  const T = {daily:'দৈনিক', weekly:'সাপ্তাহিক', monthly:'মাসিক'};
+  return `<h2 style="font-size:16px;margin-top:6px">আগের পাঠানো</h2><div class="list">${DB.smsLog.slice(0, 15).map(j => {
+    const s = j.items.filter(x => x.st === 'sent').length, f = j.items.filter(x => x.st === 'failed').length;
+    return `<button class="psrow pslog" data-ps-log="${j.id}"><span class="grow" style="text-align:left"><span class="t1" style="font-weight:600;font-size:14px">${T[j.type]} রিপোর্ট · ${j.type === 'monthly' ? monthName(j.period) : psDM(j.period)}</span>
+      <span class="t2" style="font-size:12px">${j.scope === 'all' ? 'সব শ্রেণি' : CLASS_NAME[j.scope]} · ${new Date(j.at).toLocaleString('bn-BD', {day:'numeric', month:'short', hour:'numeric', minute:'2-digit'})}</span></span>
+      <span class="sumrow">${pill('✓ ' + bn(s), '#17663F', '#E3F4EA')}${f ? pill('✗ ' + bn(f), '#B42318', '#FDE8E6') : ''}</span></button>`; }).join('')}</div>`;
+}
+function psLogSheet(id){
+  const j = DB.smsLog.find(x => x.id === id); if (!j) return;
+  const f = j.items.filter(x => x.st === 'failed').length;
+  openSheet(`<h2 style="font-size:18px;margin-bottom:10px">পাঠানোর বিবরণ</h2>
+    <div class="list" style="max-height:55vh;overflow:auto">${j.items.map(it => `<div class="psrow"><div style="display:flex;gap:8px;align-items:center"><span class="grow t1" style="font-weight:600;font-size:14px">${esc(it.name)} · ${esc(bn(it.ph))}</span>
+      ${it.st === 'sent' ? pill('পাঠানো', '#17663F', '#E3F4EA') : it.st === 'failed' ? pill('ব্যর্থ', '#B42318', '#FDE8E6') : pill('বাকি', '#3E5070', '#EEF1F6')}</div>
+      <div class="psmsg">${esc(it.txt)}</div>${it.err ? `<span style="font-size:12px;color:#B42318;font-weight:600">${esc(it.err)}</span>` : ''}</div>`).join('')}</div>
+    <div class="row2" style="margin-top:14px"><button class="btn big" data-close>বন্ধ</button>${f && smsOk() && !SQ.running ? `<button class="btn big solid" data-ps-retry="${j.id}">ব্যর্থ ${bn(f)}টি আবার</button>` : `<button class="btn big danger" data-ps-dellog="${j.id}">মুছুন</button>`}</div>`);
+}
+function psWithPerm(fn){
+  const st = SQ.sims = psSmsStatus();
+  if (st.perm) return fn();
+  UI.psAfterPerm = fn;
+  openSheet(`<h2 style="font-size:18px;margin-bottom:8px">SMS পাঠানোর অনুমতি দিন</h2>
+    <p class="t2" style="font-size:14px;line-height:1.7;margin-bottom:16px">অভিভাবকদের কাছে আপনার ফোনের সিম থেকে মেসেজ পাঠাতে অ্যাপকে "SMS পাঠানো" এবং (দুই সিমের ফোনে) "ফোন" অনুমতি দিতে হবে। পরের পর্দায় <b>Allow / অনুমতি দিন</b> চাপুন।</p>
+    <div class="row2"><button class="btn big" data-close>পরে</button><button class="btn big solid" data-ps-perm>অনুমতি দিন</button></div>`);
+}
+function psConfirmSend(){
+  const P = UI.ps, items = psBuild(P).filter(x => x.ok);
+  if (!items.length) return toast('পাঠানোর মতো কোনো মেসেজ নেই');
+  const segs = items.reduce((a, x) => a + x.seg, 0), sims = (SQ.sims && SQ.sims.sims) || [];
+  const sim = sims.length > 1 ? (sims.find(x => +x.id === +DB.smsCfg.sim) || sims[0]) : null;
+  const mins = Math.max(1, Math.round(items.length * 5 / 60));
+  openSheet(`<h2 style="font-size:18px;margin-bottom:8px">${bn(items.length)} জন অভিভাবককে পাঠাবেন?</h2>
+    <p class="t2" style="font-size:14px;line-height:1.7;margin-bottom:10px">মোট <b>${bn(segs)}টি SMS</b> কাটবে${sim ? ` (<b>${esc(sim.label)}</b> থেকে)` : ''}। সময় লাগবে প্রায় ${bn(mins)} মিনিট — এ সময় অ্যাপটি খোলা রাখুন।</p>
+    ${items.length > 25 ? `<p style="font-size:13px;line-height:1.7;background:#FFF1D6;color:#7A4A00;border-radius:12px;padding:10px 12px;margin-bottom:12px">অনেক SMS পাঠালে Android নিজে একটি বার্তা দেখিয়ে অনুমতি চাইতে পারে। তখন <b>"সবসময় অনুমতি দিন / Always allow"</b> টিক দিয়ে <b>Allow</b> চাপুন, নইলে বাকি মেসেজ যাবে না।</p>` : ''}
+    <div class="row2"><button class="btn big" data-close>বাতিল</button><button class="btn big solid" data-ps-go>পাঠান</button></div>`);
+}
+function psCreateJob(){
+  const P = UI.ps, items = psBuild(P).filter(x => x.ok);
+  const job = {id:uid(), at:Date.now(), type:P.type, period:psPeriod(P), key:psJobKey(P), scope:P.scope,
+    items:items.map(x => ({sid:x.sid, name:x.name, ph:x.ph, txt:x.txt, seg:x.seg, st:'pending', err:''}))};
+  DB.smsLog.unshift(job); if (DB.smsLog.length > 40) DB.smsLog.length = 40;
+  P.resend = false;
+  return job;
+}
+function psClick(ds){
+  const P = psState();
+  if (ds.psTab) { P.tab = ds.psTab; window.scrollTo(0, 0); return render(); }
+  if (ds.psCls) { P.cls = ds.psCls; return render(); }
+  if (ds.psSubj) { P.subj = ds.psSubj; return render(); }
+  if (ds.psType) { P.type = ds.psType; P.resend = false; return render(); }
+  if (ds.psL) { const r = psRecW(P.date, P.cls), x = r.s[ds.psL] = r.s[ds.psL] || {}; const v = ds.v === 'y' ? 1 : 0; if (x.l === v) delete x.l; else x.l = v; save(); return render(); }
+  if (ds.psH) { const r = psRecW(P.date, P.cls), x = r.s[ds.psH] = r.s[ds.psH] || {}; if (x.h === ds.v) delete x.h; else x.h = ds.v; save(); return render(); }
+  if ('psAllok' in ds) { const r = psRecW(P.date, P.cls); sortedStudents(P.cls).forEach(s => { const x = r.s[s.id] = r.s[s.id] || {}; if (psAtt(P.date, s.id) === 'a' || psAtt(P.date, s.id) === 'l') return; if (x.l == null) x.l = 1; if (!x.h) x.h = 'done'; }); save(); toast('অনুপস্থিত ছাড়া বাকি সবার তথ্য দেওয়া হয়েছে'); return render(); }
+  if (ds.psLv) { const M = DB.learn[P.ym] = DB.learn[P.ym] || {}, x = M[ds.psLv] = M[ds.psLv] || {}; if (x[P.subj] === ds.v) delete x[P.subj]; else x[P.subj] = ds.v; save(); return render(); }
+  if ('psSend' in ds) { if (!smsOk()) return; return psWithPerm(psConfirmSend); }
+  if ('psPerm' in ds) { closeSheet(); try { BR.smsRequestPermission(); } catch(e) { toast('অনুমতি চাওয়া যায়নি'); } return; }
+  if ('psGo' in ds) { closeSheet(); const j = psCreateJob(); save(); render(); psStart(j); return; }
+  if ('psStop' in ds) { SQ.running = false; clearTimeout(SQ.timer); SQ.wait = null; psProgress(); toast('পাঠানো থামানো হয়েছে'); return render(); }
+  if (ds.psResume) { const j = DB.smsLog.find(x => x.id === ds.psResume); if (j && smsOk()) psWithPerm(() => psStart(j)); return; }
+  if (ds.psLog) return psLogSheet(ds.psLog);
+  if (ds.psRetry) { const j = DB.smsLog.find(x => x.id === ds.psRetry); if (!j) return; closeSheet(); j.items.forEach(it => { if (it.st === 'failed') { it.st = 'pending'; it.err = ''; } }); save(); return psWithPerm(() => { render(); psStart(j); }); }
+  if (ds.psDellog) { DB.smsLog = DB.smsLog.filter(x => x.id !== ds.psDellog); save(); closeSheet(); return render(); }
+}
+function bindParentSms(){
+  const P = psState();
+  const on = (id, ev, fn) => { const el = document.getElementById(id); if (el) el.addEventListener(ev, () => fn(el)); };
+  on('psDate', 'change', el => { if (el.value) { P.date = el.value; render(); } });
+  on('psYm', 'change', el => { if (el.value) { P.ym = el.value; render(); } });
+  on('psSdate', 'change', el => { if (el.value) { P.sdate = el.value; P.resend = false; render(); } });
+  on('psSym', 'change', el => { if (el.value) { P.sym = el.value; P.resend = false; render(); } });
+  on('psScope', 'change', el => { P.scope = el.value; render(); });
+  on('psMax', 'change', el => { DB.smsCfg.maxSeg = +el.value; save(); render(); });
+  on('psSim', 'change', el => { DB.smsCfg.sim = +el.value; save(); });
+  on('psResend', 'change', el => { P.resend = el.checked; render(); });
+  on('psSign', 'change', el => { DB.smsCfg.sign = el.value.trim(); save(); render(); });
+  let t;
+  on('psHw', 'input', el => { psRecW(P.date, P.cls).hw = el.value; clearTimeout(t); t = setTimeout(save, 400); });
+  document.querySelectorAll('[data-ps-r]').forEach(el => el.addEventListener('input', () => {
+    const r = psRecW(P.date, P.cls), x = r.s[el.dataset.psR] = r.s[el.dataset.psR] || {};
+    if (el.value.trim()) x.r = el.value.trim(); else delete x.r; clearTimeout(t); t = setTimeout(save, 400); }));
+}
+
 const TOP = NAV.map(n => n[0]);
 const ROUTE_ALIAS = {'student-profile':'students'};
 function render(){
   let r = (location.hash || '#home').slice(1) || 'home';
   r = ROUTE_ALIAS[r] || r;
-  if (!(TOP.includes(r) || r==='committee' || r==='students' || r==='teachers' || r==='lesson-plan' || r==='teacher-att' || r==='student-att' || r==='certificates' || r==='gpf' || r==='assessment' || r==='pension' || r==='salary' || r==='leave' || r==='img2pdf' || r==='textbooks' || ALL[r])) r = 'home';
+  if (!(TOP.includes(r) || r==='committee' || r==='students' || r==='teachers' || r==='lesson-plan' || r==='teacher-att' || r==='student-att' || r==='certificates' || r==='gpf' || r==='assessment' || r==='pension' || r==='salary' || r==='leave' || r==='img2pdf' || r==='textbooks' || r==='parent-sms' || ALL[r])) r = 'home';
   if (r !== UI.lastRoute) { if (r === 'teacher-att' || r === 'student-att') UI.attView = 'day'; UI.lastRoute = r; }
   const inner = !TOP.includes(r);
   $app.classList.toggle('inner', inner);
   $nav.style.display = inner ? 'none' : 'grid';
-  const views = {home, profile, settings, committee, students, teachers, 'lesson-plan':lessonPlan, 'teacher-att':teacherAtt, 'student-att':studentAtt, certificates, gpf, assessment, pension, salary, leave, img2pdf, textbooks};
+  const views = {home, profile, settings, committee, students, teachers, 'lesson-plan':lessonPlan, 'teacher-att':teacherAtt, 'student-att':studentAtt, certificates, gpf, assessment, pension, salary, leave, img2pdf, textbooks, 'parent-sms':parentSms};
   $app.innerHTML = (views[r] || (() => placeholder(r)))();
   $nav.innerHTML = NAV.map(n => `<button class="${n[0]===r?'on':''}" data-go="${n[0]}" aria-label="${n[1]}" ${n[0]===r?'aria-current="page"':''}><span class="p">${ic(n[2])}</span>${n[1]}</button>`).join('');
   bindView(r);
@@ -3308,6 +3676,7 @@ function bindView(r){
       }); });
   }
   if (r === 'img2pdf') bindImg2pdf();
+  if (r === 'parent-sms') bindParentSms();
   if (r === 'leave') {
     bindLogo();
     const L = lvState(), pv = () => { const el = document.getElementById('lvPreview'); if (el) el.innerHTML = lvLetterHtml(L); };
@@ -3375,6 +3744,7 @@ document.addEventListener('click', e => {
   if ('close' in ds) return closeSheet();
   if ('readall' in ds) { NOTIFS.forEach(n => n.read = true); closeSheet(); render(); return toast('সব নোটিফিকেশন পড়া হয়েছে'); }
   if (ds.go) { window.scrollTo(0,0); return go(ds.go); }
+  if (Object.keys(ds).some(k => /^ps[A-Z]/.test(k))) return psClick(ds);
   if ('back' in ds) { if (history.length > 1) history.back(); else go('home'); return; }
   // committee
   if (ds.ctab) { UI.committeeTab = ds.ctab; UI.showAllMembers = false; try { localStorage.setItem('committeeTab', ds.ctab); } catch(_) {} return render(); }
