@@ -273,7 +273,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '4.9';
+const WEB_VERSION = '5.0';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -575,6 +575,19 @@ function withTeachers(db){
   }
   return db;
 }
+// Earlier versions marked PE, arts & crafts and music out of 100 each; convert once to PE (50) and শিল্পকলা (50).
+function migrateCo50(db){
+  if (db.migrCo50) return db;
+  const M = db.marks || {}, r1 = x => Math.round(x * 10) / 10, n = v => (v === '' || v == null) ? null : +v;
+  Object.values(M).forEach(Y => Object.values(Y || {}).forEach(T => Object.entries(T || {}).forEach(([cls, C]) => {
+    if (cls === 'pre' || !C) return;
+    if (C.pe) Object.values(C.pe).forEach(m => { if (n(m.c) != null) m.c = r1(n(m.c) / 2); });
+    const ids = new Set([...Object.keys(C.art || {}), ...Object.keys(C.music || {})]);
+    if (ids.size) { C.arts = C.arts || {}; ids.forEach(id => { const a = n((C.art || {})[id] && C.art[id].c), b = n((C.music || {})[id] && C.music[id].c);
+      const v = a != null && b != null ? (a + b) / 4 : (a != null ? a : b) / 2; if (v != null && !isNaN(v) && !C.arts[id]) C.arts[id] = {c: r1(v)}; }); }
+  })));
+  db.migrCo50 = true; return db;
+}
 let canStore = true;
 let FRESH = false; try { FRESH = !localStorage.getItem(KEY); } catch(e) {}
 let DB = (() => {
@@ -583,10 +596,10 @@ let DB = (() => {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const s = JSON.parse(raw);
-      return withTeachers({...d, ...s, teacher:{...d.teacher, ...(s.teacher||{})}, committees:{...d.committees, ...(s.committees||{})}});
+      return migrateCo50(withTeachers({...d, ...s, teacher:{...d.teacher, ...(s.teacher||{})}, committees:{...d.committees, ...(s.committees||{})}}));
     }
   } catch(e) { canStore = false; }
-  return withTeachers(d);
+  d.migrCo50 = true; return withTeachers(d);
 })();
 function save(){
   try { localStorage.setItem(KEY, JSON.stringify(DB)); scheduleBackup(); return true; }
@@ -619,7 +632,7 @@ function applyBackup(obj){
   const s = obj && obj.db ? obj.db : obj;
   if (!s || !s.teacher || !s.committees || !Array.isArray(s.students)) throw new Error('bad backup');
   const d = DEFAULTS();
-  DB = withTeachers({...d, ...s, teacher:{...d.teacher, ...s.teacher}, committees:{...d.committees, ...s.committees}, plans:Array.isArray(s.plans)?s.plans:[]});
+  DB = migrateCo50(withTeachers({...d, ...s, teacher:{...d.teacher, ...s.teacher}, committees:{...d.committees, ...s.committees}, plans:Array.isArray(s.plans)?s.plans:[]}));
   if (obj && obj.photos && typeof obj.photos === 'object') { PHOTOS = obj.photos; try { localStorage.setItem(PHOTO_KEY, JSON.stringify(PHOTOS)); } catch(e) {} }
   save();
 }
@@ -2152,10 +2165,21 @@ function gpfRefresh(){
 const TERMS = [['t1','প্রথম প্রান্তিক'],['t2','দ্বিতীয় প্রান্তিক'],['t3','চূড়ান্ত প্রান্তিক']];
 const TERM_NAME = Object.fromEntries(TERMS);
 const RELIGION_SUBJ = {islam:'ইসলাম', hindu:'হিন্দু', buddha:'বৌদ্ধ', christ:'খ্রিষ্ট'};
-const CO_SUBJ = new Set(['pe','art','music']);
+const CO_SUBJ = new Set(['pe','art','music','arts']);
+// Marks for classes 1–5: physical & mental health education (50) and শিল্পকলা — arts & crafts with music — (50).
+// Lesson plans keep the separate subjects; only assessment uses this list.
+const CO_ASSESS = [['pe','শারীরিক ও মানসিক স্বাস্থ্য শিক্ষা','সহশিক্ষা'],['arts','শিল্পকলা','সহশিক্ষা']];
+function assessSubjectsFor(cls){
+  if (cls === 'pre') return subjectsFor(cls);
+  return [...subjectsFor(cls).filter(([sid]) => !CO_SUBJ.has(sid)).filter(x => !x[3]), ...CO_ASSESS, ...subjectsFor(cls).filter(x => x[3])];
+}
+// Grade points (Bangladesh primary): A+ 5, A 4, A- 3.5, B 3, C 2, D 1, F 0.
+const GP = {'A+':5, 'A':4, 'A-':3.5, 'B':3, 'C':2, 'D':1, 'F':0};
+const gpaTxt = g => g == null ? '–' : bn(g.toFixed(2));
 // 2026 primary assessment guideline: classes 1-2 → 50 continuous + 50 summative; 3-5 → 30 + 70;
 // co-curricular subjects (and pre-primary) → 100% continuous.
 function subjMax(cls, sid){
+  if (cls !== 'pre' && (sid === 'pe' || sid === 'arts')) return {c:50, s:0};
   if (cls === 'pre' || CO_SUBJ.has(sid)) return {c:100, s:0};
   if (cls === '1' || cls === '2') return {c:50, s:50};
   return {c:30, s:70};
@@ -2167,7 +2191,7 @@ function gradeOf(p){
 const GRADE_COL = {'A+':['#17663F','#E3F4EA'], 'A':['#17663F','#E3F4EA'], 'A-':['#0E5F58','#E2F4F2'], 'B':['#1F4E8C','#E6EFFA'], 'C':['#7A4A00','#FFF1D6'], 'D':['#7A4A00','#FFF1D6'], 'F':['#B42318','#FDE8E6']};
 const gradePill = g => `<span class="gr" style="color:${GRADE_COL[g][0]};background:${GRADE_COL[g][1]}">${g}</span>`;
 function studentSubjects(st){
-  return subjectsFor(st.cls).filter(([sid]) => !RELIGION_SUBJ[sid] || !st.religion || st.religion === sid);
+  return assessSubjectsFor(st.cls).filter(([sid]) => !RELIGION_SUBJ[sid] || !st.religion || st.religion === sid);
 }
 function markBox(year, term, cls, subj, create){
   const M = DB.marks;
@@ -2183,12 +2207,16 @@ function termResult(st, year, term){
     const mx = subjMax(st.cls, sid);
     if (!m || (m.c === '' || m.c == null) && (m.s === '' || m.s == null)) { if (!RELIGION_SUBJ[sid] || st.religion === sid) rows.push({sid, name, mx, has:false}); return; }
     const c = num(m.c), sm = num(m.s), tot = c + (mx.s ? sm : 0), full = mx.c + mx.s, pct = tot * 100 / full;
-    rows.push({sid, name, mx, has:true, c, s:sm, tot, full, pct, grade: gradeOf(pct)});
+    const grade = gradeOf(pct);
+    rows.push({sid, name, mx, has:true, c, s:sm, tot, full, pct, grade, gp: GP[grade]});
   });
   const done = rows.filter(r => r.has);
   const tot = done.reduce((a, r) => a + r.tot, 0), full = done.reduce((a, r) => a + r.full, 0);
   const pct = full ? tot * 100 / full : 0;
-  return {rows, done, tot, full, pct, grade: full ? gradeOf(pct) : '', failed: done.filter(r => r.pct < 33)};
+  const failed = done.filter(r => r.pct < 33);
+  // GPA: average grade point of the marked subjects; a fail in any subject makes it 0.00
+  const gpa = done.length ? (failed.length ? 0 : Math.round(done.reduce((a, r) => a + r.gp, 0) / done.length * 100) / 100) : null;
+  return {rows, done, tot, full, pct, grade: full ? gradeOf(pct) : '', failed, gpa};
 }
 function classResults(cls, year, term){
   const list = sortedStudents(cls).map(st => ({st, r: termResult(st, year, term)}));
@@ -2224,7 +2252,7 @@ function assessment(){
   return head + `<div class="sec" style="padding-top:16px">${top}${A.view === 'entry' ? marksEntry() : resultSheet()}</div>`;
 }
 function marksEntry(){
-  const A = UI.as, subs = subjectsFor(A.cls), list = sortedStudents(A.cls);
+  const A = UI.as, subs = assessSubjectsFor(A.cls), list = sortedStudents(A.cls);
   if (!A.subj || !subs.some(x => x[0] === A.subj)) A.subj = subs[0][0];
   const studentsFor = sid => RELIGION_SUBJ[sid] ? list.filter(st => !st.religion || st.religion === sid) : list;
   const filled = sid => { const b = markBox(A.year, A.term, A.cls, sid); return studentsFor(sid).filter(st => b[st.id] && (b[st.id].c !== '' || b[st.id].s !== '')).length; };
@@ -2261,7 +2289,7 @@ function resultSheet(){
     <p class="hint">শিক্ষার্থীর নামে চাপলে তার অগ্রগতি রিপোর্ট কার্ড খুলবে।</p>
     <div class="list">${list.map(({st, r}) => `<button class="mem tap" data-as-report="${st.id}">
       <span class="rollb">${st.roll ? esc(bn(st.roll)) : '–'}</span>
-      <span class="grow"><span class="t1" style="font-weight:600;font-size:14px">${esc(st.name)}</span><span class="t2">${r.done.length ? `${bn(Math.round(r.tot*10)/10)}/${bn(r.full)} · ${bn(Math.round(r.pct))}%${r.failed.length ? ` · ${bn(r.failed.length)} বিষয়ে অকৃতকার্য` : ''}` : 'নম্বর দেওয়া হয়নি'}</span></span>
+      <span class="grow"><span class="t1" style="font-weight:600;font-size:14px">${esc(st.name)}</span><span class="t2">${r.done.length ? `${bn(Math.round(r.tot*10)/10)}/${bn(r.full)} · ${bn(Math.round(r.pct))}% · জিপিএ ${gpaTxt(r.gpa)}${r.failed.length ? ` · ${bn(r.failed.length)} বিষয়ে অকৃতকার্য` : ''}` : 'নম্বর দেওয়া হয়নি'}</span></span>
       ${r.done.length ? `${gradePill(r.grade)}<span class="pct" style="min-width:40px">${ordBn(posOf.get(st.id))}</span>` : ''}
       <span style="color:var(--mute)">${ic('chev',20)}</span></button>`).join('')}</div>`;
 }
@@ -2307,7 +2335,7 @@ function reportInner(st, year, term){
   const f1 = x => bn(Math.round(x * 10) / 10);
   const remark = ((DB.remarks[year] || {})[term] || {})[st.id] || '';
   const rowsN = r.rows.length + (others.length > 1 ? studentSubjects(st).length + 2 : 0) + (remark.length > 120 ? 2 : 0);
-  return `<div class="rep a4${rowsN > 30 ? ' dense xd' : rowsN > 16 ? ' dense' : ''}">${logoWm()}
+  return `<div class="rep a4${rowsN > 26 ? ' dense xd' : rowsN > 16 ? ' dense' : ''}">${logoWm()}
     <div class="h">${logoHead()}<div class="s">${esc(T.school)}</div>${sub ? `<div class="sub">${esc(sub)}</div>` : ''}</div>
     <div class="ttl"><span>শিক্ষার্থীর অগ্রগতি প্রতিবেদন</span></div>
     <div class="info"><table><tr><td>নাম:</td><td><b>${esc(st.name)}</b></td></tr>
@@ -2316,12 +2344,12 @@ function reportInner(st, year, term){
       <tr><td>মাতার নাম:</td><td>${st.mother ? esc(st.mother) : '................................'}</td></tr>
       <tr><td>মূল্যায়ন:</td><td>${TERM_NAME[term]}, শিক্ষাবর্ষ ${bn(year)}</td></tr></table>
       ${PHOTOS[st.id] ? `<img class="ph" src="${PHOTOS[st.id]}" alt="">` : ''}</div>
-    <table class="m"><thead><tr><th class="l">বিষয়</th><th>ধারাবাহিক</th><th>সামষ্টিক</th><th>মোট (১০০)</th><th>গ্রেড</th></tr></thead><tbody>
+    <table class="m"><thead><tr><th class="l">বিষয়</th><th>ধারাবাহিক</th><th>সামষ্টিক</th><th>মোট</th><th>গ্রেড</th><th>গ্রেড পয়েন্ট</th></tr></thead><tbody>
       ${r.rows.map(x => x.has
-        ? `<tr><td class="l">${esc(x.name)}</td><td>${f1(x.c)}/${bn(x.mx.c)}</td><td>${x.mx.s ? `${f1(x.s)}/${bn(x.mx.s)}` : '—'}</td><td>${f1(x.tot)}</td><td class="${x.grade==='F'?'f':''}">${x.grade}</td></tr>`
-        : `<tr><td class="l">${esc(x.name)}</td><td colspan="4" style="color:#777">নম্বর দেওয়া হয়নি</td></tr>`).join('')}
+        ? `<tr><td class="l">${esc(x.name)}</td><td>${f1(x.c)}/${bn(x.mx.c)}</td><td>${x.mx.s ? `${f1(x.s)}/${bn(x.mx.s)}` : '—'}</td><td>${f1(x.tot)}/${bn(x.full)}</td><td class="${x.grade==='F'?'f':''}">${x.grade}</td><td>${bn(x.gp.toFixed(2))}</td></tr>`
+        : `<tr><td class="l">${esc(x.name)}</td><td colspan="5" style="color:#777">নম্বর দেওয়া হয়নি</td></tr>`).join('')}
     </tbody></table>
-    <div class="sum"><span>মোট প্রাপ্ত নম্বর: <b>${f1(r.tot)}/${bn(r.full)}</b></span><span>শতকরা: <b>${bn(Math.round(r.pct))}%</b></span><span>গ্রেড: <b>${r.grade || '–'}</b></span>${me ? `<span>মেধাক্রম: <b>${ordBn(me.pos)}</b> (${bn(ranked.length)} জনের মধ্যে)</span>` : ''}${att.pct !== null ? `<span>উপস্থিতি (${bn(year)}): <b>${bn(att.pct)}%</b> (${bn(att.p)} দিন)</span>` : ''}</div>
+    <div class="sum"><span>মোট প্রাপ্ত নম্বর: <b>${f1(r.tot)}/${bn(r.full)}</b></span><span>শতকরা: <b>${bn(Math.round(r.pct))}%</b></span><span>গ্রেড: <b>${r.grade || '–'}</b></span><span>জিপিএ: <b class="${r.gpa === 0 ? 'f' : ''}">${gpaTxt(r.gpa)}</b></span>${me ? `<span>মেধাক্রম: <b>${ordBn(me.pos)}</b> (${bn(ranked.length)} জনের মধ্যে)</span>` : ''}${att.pct !== null ? `<span>উপস্থিতি (${bn(year)}): <b>${bn(att.pct)}%</b> (${bn(att.p)} দিন)</span>` : ''}</div>
     ${r.failed.length ? `<p class="f" style="margin:0 0 8px">উন্নতি প্রয়োজন: ${r.failed.map(x => esc(x.name)).join(', ')}</p>` : ''}
     ${others.length > 1 ? `<b>প্রান্তিকভিত্তিক অগ্রগতি (মোট নম্বর)</b><table class="m"><thead><tr><th class="l">বিষয়</th>${others.map(([, n]) => `<th>${n}</th>`).join('')}</tr></thead><tbody>
       ${studentSubjects(st).map(([sid, name]) => { const cells = others.map(([t]) => { const x = termResult(st, year, t).rows.find(y => y.sid === sid); return x && x.has ? f1(x.tot) : '—'; });
@@ -2360,12 +2388,12 @@ function reportText(st, year, term){
   const remark = ((DB.remarks[year] || {})[term] || {})[st.id] || '';
   return `${DB.teacher.school}\nঅগ্রগতি প্রতিবেদন — ${TERM_NAME[term]}, ${bn(year)}\n${st.name}, ${CLASS_NAME[st.cls]||''}, রোল ${st.roll ? bn(st.roll) : '–'}\n\n` +
     r.done.map(x => `${x.name}: ${bn(Math.round(x.tot*10)/10)} (${x.grade})`).join('\n') +
-    `\n\nমোট: ${bn(Math.round(r.tot*10)/10)}/${bn(r.full)} (${bn(Math.round(r.pct))}%), গ্রেড ${r.grade || '–'}${me ? `, মেধাক্রম ${ordBn(me.pos)}` : ''}` + (remark ? `\nমন্তব্য: ${remark}` : '');
+    `\n\nমোট: ${bn(Math.round(r.tot*10)/10)}/${bn(r.full)} (${bn(Math.round(r.pct))}%), গ্রেড ${r.grade || '–'}, জিপিএ ${gpaTxt(r.gpa)}${me ? `, মেধাক্রম ${ordBn(me.pos)}` : ''}` + (remark ? `\nমন্তব্য: ${remark}` : '');
 }
 function sheetDoc(cls, year, term){
   const {list, ranked} = classResults(cls, year, term), posOf = new Map(ranked.map(x => [x.st.id, x.pos]));
   // All religion subjects share one column: each student has only their own.
-  const used = subjectsFor(cls).filter(([sid]) => list.some(({r}) => r.done.some(x => x.sid === sid)));
+  const used = assessSubjectsFor(cls).filter(([sid]) => list.some(({r}) => r.done.some(x => x.sid === sid)));
   const subs = []; let relAdded = false;
   used.forEach(sub => { if (RELIGION_SUBJ[sub[0]]) { if (!relAdded) { subs.push(['__rel', 'ধর্ম ও নৈতিক শিক্ষা']); relAdded = true; } } else subs.push(sub); });
   const T = DB.teacher, f1 = x => bn(Math.round(x * 10) / 10);
@@ -2373,16 +2401,16 @@ function sheetDoc(cls, year, term){
   <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;600;700&display=swap" rel="stylesheet">
   <style>@page{size:A4 landscape;margin:10mm}html,body{margin:0}${REPORT_CSS}.rep{border:0;padding:0}.rep table.m th,.rep table.m td{padding:3px 4px;font-size:12px}</style></head><body><div class="rep">
   <div class="h"><div class="s">${esc(T.school)}</div><div class="sub">ফলাফল শিট — ${CLASS_NAME[cls]}, ${TERM_NAME[term]}, শিক্ষাবর্ষ ${bn(year)}</div></div>
-  <table class="m"><thead><tr><th>রোল</th><th class="l">নাম</th>${subs.map(([, n]) => `<th>${esc(n)}</th>`).join('')}<th>মোট</th><th>%</th><th>গ্রেড</th><th>মেধাক্রম</th></tr></thead><tbody>
+  <table class="m"><thead><tr><th>রোল</th><th class="l">নাম</th>${subs.map(([, n]) => `<th>${esc(n)}</th>`).join('')}<th>মোট</th><th>%</th><th>গ্রেড</th><th>জিপিএ</th><th>মেধাক্রম</th></tr></thead><tbody>
   ${list.map(({st, r}) => `<tr><td>${st.roll ? esc(bn(st.roll)) : '–'}</td><td class="l">${esc(st.name)}</td>${subs.map(([sid]) => { const x = sid === '__rel' ? r.rows.find(y => RELIGION_SUBJ[y.sid] && y.has) : r.rows.find(y => y.sid === sid); return `<td class="${x && x.has && x.grade==='F' ? 'f' : ''}">${x && x.has ? f1(x.tot) : '—'}</td>`; }).join('')}
-    <td><b>${r.done.length ? f1(r.tot) : '—'}</b></td><td>${r.done.length ? bn(Math.round(r.pct)) : '—'}</td><td>${r.grade || '—'}</td><td>${posOf.has(st.id) ? bn(posOf.get(st.id)) : '—'}</td></tr>`).join('')}
+    <td><b>${r.done.length ? f1(r.tot) : '—'}</b></td><td>${r.done.length ? bn(Math.round(r.pct)) : '—'}</td><td>${r.grade || '—'}</td><td>${r.done.length ? gpaTxt(r.gpa) : '—'}</td><td>${posOf.has(st.id) ? bn(posOf.get(st.id)) : '—'}</td></tr>`).join('')}
   </tbody></table>
   <div class="sg"><div>শ্রেণি শিক্ষক</div><div>প্রধান শিক্ষক</div></div></div></body></html>`;
 }
 function sheetText(cls, year, term){
   const {list, ranked} = classResults(cls, year, term), posOf = new Map(ranked.map(x => [x.st.id, x.pos]));
   return `${DB.teacher.school}\nফলাফল — ${CLASS_NAME[cls]}, ${TERM_NAME[term]}, ${bn(year)}\n\n` +
-    list.filter(x => x.r.done.length).map(({st, r}) => `রোল ${st.roll ? bn(st.roll) : '–'} ${st.name}: ${bn(Math.round(r.tot*10)/10)}/${bn(r.full)} (${bn(Math.round(r.pct))}%), ${r.grade}, মেধাক্রম ${ordBn(posOf.get(st.id))}`).join('\n');
+    list.filter(x => x.r.done.length).map(({st, r}) => `রোল ${st.roll ? bn(st.roll) : '–'} ${st.name}: ${bn(Math.round(r.tot*10)/10)}/${bn(r.full)} (${bn(Math.round(r.pct))}%), ${r.grade}, জিপিএ ${gpaTxt(r.gpa)}, মেধাক্রম ${ordBn(posOf.get(st.id))}`).join('\n');
 }
 function onMarkInput(el){
   const A = UI.as, max = num(el.dataset.max), raw = toEn(el.value).trim();
