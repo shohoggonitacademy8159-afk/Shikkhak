@@ -236,6 +236,40 @@ img.ma{object-fit:cover;background:#E8EEF5}
 .pssum{padding:9px 12px;border-top:1px solid #EDF2EF;font-size:13.5px}.pssum:first-child{border-top:0}
 .pssum div{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
 .pschip{font-size:11.5px;font-weight:700;padding:2px 9px;border-radius:99px}
+.rtwrap{overflow-x:auto;border:1px solid #9FB0C4;border-radius:12px;background:#fff;-webkit-overflow-scrolling:touch}
+.rtt{width:100%;border-collapse:collapse;min-width:100%}
+.rtt th{font-size:12px;font-weight:700;background:#EEF4F2;border:1px solid #C5D2DE;padding:4px 2px;text-align:center;line-height:1.2}
+.rtt th small{display:block;font-size:10px;font-weight:600;color:var(--mute);white-space:nowrap}
+.rtt th.d{width:44px;min-width:44px;font-size:12.5px}
+.rtt td{border:1px solid #D5DEE8;padding:0;text-align:center;min-width:56px;height:52px}
+.rtt th.br,.rtt td.br{width:18px;min-width:18px;background:#F4F6F8;padding:0}
+.rtt th.br span{writing-mode:vertical-rl;transform:rotate(180deg);font-size:10.5px;color:var(--mute)}
+.rtt.all td{min-width:62px}.rtt.all tr.dstart th,.rtt.all tr.dstart td{border-top:2px solid #7C8FA6}
+.rtc{width:100%;height:100%;min-height:52px;border:0;background:transparent;font:inherit;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:2px;cursor:pointer;color:var(--ink)}
+.rtc b{font-size:12px;line-height:1.2}.rtc small{font-size:10.5px;color:var(--mute);line-height:1.15}
+.rtc .plus{font-size:18px;color:#B7C3D0}
+.rtt tr.today th.d{background:#0F766E;color:#fff}
+.rtt td.live{outline:3px solid #0F766E;outline-offset:-3px}
+.rtt td.bad{background:#FDE8E6}
+.rtday{background:#fff;border-radius:14px;padding:10px 12px;border:1px solid #E1E8EF}
+.rtday.today{border:2px solid #0F766E}
+.rtdh{display:flex;align-items:center;gap:8px;margin-bottom:4px}.rtdh .t2{margin-left:auto;font-size:12.5px}
+.rtitem{display:flex;gap:10px;align-items:center;padding:7px 0;border-top:1px solid #EEF2F5;font-size:13.5px}
+.rtitem .tm{font-size:12px;font-weight:700;color:#0F766E;min-width:84px}
+.rtitem .grow{display:flex;flex-direction:column}.rtitem small{font-size:11.5px;color:var(--mute)}
+.rtitem.live{background:#E0F2EF;border-radius:10px;padding:7px 8px}
+.rtitem.bad small{color:#B42318;font-weight:700}
+.rtpick{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.rtpick.t{grid-template-columns:1fr}
+.rtpick button{min-height:42px;border-radius:10px;border:1px solid #C5D2DE;background:#fff;font:inherit;font-size:13px;font-weight:700;color:var(--ink);padding:4px 6px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.25;cursor:pointer}
+.rtpick.t button{align-items:flex-start;text-align:left;padding:6px 12px}
+.rtpick button small{font-size:11px;font-weight:600}
+.rtpick button.on{background:#0F766E;border-color:#0F766E;color:#fff}
+.rsrow{display:grid;grid-template-columns:1.3fr 1fr 1fr auto auto;gap:4px;align-items:center}
+.rsrow .psin{padding:6px 4px;font-size:12.5px;min-height:38px}
+.rskind{min-height:38px;border-radius:9px;border:1px solid #9FB0C4;background:#E0F2EF;color:#0F766E;font:inherit;font-size:11.5px;font-weight:700;padding:0 6px}
+.rskind.br{background:#F4F6F8;color:#3E5070}
+.rsdel{min-height:38px;width:34px;border-radius:9px;border:1px solid #F1B8B0;background:#fff;color:#B42318;font-weight:800}
 .pschk{flex:none;width:30px;height:30px;border-radius:8px;border:2px solid #9FB0C4;background:#fff;font-size:18px;font-weight:800;color:#fff;line-height:1;cursor:pointer}
 .pschk.on{background:#0F766E;border-color:#0F766E}
 .pschk:disabled{opacity:.35;cursor:not-allowed}
@@ -309,7 +343,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '6.0';
+const WEB_VERSION = '6.1';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -3302,6 +3336,302 @@ function tbAddSheet(){
   });
 }
 
+/* ---------- ক্লাস রুটিন (এক বা দুই শিফট) ---------- */
+/* DB.routine = {twoShift, days:[...], shifts:[{id,name,classes:[...],slots:[{id,label,start,end,kind:'period'|'break'}]}],
+                 grid:{cls:{day:{slotId:{sub, t}}}}, me:teacherId} */
+const RT_DAYS = [['sat','শনিবার','শনি'],['sun','রবিবার','রবি'],['mon','সোমবার','সোম'],['tue','মঙ্গলবার','মঙ্গল'],['wed','বুধবার','বুধ'],['thu','বৃহস্পতিবার','বৃহঃ']];
+const RT_DAY_OF_JS = ['sun','mon','tue','wed','thu','fri','sat'];
+const RT_SUB = {bangla:'বাংলা', english:'ইংরেজি', math:'গণিত', science:'বিজ্ঞান', bgs:'বাওবি', religion:'ধর্ম', pe:'শারীরিক ও মানসিক স্বাস্থ্য', arts:'শিল্পকলা',
+  skill:'পঠন-লিখন দক্ষতা', remedial:'নিরাময়মূলক', cocur:'সহপাঠ্যক্রম', 'pre-lang':'ভাষা ও যোগাযোগ', 'pre-math':'গণিত', 'pre-env':'পরিবেশ পরিচিতি', art:'চারু ও কারুকলা', ppe:'শারীরিক কার্যক্রম'};
+const RT_SHORT = {pe:'শা. ও মা. স্বাস্থ্য', skill:'দক্ষতা', remedial:'নিরাময়', cocur:'সহপাঠ্য', 'pre-lang':'ভাষা', 'pre-env':'পরিবেশ', art:'চারু-কারু', ppe:'শারীরিক'};
+const RT_COL = {bangla:'#1E8A55', english:'#2563C9', math:'#7C4DCC', science:'#0E8C82', bgs:'#C27C0E', religion:'#B4235A', pe:'#E0701A', arts:'#D23F74', skill:'#4F46E5', remedial:'#6B7280', cocur:'#0F766E', 'pre-lang':'#1E8A55', 'pre-math':'#7C4DCC', 'pre-env':'#0E8C82', art:'#D23F74', ppe:'#E0701A'};
+function rtSubjects(cls){
+  const base = cls === 'pre' ? ['pre-lang','pre-math','pre-env','art','ppe','cocur']
+    : (cls === '1' || cls === '2') ? ['bangla','english','math','pe','arts','skill','remedial','cocur']
+    : ['bangla','english','math','science','bgs','religion','pe','arts','skill','remedial','cocur'];
+  const custom = ((DB.customSubjects || {})[cls] || []).map(s => s.id);
+  return [...base, ...custom];
+}
+function rtSubName(id, cls, short){
+  if (RT_SUB[id]) return short && RT_SHORT[id] ? RT_SHORT[id] : RT_SUB[id];
+  const c = ((DB.customSubjects || {})[cls] || []).find(s => s.id === id);
+  return c ? c.name : id;
+}
+const rtColor = id => RT_COL[id] || '#3E5070';
+function rtSlotsDefault(n, start, assembly, breakAfter){
+  // n periods; times in minutes from midnight
+  const out = []; let t = start; const mk = (label, len, kind) => { out.push({id:uid(), label, start:rtHM(t), end:rtHM(t + len), kind}); t += len; };
+  if (assembly) mk('সমাবেশ', 15, 'break');
+  const names = ['১ম','২য়','৩য়','৪র্থ','৫ম','৬ষ্ঠ','৭ম'];
+  for (let i = 0; i < n; i++) { mk(names[i] + ' পিরিয়ড', 40, 'period'); if (breakAfter && i === breakAfter - 1) mk('বিরতি', 30, 'break'); }
+  return out;
+}
+const rtHM = m => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+const rtMin = hm => { const [h, m] = (hm || '0:0').split(':').map(Number); return h * 60 + m; };
+function rtTime(hm){ // 13:05 → ১:০৫
+  if (!hm) return ''; let [h, m] = hm.split(':').map(Number); h = h % 12 || 12;
+  return bn(h) + ':' + bn(String(m).padStart(2, '0'));
+}
+function rtData(){
+  let R = DB.routine;
+  if (!R || typeof R !== 'object' || !Array.isArray(R.shifts)) {
+    R = DB.routine = {twoShift:true, days:['sun','mon','tue','wed','thu'], grid:{}, me:null,
+      shifts:[{id:'s1', name:'১ম শিফট', classes:['pre','1','2'], slots:rtSlotsDefault(4, 9 * 60, true, 0)},
+              {id:'s2', name:'২য় শিফট', classes:['3','4','5'], slots:rtSlotsDefault(5, 12 * 60, true, 2)}]};
+  }
+  R.grid = R.grid || {}; R.days = R.days && R.days.length ? R.days : ['sun','mon','tue','wed','thu'];
+  return R;
+}
+function rtShifts(){ const R = rtData(); return R.twoShift ? R.shifts : [R.shifts[0]]; }
+function rtShiftOf(cls){ const R = rtData(); return rtShifts().find(s => s.classes.includes(cls)) || rtShifts()[0]; }
+const rtCell = (cls, day, slotId) => ((((rtData().grid[cls] || {})[day]) || {})[slotId]) || null;
+function rtSetCell(cls, day, slotId, v){
+  const G = rtData().grid; G[cls] = G[cls] || {}; G[cls][day] = G[cls][day] || {};
+  if (v && (v.sub || v.t)) G[cls][day][slotId] = v; else delete G[cls][day][slotId];
+}
+function rtTeachers(){ return DB.teachers.slice().sort((a, b) => (parseInt(a.serial) || 99) - (parseInt(b.serial) || 99)); }
+function rtTName(id, short){
+  const t = DB.teachers.find(x => x.id === id); if (!t) return '';
+  if (!short) return t.name;
+  const w = t.name.replace(/^(মোঃ|মোছাঃ|মো\.|মোসাঃ|মিসেস|শ্রী|শ্রীমতি|মুহাম্মদ|মোহাম্মদ)\s*/,'').trim().split(/\s+/);
+  return w[0] || t.name;
+}
+/* all classes in shift order */
+function rtClasses(){ return rtShifts().flatMap(s => s.classes); }
+/* who teaches at which time — for clash warnings */
+function rtBusy(){
+  const R = rtData(), map = {};
+  rtShifts().forEach(sh => sh.classes.forEach(cls => R.days.forEach(day => sh.slots.forEach(sl => {
+    if (sl.kind !== 'period') return; const c = rtCell(cls, day, sl.id); if (!c || !c.t) return;
+    (map[day + '|' + c.t] = map[day + '|' + c.t] || []).push({cls, slot:sl, a:rtMin(sl.start), b:rtMin(sl.end)});
+  }))));
+  return map;
+}
+function rtClashes(){
+  const busy = rtBusy(), bad = new Set();
+  Object.entries(busy).forEach(([k, list]) => { const day = k.split('|')[0];
+    for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+      const x = list[i], y = list[j]; if (x.a < y.b && y.a < x.b) { bad.add(x.cls + '|' + day + '|' + x.slot.id); bad.add(y.cls + '|' + day + '|' + y.slot.id); } } });
+  return bad;
+}
+function rtState(){ if (!UI.rt) UI.rt = {tab:'class', cls:null, tid:null}; return UI.rt; }
+const rtDayName = (d, short) => (RT_DAYS.find(x => x[0] === d) || [d, d, d])[short ? 2 : 1];
+
+/* ---- weekly sample fill (can be changed cell by cell) ---- */
+function rtSampleFill(cls){
+  const R = rtData(), sh = rtShiftOf(cls), periods = sh.slots.filter(s => s.kind === 'period');
+  const plan = cls === 'pre' ? {'pre-lang':5, 'pre-math':5, 'pre-env':4, art:3, ppe:3}
+    : (cls === '1' || cls === '2') ? {bangla:5, english:5, math:5, pe:2, arts:2, skill:1}
+    : {bangla:5, english:5, math:5, science:3, bgs:3, religion:2, arts:1, pe:1};
+  const core = Object.keys(plan).filter(k => plan[k] >= 5).slice(0, periods.length);
+  const rest = []; Object.entries(plan).forEach(([k, n]) => { if (!core.includes(k)) for (let i = 0; i < n; i++) rest.push(k); });
+  R.days.forEach((day, di) => periods.forEach((sl, pi) => {
+    const old = rtCell(cls, day, sl.id) || {};
+    let sub;
+    if (pi < core.length && di < 5) sub = core[pi];
+    else sub = rest.length ? rest.shift() : (cls === 'pre' ? 'cocur' : 'remedial');
+    rtSetCell(cls, day, sl.id, {sub, t:old.t});
+  }));
+}
+
+/* ---- views ---- */
+function routine(){
+  const R = rtData(), U = rtState();
+  const head = topHeader('রুটিন', 'clock');
+  const tabs = `<div class="tabs2" style="grid-template-columns:repeat(3,minmax(0,1fr))" role="tablist">${[['class','শ্রেণির রুটিন'],['teacher','শিক্ষকের রুটিন'],['all','পুরো ছক']].map(([k, l]) => `<button role="tab" class="${U.tab === k ? 'on' : ''}" data-rt-tab="${k}">${l}</button>`).join('')}</div>`;
+  const tools = `<div class="row2"><button class="btn" data-rt-setup>${ic('gear', 18)} শিফট ও সময়</button><button class="btn" data-rt-print>${ic('doc', 18)} প্রিন্ট / PDF</button></div>`;
+  const shiftInfo = `<div class="card" style="gap:6px">${rtShifts().map(s => { const p = s.slots.filter(x => x.kind === 'period').length;
+      return `<div style="display:flex;justify-content:space-between;gap:8px;font-size:13.5px"><b>${esc(s.name)}</b><span class="t2">${s.classes.map(c => CLASS_NAME[c]).join(', ') || '—'} · ${s.slots.length ? rtTime(s.slots[0].start) + '–' + rtTime(s.slots[s.slots.length - 1].end) : ''} · ${bn(p)} পিরিয়ড</span></div>`; }).join('')}</div>`;
+  const body = U.tab === 'teacher' ? rtTeacherView() : U.tab === 'all' ? rtAllView() : rtClassView();
+  return head + `<div class="sec" style="padding-top:16px">${tabs}${shiftInfo}${tools}${body}</div>`;
+}
+function rtTodayKey(){ return RT_DAY_OF_JS[new Date().getDay()]; }
+function rtNowSlot(sh){ const n = new Date(), m = n.getHours() * 60 + n.getMinutes(); return sh.slots.find(s => rtMin(s.start) <= m && m < rtMin(s.end)); }
+function rtGridTable(cls, editable, clash){
+  const R = rtData(), sh = rtShiftOf(cls), today = rtTodayKey(), now = rtNowSlot(sh);
+  const head = `<tr><th class="d">বার</th>${sh.slots.map(s => s.kind === 'break' ? `<th class="br"><span>${esc(s.label)}</span></th>` : `<th>${esc(s.label.replace(' পিরিয়ড', ''))}<small>${rtTime(s.start)}–${rtTime(s.end)}</small></th>`).join('')}</tr>`;
+  const rows = R.days.map(day => `<tr class="${day === today ? 'today' : ''}"><th class="d">${rtDayName(day, true)}</th>${sh.slots.map(s => {
+      if (s.kind === 'break') return `<td class="br"></td>`;
+      const c = rtCell(cls, day, s.id) || {}, bad = clash && clash.has(cls + '|' + day + '|' + s.id), live = day === today && now && now.id === s.id;
+      const inner = c.sub ? `<b style="color:${rtColor(c.sub)}">${esc(rtSubName(c.sub, cls, true))}</b>${c.t ? `<small>${esc(rtTName(c.t, true))}</small>` : ''}` : (editable ? '<span class="plus">+</span>' : '');
+      return editable ? `<td class="${bad ? 'bad' : ''}${live ? ' live' : ''}"><button class="rtc" data-rt-cell="${cls}|${day}|${s.id}" aria-label="${rtDayName(day)} ${esc(s.label)}">${inner}</button></td>` : `<td class="${bad ? 'bad' : ''}${live ? ' live' : ''}"><div class="rtc">${inner}</div></td>`;
+    }).join('')}</tr>`).join('');
+  return `<div class="rtwrap"><table class="rtt">${head}${rows}</table></div>`;
+}
+function rtClassView(){
+  const U = rtState(), cl = rtClasses();
+  if (!U.cls || !cl.includes(U.cls)) U.cls = cl[0] || '1';
+  const R = rtData(), clash = rtClashes(), sh = rtShiftOf(U.cls);
+  const count = {}; let empty = 0;
+  R.days.forEach(day => sh.slots.forEach(s => { if (s.kind !== 'period') return; const c = rtCell(U.cls, day, s.id); if (c && c.sub) count[c.sub] = (count[c.sub] || 0) + 1; else empty++; }));
+  const myClash = [...clash].filter(k => k.startsWith(U.cls + '|')).length;
+  return `<div class="chips" role="tablist" aria-label="শ্রেণি">${cl.map(c => `<button class="${c === U.cls ? 'on' : ''}" data-rt-cls="${c}">${CLASS_NAME[c]}</button>`).join('')}</div>
+    <div class="top" style="margin:2px"><b style="font-size:15px">${CLASS_NAME[U.cls]} · ${esc(sh.name)}</b><span class="t2" style="font-size:12.5px">ঘরে চাপ দিয়ে বিষয় ও শিক্ষক দিন</span></div>
+    ${rtGridTable(U.cls, true, clash)}
+    ${myClash ? `<p style="font-size:13px;font-weight:600;color:#B42318;background:#FDE8E6;border-radius:12px;padding:8px 12px">লাল ঘর: একই শিক্ষক একই সময়ে অন্য শ্রেণিতেও আছেন — ঠিক করে নিন।</p>` : ''}
+    <div class="card" style="gap:8px"><b style="font-size:14px">সপ্তাহে কোন বিষয় কত পিরিয়ড</b>
+      <div class="sumrow">${Object.entries(count).map(([k, n]) => pill(rtSubName(k, U.cls, true) + ' ' + bn(n), rtColor(k), '#F3F6F9')).join('') || '<span class="t2" style="font-size:13px">এখনো কিছু দেওয়া হয়নি</span>'}${empty && Object.keys(count).length ? pill('খালি ' + bn(empty), '#3E5070', '#EEF1F6') : ''}</div>
+      <div class="row2"><button class="btn" data-rt-sample>নমুনা দিয়ে পূরণ</button><button class="btn" data-rt-clear ${Object.keys(count).length ? '' : 'disabled'}>এই শ্রেণি খালি করুন</button></div>
+      <p class="hint">নমুনায় বাংলা, ইংরেজি ও গণিত প্রতিদিন থাকে; বাকি বিষয় সপ্তাহে ভাগ করা হয়। নেপের রুটিন অনুযায়ী প্রয়োজনমতো ঘর বদলে নিন — শিক্ষক আগে দেওয়া থাকলে থেকে যায়।</p></div>`;
+}
+function rtTeacherView(){
+  const U = rtState(), R = rtData(), T = rtTeachers();
+  if (!T.length) return `<div class="card empty"><p class="t2" style="font-size:14px">আগে "শিক্ষক" অংশে শিক্ষকদের নাম যোগ করুন।</p><button class="btn solid" data-go="teachers">শিক্ষক তালিকা</button></div>`;
+  if (!U.tid || !T.some(t => t.id === U.tid)) U.tid = R.me && T.some(t => t.id === R.me) ? R.me : (T.find(t => t.me) || T[0]).id;
+  const busy = rtBusy(), clash = rtClashes(), today = rtTodayKey();
+  let total = 0;
+  const days = R.days.map(day => { const list = (busy[day + '|' + U.tid] || []).slice().sort((a, b) => a.a - b.a); total += list.length;
+      const nowM = new Date().getHours() * 60 + new Date().getMinutes();
+      return `<div class="rtday${day === today ? ' today' : ''}"><div class="rtdh"><b>${rtDayName(day)}</b>${day === today ? `<span class="sumrow">${pill('আজ', '#fff', '#0F766E')}</span>` : ''}<span class="t2">${bn(list.length)} পিরিয়ড</span></div>
+        ${list.length ? list.map(x => { const c = rtCell(x.cls, day, x.slot.id) || {}, bad = clash.has(x.cls + '|' + day + '|' + x.slot.id), live = day === today && x.a <= nowM && nowM < x.b;
+          return `<div class="rtitem${bad ? ' bad' : ''}${live ? ' live' : ''}"><span class="tm">${rtTime(x.slot.start)}–${rtTime(x.slot.end)}</span><span class="grow"><span><b>${CLASS_NAME[x.cls]}</b> · ${esc(rtSubName(c.sub, x.cls))}</span><small>${esc(x.slot.label)}${live ? ' · এখন চলছে' : ''}${bad ? ' · একই সময়ে দুই শ্রেণি!' : ''}</small></span></div>`; }).join('')
+        : '<p class="t2" style="font-size:13px;padding:4px 2px">কোনো ক্লাস নেই</p>'}</div>`; }).join('');
+  return `<div class="field"><label for="rtT">শিক্ষক</label><select id="rtT">${T.map(t => `<option value="${t.id}" ${t.id === U.tid ? 'selected' : ''}>${esc(t.name)}${t.designation ? ' — ' + esc(t.designation) : ''}</option>`).join('')}</select></div>
+    <div class="card" style="gap:8px"><div class="top"><b style="font-size:15px">${esc(rtTName(U.tid))}</b><span class="sumrow">${pill('সপ্তাহে ' + bn(total) + ' পিরিয়ড', '#0F766E', '#E0F2EF')}</span></div>
+      <label style="display:flex;gap:8px;align-items:center;font-size:13px"><input type="checkbox" id="rtMe" ${R.me === U.tid ? 'checked' : ''} style="width:20px;height:20px"> এটি আমার রুটিন (রুটিন খুললেই এটি দেখাবে)</label></div>
+    ${days}`;
+}
+function rtAllView(){
+  const R = rtData(), clash = rtClashes();
+  return rtShifts().map(sh => { const per = sh.slots.filter(s => s.kind === 'period');
+    return `<h2 style="font-size:16px;margin:6px 2px 0">${esc(sh.name)} <span class="t2" style="font-size:12.5px;font-weight:400">${sh.slots.length ? rtTime(sh.slots[0].start) + '–' + rtTime(sh.slots[sh.slots.length - 1].end) : ''}</span></h2>
+    <div class="rtwrap"><table class="rtt all"><tr><th class="d">বার</th><th class="d">শ্রেণি</th>${per.map(s => `<th>${esc(s.label.replace(' পিরিয়ড', ''))}<small>${rtTime(s.start)}–${rtTime(s.end)}</small></th>`).join('')}</tr>
+    ${R.days.map(day => sh.classes.map((cls, i) => `<tr class="${i === 0 ? 'dstart' : ''}">${i === 0 ? `<th class="d" rowspan="${sh.classes.length}">${rtDayName(day, true)}</th>` : ''}<th class="d">${PS_CLS[cls]}</th>${per.map(s => {
+        const c = rtCell(cls, day, s.id) || {}, bad = clash.has(cls + '|' + day + '|' + s.id);
+        return `<td class="${bad ? 'bad' : ''}"><button class="rtc" data-rt-cell="${cls}|${day}|${s.id}">${c.sub ? `<b style="color:${rtColor(c.sub)}">${esc(rtSubName(c.sub, cls, true))}</b>${c.t ? `<small>${esc(rtTName(c.t, true))}</small>` : ''}` : '<span class="plus">+</span>'}</button></td>`; }).join('')}</tr>`).join('')).join('')}
+    </table></div>`; }).join('') + `<p class="hint" style="text-align:center">এখানে শুধু পিরিয়ডগুলো দেখানো হয়েছে; প্রিন্টে বিরতিও থাকবে। ঘরে চাপ দিয়ে এখান থেকেও বদলানো যায়।</p>`;
+}
+
+/* ---- cell editor ---- */
+function rtCellSheet(key){
+  const [cls, day, sid] = key.split('|'), sh = rtShiftOf(cls), sl = sh.slots.find(s => s.id === sid); if (!sl) return;
+  const c = rtCell(cls, day, sid) || {}, busy = rtBusy(), a = rtMin(sl.start), b = rtMin(sl.end);
+  UI.rtEdit = {key, sub:c.sub || '', t:c.t || '', all:false};
+  const busyWith = tid => (busy[day + '|' + tid] || []).filter(x => !(x.cls === cls && x.slot.id === sid) && x.a < b && a < x.b).map(x => CLASS_NAME[x.cls]);
+  const draw = () => {
+    const E = UI.rtEdit;
+    document.getElementById('rtEd').innerHTML = `
+      <div style="font-weight:700;font-size:14px;margin:4px 0 6px">বিষয়</div>
+      <div class="rtpick">${rtSubjects(cls).map(id => `<button class="${E.sub === id ? 'on' : ''}" data-rt-sub="${id}" style="${E.sub === id ? `background:${rtColor(id)};border-color:${rtColor(id)}` : `color:${rtColor(id)}`}">${esc(rtSubName(id, cls))}</button>`).join('')}<button class="${!E.sub ? 'on' : ''}" data-rt-sub="">খালি</button></div>
+      <div style="font-weight:700;font-size:14px;margin:12px 0 6px">শিক্ষক</div>
+      <div class="rtpick t">${rtTeachers().map(t => { const bz = busyWith(t.id); return `<button class="${E.t === t.id ? 'on' : ''}" data-rt-t="${t.id}"><span>${esc(t.name)}</span>${bz.length ? `<small style="color:${E.t === t.id ? '#FFE0DB' : '#B42318'}">এ সময়ে ব্যস্ত: ${bz.join(', ')}</small>` : ''}</button>`; }).join('')}<button class="${!E.t ? 'on' : ''}" data-rt-t="">শিক্ষক নির্ধারিত নয়</button></div>
+      <label style="display:flex;gap:8px;align-items:center;font-size:13.5px;margin-top:12px"><input type="checkbox" id="rtAllDays" ${E.all ? 'checked' : ''} style="width:20px;height:20px"> সপ্তাহের সব দিনে এই সময়ে একই দিন</label>`;
+    document.getElementById('rtAllDays').addEventListener('change', e => { UI.rtEdit.all = e.target.checked; });
+  };
+  openSheet(`<h2 style="font-size:18px;margin-bottom:2px">${CLASS_NAME[cls]} · ${rtDayName(day)}</h2><p class="t2" style="font-size:13px">${esc(sl.label)} · ${rtTime(sl.start)}–${rtTime(sl.end)}</p>
+    <div id="rtEd" style="max-height:58vh;overflow:auto"></div>
+    <div class="row2" style="margin-top:12px"><button class="btn big" data-close>বাতিল</button><button class="btn big solid" data-rt-save>সংরক্ষণ</button></div>`);
+  UI.rtDraw = draw; draw();
+}
+
+/* ---- shift & time setup ---- */
+function rtSetupSheet(){
+  const R = rtData();
+  UI.rtSet = JSON.parse(JSON.stringify({twoShift:R.twoShift, days:R.days, shifts:R.shifts}));
+  const draw = () => {
+    const S = UI.rtSet;
+    const shifts = S.shifts.slice(0, S.twoShift ? 2 : 1);
+    document.getElementById('rtSet').innerHTML = `
+      <div class="rtpick" style="grid-template-columns:1fr 1fr"><button class="${S.twoShift ? 'on' : ''}" data-rs-two="1">দুই শিফট</button><button class="${!S.twoShift ? 'on' : ''}" data-rs-two="0">এক শিফট</button></div>
+      <div style="font-weight:700;font-size:14px;margin:12px 0 6px">ক্লাসের দিন</div>
+      <div class="rtpick" style="grid-template-columns:repeat(3,1fr)">${RT_DAYS.map(([k, n]) => `<button class="${S.days.includes(k) ? 'on' : ''}" data-rs-day="${k}">${n}</button>`).join('')}</div>
+      ${shifts.map((sh, si) => `<div class="card" style="gap:8px;margin-top:12px;border:1px solid #D5DEE8">
+        <input class="psin" data-rs-name="${si}" value="${esc(sh.name)}" aria-label="শিফটের নাম" style="font-weight:700">
+        ${S.twoShift ? `<div style="font-size:13px;font-weight:600">শ্রেণি</div><div class="rtpick" style="grid-template-columns:repeat(6,1fr)">${CLASSES.map(([c]) => `<button class="${sh.classes.includes(c) ? 'on' : ''}" data-rs-cls="${si}|${c}">${PS_CLS[c]}</button>`).join('')}</div>` : ''}
+        <div style="font-size:13px;font-weight:600">সময়সূচি</div>
+        ${sh.slots.map((sl, k) => `<div class="rsrow"><input class="psin" data-rs-lbl="${si}|${k}" value="${esc(sl.label)}" aria-label="নাম"><input type="time" class="psin" data-rs-st="${si}|${k}" value="${sl.start}" aria-label="শুরু"><input type="time" class="psin" data-rs-en="${si}|${k}" value="${sl.end}" aria-label="শেষ"><button class="rskind${sl.kind === 'break' ? ' br' : ''}" data-rs-kind="${si}|${k}" title="পিরিয়ড/বিরতি">${sl.kind === 'break' ? 'বিরতি' : 'পিরিয়ড'}</button><button class="rsdel" data-rs-del="${si}|${k}" aria-label="মুছুন">✕</button></div>`).join('')}
+        <div class="row2"><button class="btn" data-rs-add="${si}|period">+ পিরিয়ড</button><button class="btn" data-rs-add="${si}|break">+ বিরতি</button></div></div>`).join('')}
+      <p class="hint">সময় বদলালে আগের রুটিনের বিষয়-শিক্ষক ঠিক থাকে। নেপের রুটিনে দুই শিফটে ১ম–২য় শ্রেণিতে ৪টি ও ৩য়–৫ম শ্রেণিতে ৫টি পিরিয়ড; সময় আপনার উপজেলার নির্দেশনা অনুযায়ী দিন।</p>`;
+    const sync = () => document.querySelectorAll('[data-rs-lbl],[data-rs-st],[data-rs-en],[data-rs-name]').forEach(el => {
+      const d = el.dataset; if (d.rsName != null) { S.shifts[+d.rsName].name = el.value; return; }
+      const [si, k] = (d.rsLbl || d.rsSt || d.rsEn).split('|').map(Number), sl = S.shifts[si].slots[k];
+      if (d.rsLbl != null) sl.label = el.value; else if (d.rsSt != null) sl.start = el.value; else sl.end = el.value; });
+    UI.rtSync = sync;
+  };
+  openSheet(`<h2 style="font-size:18px;margin-bottom:8px">শিফট ও সময়</h2><div id="rtSet" style="max-height:62vh;overflow:auto"></div>
+    <div class="row2" style="margin-top:12px"><button class="btn big" data-close>বাতিল</button><button class="btn big solid" data-rs-save>সংরক্ষণ</button></div>`);
+  UI.rtSetDraw = draw; draw();
+}
+function rtSetupClick(ds){
+  const S = UI.rtSet; if (!S) return; UI.rtSync && UI.rtSync();
+  if (ds.rsTwo != null) { S.twoShift = ds.rsTwo === '1';
+    if (!S.twoShift) S.shifts[0].classes = CLASSES.map(c => c[0]);   // 2nd shift is kept aside, not deleted
+    else { if (!S.shifts[1]) S.shifts.push({id:'s2', name:'২য় শিফট', classes:['3','4','5'], slots:rtSlotsDefault(5, 12 * 60, true, 2)});
+      if (!S.shifts[1].classes.length) S.shifts[1].classes = ['3','4','5'];
+      S.shifts[0].classes = CLASSES.map(c => c[0]).filter(c => !S.shifts[1].classes.includes(c)); } }
+  else if (ds.rsDay) { const i = S.days.indexOf(ds.rsDay); if (i >= 0) { if (S.days.length > 1) S.days.splice(i, 1); } else S.days.push(ds.rsDay); S.days.sort((a, b) => RT_DAYS.findIndex(x => x[0] === a) - RT_DAYS.findIndex(x => x[0] === b)); }
+  else if (ds.rsCls) { const [si, c] = ds.rsCls.split('|'); S.shifts.forEach((sh, k) => { sh.classes = sh.classes.filter(x => x !== c); if (k === +si) sh.classes.push(c); });
+    S.shifts.forEach(sh => sh.classes.sort((a, b) => CLASSES.findIndex(x => x[0] === a) - CLASSES.findIndex(x => x[0] === b))); }
+  else if (ds.rsKind) { const [si, k] = ds.rsKind.split('|').map(Number), sl = S.shifts[si].slots[k]; sl.kind = sl.kind === 'break' ? 'period' : 'break'; }
+  else if (ds.rsDel) { const [si, k] = ds.rsDel.split('|').map(Number); S.shifts[si].slots.splice(k, 1); }
+  else if (ds.rsAdd) { const [si, kind] = ds.rsAdd.split('|'), sl = S.shifts[+si].slots, last = sl[sl.length - 1], st = last ? rtMin(last.end) : 9 * 60, len = kind === 'break' ? 20 : 40;
+    const n = sl.filter(x => x.kind === 'period').length; const names = ['১ম','২য়','৩য়','৪র্থ','৫ম','৬ষ্ঠ','৭ম','৮ম'];
+    sl.push({id:uid(), label:kind === 'break' ? 'বিরতি' : (names[n] || bn(n + 1)) + ' পিরিয়ড', start:rtHM(st), end:rtHM(st + len), kind}); }
+  else if ('rsSave' in ds) {
+    for (const sh of S.shifts.slice(0, S.twoShift ? 2 : 1)) for (const sl of sh.slots) if (!sl.start || !sl.end || rtMin(sl.end) <= rtMin(sl.start)) return toast(`${sh.name}: "${sl.label}"-এর সময় ঠিক নয়`);
+    const R = rtData(); R.twoShift = S.twoShift; R.days = S.days; R.shifts = S.shifts;
+    save(); closeSheet(); toast('শিফট ও সময় সংরক্ষিত হয়েছে'); return render();
+  }
+  UI.rtSetDraw();
+}
+
+/* ---- printing (CSS only) ---- */
+function rtPrintDoc(){
+  const R = rtData(), U = rtState(), T = DB.teacher;
+  const css = `@page{size:A4 landscape;margin:8mm}html,body{margin:0}body{font-family:'Hind Siliguri','Noto Sans Bengali',sans-serif;color:#000}
+  section{page-break-after:always}section:last-child{page-break-after:auto}.h{text-align:center;margin-bottom:6px}.s{font-size:19px;font-weight:700}.sub{font-size:13.5px}
+  table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{border:1px solid #000;text-align:center;padding:3px 2px;font-size:12px;vertical-align:middle}th{background:#EFEFEF}th small{display:block;font-weight:400;font-size:10.5px}
+  td b{display:block;font-size:12px}td small{display:block;font-size:10.5px}th.d{width:60px}th.br,td.br{width:22px;background:#F5F5F5}th.br span,td.br span{writing-mode:vertical-rl;font-size:11px}tr{break-inside:avoid}
+  .sg{display:flex;justify-content:flex-end;margin-top:26px;font-size:13px}.sg div{border-top:1px solid #000;padding-top:3px;min-width:160px;text-align:center}`;
+  const headCells = sh => sh.slots.map(s => s.kind === 'break' ? `<th class="br"><span>${esc(s.label)}</span></th>` : `<th>${esc(s.label)}<small>${rtTime(s.start)}–${rtTime(s.end)}</small></th>`).join('');
+  const cell = (cls, day, s) => { const c = rtCell(cls, day, s.id) || {}; return `<td>${c.sub ? `<b>${esc(rtSubName(c.sub, cls))}</b>` : ''}${c.t ? `<small>${esc(rtTName(c.t))}</small>` : ''}</td>`; };
+  let pages = '';
+  if (U.tab === 'class') {
+    const cls = U.cls, sh = rtShiftOf(cls);
+    pages = `<section><div class="h"><div class="s">${esc(T.school || '')}</div><div class="sub">ক্লাস রুটিন — ${CLASS_NAME[cls]} · ${esc(sh.name)}</div></div>
+      <table><tr><th class="d">বার</th>${headCells(sh)}</tr>${R.days.map(day => `<tr><th class="d">${rtDayName(day)}</th>${sh.slots.map(s => s.kind === 'break' ? '<td class="br"></td>' : cell(cls, day, s)).join('')}</tr>`).join('')}</table>
+      <div class="sg"><div>প্রধান শিক্ষকের স্বাক্ষর</div></div></section>`;
+  } else if (U.tab === 'teacher' && U.tid) {
+    const busy = rtBusy(), slotsAll = [];
+    rtShifts().forEach(sh => sh.slots.forEach(s => { if (s.kind === 'period') slotsAll.push({sh, s}); }));
+    slotsAll.sort((a, b) => rtMin(a.s.start) - rtMin(b.s.start));
+    pages = `<section><div class="h"><div class="s">${esc(T.school || '')}</div><div class="sub">শিক্ষকের রুটিন — ${esc(rtTName(U.tid))}</div></div>
+      <table><tr><th class="d">বার</th>${slotsAll.map(x => `<th>${esc(x.sh.name)}<br>${esc(x.s.label)}<small>${rtTime(x.s.start)}–${rtTime(x.s.end)}</small></th>`).join('')}</tr>
+      ${R.days.map(day => `<tr><th class="d">${rtDayName(day)}</th>${slotsAll.map(x => { const hit = (busy[day + '|' + U.tid] || []).find(y => y.slot.id === x.s.id);
+        if (!hit) return '<td></td>'; const c = rtCell(hit.cls, day, x.s.id) || {}; return `<td><b>${CLASS_NAME[hit.cls]}</b><small>${esc(rtSubName(c.sub, hit.cls))}</small></td>`; }).join('')}</tr>`).join('')}</table>
+      <div class="sg"><div>প্রধান শিক্ষকের স্বাক্ষর</div></div></section>`;
+  } else {
+    pages = rtShifts().map(sh => `<section><div class="h"><div class="s">${esc(T.school || '')}</div><div class="sub">সাপ্তাহিক ক্লাস রুটিন — ${esc(sh.name)}${sh.slots.length ? ` (${rtTime(sh.slots[0].start)}–${rtTime(sh.slots[sh.slots.length - 1].end)})` : ''}</div></div>
+      <table><tr><th class="d">বার</th><th class="d">শ্রেণি</th>${headCells(sh)}</tr>
+      ${R.days.map((day, di) => sh.classes.map((cls, i) => `<tr>${i === 0 ? `<th class="d" rowspan="${sh.classes.length}">${rtDayName(day)}</th>` : ''}<th class="d">${CLASS_NAME[cls]}</th>${sh.slots.map(s => s.kind === 'break' ? (di === 0 && i === 0 ? `<td class="br" rowspan="${R.days.length * sh.classes.length}"><span>${esc(s.label)}</span></td>` : '') : cell(cls, day, s)).join('')}</tr>`).join('')).join('')}</table>
+      <div class="sg"><div>প্রধান শিক্ষকের স্বাক্ষর</div></div></section>`).join('');
+  }
+  return `<!DOCTYPE html><html lang="bn"><head><meta charset="utf-8"><title>ক্লাস রুটিন</title><link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;600;700&display=swap" rel="stylesheet"><style>${css}</style></head><body>${pages}</body></html>`;
+}
+
+function rtClick(ds){
+  const U = rtState();
+  if (ds.rtTab) { U.tab = ds.rtTab; window.scrollTo(0, 0); return render(); }
+  if (ds.rtCls) { U.cls = ds.rtCls; return render(); }
+  if (ds.rtCell) return rtCellSheet(ds.rtCell);
+  if (ds.rtSub != null) { UI.rtEdit.sub = ds.rtSub; return UI.rtDraw(); }
+  if (ds.rtT != null) { UI.rtEdit.t = ds.rtT; return UI.rtDraw(); }
+  if ('rtSave' in ds) { const E = UI.rtEdit, [cls, day, sid] = E.key.split('|'), v = E.sub || E.t ? {sub:E.sub, t:E.t} : null;
+    (E.all ? rtData().days : [day]).forEach(d => rtSetCell(cls, d, sid, v)); save(); closeSheet();
+    const bad = [...rtClashes()].some(k => k.startsWith(cls + '|') && k.endsWith('|' + sid));
+    if (bad) toast('সতর্কতা: এই শিক্ষক একই সময়ে অন্য শ্রেণিতেও আছেন', 4000); return render(); }
+  if ('rtSample' in ds) { const cls = U.cls, has = rtData().days.some(d => Object.keys(((rtData().grid[cls] || {})[d]) || {}).length);
+    const go = () => { rtSampleFill(cls); save(); toast(`${CLASS_NAME[cls]}-এর নমুনা রুটিন বসানো হয়েছে`); render(); };
+    return has ? confirmSheet('নমুনা দিয়ে পূরণ করবেন?', `${CLASS_NAME[cls]}-এর বিষয়গুলো নমুনা অনুযায়ী বদলে যাবে (শিক্ষক থেকে যাবেন)।`, 'পূরণ করুন', go) : go(); }
+  if ('rtClear' in ds) { const cls = U.cls; return confirmSheet('এই শ্রেণির রুটিন খালি করবেন?', `${CLASS_NAME[cls]}-এর সব ঘরের বিষয় ও শিক্ষক মুছে যাবে।`, 'খালি করুন', () => { delete rtData().grid[cls]; save(); }); }
+  if ('rtSetup' in ds) return rtSetupSheet();
+  if ('rtPrint' in ds) return printDoc('ক্লাস রুটিন', rtPrintDoc());
+}
+function bindRoutine(){
+  const t = document.getElementById('rtT'); if (t) t.addEventListener('change', () => { rtState().tid = t.value; render(); });
+  const me = document.getElementById('rtMe'); if (me) me.addEventListener('change', () => { rtData().me = me.checked ? rtState().tid : null; save(); });
+}
+
 /* ---------- placeholders ---------- */
 function placeholder(id){
   const f = ALL[id];
@@ -3793,7 +4123,7 @@ function render(){
   const inner = !TOP.includes(r);
   $app.classList.toggle('inner', inner);
   $nav.style.display = inner ? 'none' : 'grid';
-  const views = {home, profile, settings, committee, students, teachers, 'lesson-plan':lessonPlan, 'teacher-att':teacherAtt, 'student-att':studentAtt, certificates, gpf, assessment, pension, salary, leave, img2pdf, textbooks, 'parent-sms':parentSms};
+  const views = {home, profile, settings, committee, students, teachers, 'lesson-plan':lessonPlan, 'teacher-att':teacherAtt, 'student-att':studentAtt, certificates, gpf, assessment, pension, salary, leave, img2pdf, textbooks, 'parent-sms':parentSms, routine};
   $app.innerHTML = (views[r] || (() => placeholder(r)))();
   $nav.innerHTML = NAV.map(n => `<button class="${n[0]===r?'on':''}" data-go="${n[0]}" aria-label="${n[1]}" ${n[0]===r?'aria-current="page"':''}><span class="p">${ic(n[2])}</span>${n[1]}</button>`).join('');
   bindView(r);
@@ -3859,6 +4189,7 @@ function bindView(r){
   }
   if (r === 'img2pdf') bindImg2pdf();
   if (r === 'parent-sms') bindParentSms();
+  if (r === 'routine') bindRoutine();
   if (r === 'leave') {
     bindLogo();
     const L = lvState(), pv = () => { const el = document.getElementById('lvPreview'); if (el) el.innerHTML = lvLetterHtml(L); };
@@ -3927,6 +4258,8 @@ document.addEventListener('click', e => {
   if ('readall' in ds) { NOTIFS.forEach(n => n.read = true); closeSheet(); render(); return toast('সব নোটিফিকেশন পড়া হয়েছে'); }
   if (ds.go) { window.scrollTo(0,0); return go(ds.go); }
   if (Object.keys(ds).some(k => /^ps[A-Z]/.test(k))) return psClick(ds);
+  if (Object.keys(ds).some(k => /^rt[A-Z]/.test(k))) return rtClick(ds);
+  if (Object.keys(ds).some(k => /^rs[A-Z]/.test(k))) return rtSetupClick(ds);
   if ('back' in ds) { if (history.length > 1) history.back(); else go('home'); return; }
   // committee
   if (ds.ctab) { UI.committeeTab = ds.ctab; UI.showAllMembers = false; try { localStorage.setItem('committeeTab', ds.ctab); } catch(_) {} return render(); }
