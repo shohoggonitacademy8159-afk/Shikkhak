@@ -16,6 +16,11 @@ html,body{margin:0;background:#E4ECE7}
 body{font-family:'Hind Siliguri','SolaimanLipi','Nikosh','Noto Sans Bengali',sans-serif;color:var(--ink);-webkit-tap-highlight-color:transparent}
 button{font:inherit;color:inherit;cursor:pointer}
 a{color:var(--g)}
+.imgmenu{position:fixed;inset:0;background:rgba(14,26,44,.45);z-index:9999;display:flex;align-items:flex-end;justify-content:center}
+.im-box{background:#fff;width:100%;max-width:520px;border-radius:20px 20px 0 0;padding:18px 16px calc(16px + env(safe-area-inset-bottom));display:grid;gap:10px}
+.im-box>b{font-size:17px}
+.im-btn{display:flex;gap:14px;align-items:center;text-align:left;background:#F7FAF8;border:1.5px solid var(--line);border-radius:14px;padding:12px 14px;min-height:64px;cursor:pointer;font:inherit;color:var(--ink)}
+.im-btn:active{background:var(--gt)}.im-btn .im-ic{font-size:28px;width:40px;text-align:center}.im-btn b{display:block;font-size:15.5px}.im-btn small{display:block;color:var(--mute);font-size:12.5px;margin-top:2px}
 .okbox{display:flex;flex-direction:column;gap:2px;background:#E3F4EA;border:1px solid #9FD3B4;color:#17663F;border-radius:12px;padding:10px 12px;font-size:13.5px;line-height:1.55}
 .p2grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
 .p2pg{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;display:flex;flex-direction:column}
@@ -268,7 +273,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '4.7';
+const WEB_VERSION = '4.8';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -382,7 +387,7 @@ function logoCard(){
     return `<div style="display:flex;gap:10px;align-items:center">
       <span style="width:56px;height:56px;border-radius:12px;border:1px dashed var(--line);display:grid;place-items:center;flex:none;background:#fff">${src ? `<img src="${src}" alt="${label}" style="max-width:48px;max-height:48px">` : `<span class="t2" style="font-size:10.5px;text-align:center">নেই</span>`}</span>
       <span class="grow"><b style="font-size:14px">${label}</b></span>
-      <label class="btn" for="logoFile_${id}" style="min-height:38px;padding:0 10px">${ic('upload',16)} ${src ? 'বদলান' : 'যোগ'}</label>
+      <button type="button" class="btn" data-img-pick="logoFile_${id}" style="min-height:38px;padding:0 10px">${ic('upload',16)} ${src ? 'বদলান' : 'যোগ'}</button>
       ${src ? `<button type="button" class="btn danger ghost" style="min-height:38px;padding:0 8px" aria-label="${label} মুছুন" data-logo-del="${id}">${ic('trash',16)}</button>` : ''}
       <input type="file" id="logoFile_${id}" data-logo-file="${id}" accept="image/*" class="vh"></div>`; };
   const any = logoL() || logoR(), both = logoL() && logoR();
@@ -408,10 +413,67 @@ function avatar(id, name, color, size){
     ? `<img class="ma" src="${PHOTOS[id]}" alt="" style="${st}">`
     : `<span class="ma" style="background:${color};${st}${size && size < 40 ? 'font-size:12px;' : ''}" aria-hidden="true">${esc(initials(name))}</span>`;
 }
+/* ---------- add a photo: camera or gallery ----------
+   Every "add photo" button opens this small menu. The gallery uses the page's own file box as before; the camera
+   uses the Android app's camera (AppBridge.takePhoto) or, in a browser, a file box that opens the camera directly.
+   Either way the picture is handed to the same file box, so every form treats it exactly like a gallery photo. */
+const camOk = () => !!(window.AppBridge && AppBridge.takePhoto && AppBridge.photoResult);
+function giveFile(inputId, file){
+  const input = document.getElementById(inputId);
+  if (!input) return false;
+  try { const dt = new DataTransfer(); dt.items.add(file); input.files = dt.files; }
+  catch(e) { return false; }
+  input.dispatchEvent(new Event('change', {bubbles:true}));
+  return true;
+}
+const dataUrlToFile = (url, name) => { const [h, b] = url.split(','), bin = atob(b), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return new File([u], name, {type: (h.match(/data:([^;]+)/) || [])[1] || 'image/jpeg'}); };
+function closeImgMenu(){ const m = document.getElementById('imgMenu'); if (m) m.remove(); }
+function imgSourceMenu(inputId){
+  closeImgMenu();
+  const m = document.createElement('div');
+  m.id = 'imgMenu'; m.className = 'imgmenu'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-label', 'ছবি যোগ করুন');
+  m.innerHTML = `<div class="im-box"><b>ছবি যোগ করুন</b>
+    <button type="button" class="im-btn" id="imCam"><span class="im-ic">📷</span><span><b>ক্যামেরা দিয়ে তুলুন</b><small>এখনই ছবি তুলে সরাসরি যোগ করুন</small></span></button>
+    <button type="button" class="im-btn" id="imGal"><span class="im-ic">🖼️</span><span><b>গ্যালারি থেকে বাছুন</b><small>ফোনে রাখা ছবি${(document.getElementById(inputId) || {}).multiple ? ' (একসঙ্গে অনেকগুলো)' : ''}</small></span></button>
+    <button type="button" class="btn ghost full" id="imNo">বাতিল</button></div>`;
+  document.body.appendChild(m);
+  m.addEventListener('click', e => { if (e.target === m) closeImgMenu(); });
+  m.querySelector('#imNo').addEventListener('click', closeImgMenu);
+  m.querySelector('#imGal').addEventListener('click', () => { closeImgMenu(); const i = document.getElementById(inputId); if (i) { i.removeAttribute('capture'); i.click(); } });
+  m.querySelector('#imCam').addEventListener('click', () => {
+    closeImgMenu();
+    if (camOk()) { UI.camKey = inputId; AppBridge.takePhoto(inputId); return; }
+    // browser: a temporary file box that asks the phone to open its camera
+    const c = document.createElement('input'); c.type = 'file'; c.accept = 'image/*'; c.setAttribute('capture', 'environment'); c.className = 'vh';
+    document.body.appendChild(c);
+    c.addEventListener('change', () => { const f = c.files && c.files[0]; if (f && !giveFile(inputId, f)) toast('ছবিটি যোগ করা যায়নি; আবার চেষ্টা করুন'); c.remove(); });
+    c.click();
+  });
+  setTimeout(() => m.querySelector('#imCam').focus(), 30);
+}
+// A photo is ready from the Android camera (also after Android closed and reopened the app meanwhile).
+function takeCameraResult(){
+  if (!camOk()) return;
+  let r = null; try { r = JSON.parse(AppBridge.photoResult() || 'null'); } catch(e) {}
+  if (!r || !r.data) return;
+  const file = dataUrlToFile(r.data, `camera_${Date.now()}.jpg`);
+  if (giveFile(r.key, file)) return;
+  // the form is gone (the app was restarted while the camera was open)
+  if (r.key === 'p2File') { fileToJpeg(file).then(src => { p2State().pages.push({src, rot:0}); go('img2pdf'); toast('তোলা ছবিটি PDF-এর পাতায় যোগ হয়েছে'); }); return; }
+  UI.pendingCam = {key: r.key, file};
+  toast('ছবি তোলার সময় অ্যাপটি আবার চালু হয়েছিল — ফর্মটি আবার খুলে "সদ্য তোলা ছবিটি বসান" চাপুন', 5000);
+}
+window.onPhotoReady = () => takeCameraResult();
+window.onPhotoFailed = (key, why) => {
+  if (why === 'cancel') return;
+  toast(why === 'nocamera' ? 'এই ফোনে ক্যামেরা অ্যাপ পাওয়া যায়নি' : why === 'empty' ? 'ছবিটি পাওয়া যায়নি — আবার তুলুন' : 'ক্যামেরা চালু করা যায়নি — আবার চেষ্টা করুন');
+};
+
 // Photo chooser inside a form. Returns a getter: undefined = unchanged, null = removed, string = new photo.
 function photoPicker(id, name, color){
   return `<div class="photopick"><span class="big" id="ppBig" style="background:${color}">${PHOTOS[id] ? `<img src="${PHOTOS[id]}" alt="ছবি">` : esc(initials(name || '?'))}</span>
-    <span class="acts"><label class="btn" for="ppFile" style="min-height:40px">${ic('upload',18)} ${PHOTOS[id] ? 'ছবি বদলান' : 'ছবি যোগ করুন'}</label>
+    <span class="acts"><button type="button" class="btn" data-img-pick="ppFile" style="min-height:40px">${ic('upload',18)} ${PHOTOS[id] ? 'ছবি বদলান' : 'ছবি যোগ করুন'}</button>
+    ${UI.pendingCam && UI.pendingCam.key === 'ppFile' ? `<button type="button" class="btn solid" data-cam-pending style="min-height:40px">সদ্য তোলা ছবিটি বসান</button>` : ''}
     <input type="file" id="ppFile" accept="image/*" class="vh">
     <button type="button" class="btn danger ghost" id="ppDel" style="min-height:36px;${PHOTOS[id] ? '' : 'display:none'}">${ic('trash',16)} ছবি মুছুন</button></span></div>`;
 }
@@ -3018,7 +3080,7 @@ function img2pdf(){
   const S = p2State(), n = S.pages.length, opt = (k, v, l) => `<button type="button" class="${S[k]===v?'on':''}" data-p2-opt="${k}" data-v="${v}">${l}</button>`;
   return innerHeader('ছবি থেকে পিডিএফ','pdf','#B42318') + `
   <div class="sec" style="padding-top:16px">
-    <label class="btn solid big full" for="p2File" style="cursor:pointer">${ic('plus',20)} ছবি যোগ করুন (ক্যামেরা বা গ্যালারি)</label>
+    <button type="button" class="btn solid big full" data-img-pick="p2File">${ic('plus',20)} ছবি যোগ করুন (ক্যামেরা বা গ্যালারি)</button>
     <input type="file" id="p2File" accept="image/*" multiple class="vh">
     <p class="hint" style="margin-top:-4px">একসঙ্গে অনেক ছবি বাছাই করা যায়। প্রতিটি ছবি PDF-এর একটি পাতা হবে; নিচে ক্রম বদলানো, ঘোরানো বা মুছে ফেলা যায়।</p>
     ${n ? `<div class="top"><h2 style="font-size:17px">${bn(n)}টি পাতা</h2><button class="btn ghost" data-p2-clear style="min-height:36px">সব মুছুন</button></div>
@@ -3231,10 +3293,10 @@ function go(id){ if (location.hash.slice(1) === id) render(); else location.hash
 
 /* ---------- toast & sheet ---------- */
 let tt;
-function toast(msg){
+function toast(msg, ms){
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
-  clearTimeout(tt); tt = setTimeout(() => t.classList.remove('show'), 2400);
+  clearTimeout(tt); tt = setTimeout(() => t.classList.remove('show'), ms || 2400);
 }
 const $sheet = document.getElementById('sheet'), $sbg = document.getElementById('sbg');
 let lastFocus = null;
@@ -3346,6 +3408,8 @@ document.addEventListener('click', e => {
   if (ds.certPick) { UI.cert.sid = ds.certPick; window.scrollTo(0,0); return render(); }
   if ('certChange' in ds) { UI.cert.sid = null; UI.cert.q = ''; return render(); }
   if ('certPrint' in ds) return printCert();
+  if (ds.imgPick) return imgSourceMenu(ds.imgPick);
+  if ('camPending' in ds) { const p = UI.pendingCam; UI.pendingCam = null; if (p && !giveFile(p.key, p.file)) toast('ছবিটি বসানো যায়নি'); el.remove(); return; }
   if (ds.tbClass) { UI.tbClass = ds.tbClass; return render(); }
   if (ds.tbKind) { UI.tbKind = ds.tbKind; return render(); }
   if (ds.tbPick) { if (tbCan()) AppBridge.pickPdf(ds.tbPick); return; }
@@ -3462,6 +3526,7 @@ if (FRESH && bkOk()) {
   if (m) { try { applyBackup(JSON.parse(m)); FRESH = false; setTimeout(() => toast('আগের তথ্য ফিরিয়ে আনা হয়েছে'), 400); } catch(e) {} }
 }
 render();
+setTimeout(takeCameraResult, 800);
 if (FRESH && !cloudOn()) setTimeout(bkWelcomeSheet, 600);
 if (cloudOn()) setTimeout(() => cloudSync(), 5000);
 else if (bkOk()) setTimeout(() => flushBackup(true), 4000);
