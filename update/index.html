@@ -309,7 +309,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '5.9';
+const WEB_VERSION = '6.0';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -3397,7 +3397,7 @@ function psDaily(s, date){
   if (!att && !en.length && !st.r && !hw) return null;
   const head = `${psName(s)} (${PS_CLS[s.cls] || ''}, রোল ${bn(s.roll || '–')}) ${psDM(date)}:`;
   const a = att === 'a' ? 'আজ অনুপস্থিত।' : att === 'l' ? 'আজ ছুটিতে।' : att === 'p' ? 'উপস্থিত।' : '';
-  const sg = psSign(), hwT = hw && `আজকের কাজ: ${psClip(hw, 60)}।`, hwS = hw && `কাজ: ${psClip(hw, 30)}।`, rm = st.r && `মন্তব্য: ${psClip(st.r, 50)}`;
+  const sg = psSign(), hwT = hw && `আজকের বাড়ির কাজ: ${psClip(hw, 60)}।`, hwS = hw && `বাড়ির কাজ: ${psClip(hw, 30)}।`, rm = st.r && `মন্তব্য: ${psClip(st.r, 50)}`;
   let detail = [], counts = '';
   if (subs.length === 1 || (en.length === 1 && en[0][0] === 'all')) {
     const x = en.length ? en[0][2] : {};
@@ -3407,11 +3407,11 @@ function psDaily(s, date){
     const nm = ([k, n]) => k === 'all' ? 'সার্বিক' : n, list = f => en.filter(f).map(nm).join(', ');
     const notL = list(([, , x]) => x.l === 0), part = list(([, , x]) => x.h === 'part'), no = list(([, , x]) => x.h === 'no');
     const okAll = !notL && !part && !no;
-    if (okAll) detail = [en.length === subs.length ? 'সব বিষয়ে পড়া দিয়েছে ও বাড়ির কাজ জমা দিয়েছে।' : `${list(() => true)}-এ পড়া ও কাজ ঠিক আছে।`];
-    else detail = [notL && `পড়া পারেনি: ${notL}।`, part && `কাজ অসম্পূর্ণ: ${part}।`, no && `কাজ জমা দেয়নি: ${no}।`,
+    if (okAll) detail = [en.length === subs.length ? 'সব বিষয়ে পড়া দিয়েছে ও বাড়ির কাজ জমা দিয়েছে।' : `${list(() => true)}-এ পড়া ও বাড়ির কাজ ঠিক আছে।`];
+    else detail = [notL && `পড়া পারেনি: ${notL}।`, part && `বাড়ির কাজ অসম্পূর্ণ: ${part}।`, no && `বাড়ির কাজ জমা দেয়নি: ${no}।`,
       en.some(([, , x]) => x.l !== 0 && x.h !== 'part' && x.h !== 'no') ? 'বাকি বিষয়ে ঠিক আছে।' : ''];
     const lN = en.filter(([, , x]) => x.l != null), hN = en.filter(([, , x]) => x.h);
-    counts = [lN.length && `পড়া দিয়েছে ${bn(lN.filter(([, , x]) => x.l === 1).length)}/${bn(lN.length)} বিষয়ে।`, hN.length && `কাজ জমা ${bn(hN.filter(([, , x]) => x.h === 'done').length)}/${bn(hN.length)} বিষয়ে।`].filter(Boolean).join(' ');
+    counts = [lN.length && `পড়া দিয়েছে ${bn(lN.filter(([, , x]) => x.l === 1).length)}/${bn(lN.length)} বিষয়ে।`, hN.length && `বাড়ির কাজ জমা ${bn(hN.filter(([, , x]) => x.h === 'done').length)}/${bn(hN.length)} বিষয়ে।`].filter(Boolean).join(' ');
   }
   return psFit([
     [head, a, ...detail, hwT, rm, sg], [head, a, ...detail, hwT, sg], [head, a, ...detail, hwS, sg], [head, a, ...detail, sg],
