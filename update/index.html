@@ -286,7 +286,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '5.2';
+const WEB_VERSION = '5.3';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -1171,6 +1171,19 @@ function teacherSheet(id){
 }
 
 /* ---------- students: add many names at once ---------- */
+/* Insert `count` students starting at roll `start`: students already at those rolls (and the ones right after them)
+   move down so that every roll stays unique; a gap later in the list absorbs the shift. Returns [{s, from, to}]. */
+function rollShift(cls, section, start, count, excludeId){
+  const sec = section || '', out = [];
+  let prev = start + count - 1;
+  activeStudents().filter(x => x.id !== excludeId && x.cls === cls && (x.section||'') === sec && (parseInt(toEn(x.roll))||0) >= start)
+    .sort((a,b) => (parseInt(toEn(a.roll))||0) - (parseInt(toEn(b.roll))||0))
+    .forEach(x => { const r = parseInt(toEn(x.roll))||0; const to = Math.max(r, prev + 1); if (to !== r) out.push({s:x, from:r, to}); prev = to; });
+  return out;
+}
+function applyRollShift(plan){ const now = Date.now(); plan.forEach(p => { p.s.roll = String(p.to); p.s.updated = now; }); }
+const shiftMsg = (plan) => plan.length ? ` · পরের ${bn(plan.length)} জনের রোল এক ধাপ পিছিয়েছে` : '';
+const stuSort = (a,b) => CLASSES.findIndex(c => c[0]===a.cls) - CLASSES.findIndex(c => c[0]===b.cls) || (a.section||'').localeCompare(b.section||'') || (parseInt(toEn(a.roll))||999) - (parseInt(toEn(b.roll))||999) || a.name.localeCompare(b.name,'bn');
 function nextRoll(cls, section){
   const r = activeStudents().filter(x => x.cls===cls && (x.section||'')===(section||'')).map(x => parseInt(toEn(x.roll))||0);
   return (r.length ? Math.max(...r) : 0) + 1;
@@ -1208,10 +1221,16 @@ function bulkSheet(){
     if (!list.length) { err.textContent = 'অন্তত একজনের নাম লিখুন।'; err.style.display = 'block'; return; }
     const taken = new Set(activeStudents().filter(x => x.cls===clsV && (x.section||'')===sec).map(x => toEn(x.roll)));
     const clash = list.map((_, i) => String(start + i)).filter(r => taken.has(r));
-    if (clash.length) { err.textContent = `রোল ${clash.map(bn).join(', ')} আগে থেকেই আছে। শুরুর রোল ${bn(nextRoll(clsV, sec))} দিন।`; err.style.display = 'block'; return; }
+    let plan = [];
+    if (clash.length) {
+      if (!f.dataset.shift) { err.innerHTML = `রোল ${clash.map(bn).join(', ')} আগে থেকেই আছে।<button type="button" class="btn full" id="bulkShift" style="margin-top:8px">রোল ${bn(start)} থেকে বসান, পরেরদের রোল পিছিয়ে দিন</button><span style="display:block;margin-top:6px;color:var(--mute)">অথবা শুরুর রোল ${bn(nextRoll(clsV, sec))} দিন।</span>`; err.style.display = 'block';
+        document.getElementById('bulkShift').addEventListener('click', () => { f.dataset.shift = '1'; f.requestSubmit(); }); return; }
+      plan = rollShift(clsV, sec, start, list.length); applyRollShift(plan);
+    }
+    delete f.dataset.shift;
     const now = Date.now();
     list.forEach((name, i) => DB.students.push({id:uid(), created:now, updated:now, name, cls:clsV, section:sec, roll:String(start + i), gender:f.elements.b_gender.value}));
-    if (save()) toast(`${bn(list.length)} জন শিক্ষার্থী যোগ হয়েছে`);
+    if (save()) toast(`${bn(list.length)} জন শিক্ষার্থী যোগ হয়েছে` + shiftMsg(plan), plan.length ? 4000 : undefined);
     UI.stuClass = clsV; closeSheet(); render();
   });
 }
@@ -1240,7 +1259,7 @@ function students(){
   const q = UI.stuQuery.trim().toLowerCase();
   const all = activeStudents(), old = alumniList().length;
   const list = all.filter(s => (UI.stuClass==='all' || s.cls===UI.stuClass) && (!q || [s.name,s.roll,bn(s.roll||''),s.father,s.mother,s.phone].join(' ').toLowerCase().includes(q)))
-    .sort((a,b) => (a.cls+'').localeCompare(b.cls+'') || (parseInt(toEn(a.roll))||999) - (parseInt(toEn(b.roll))||999));
+    .sort(stuSort);
   const cnt = c => all.filter(s => s.cls===c).length;
   return innerHeader('শিক্ষার্থী তালিকা','profile','#D23F74') + `
   <div class="sec" style="padding-top:16px">
@@ -1495,8 +1514,14 @@ function studentSheet(id){
     if (!d.s_name.trim()) { err.textContent = 'শিক্ষার্থীর নাম লিখুন।'; err.style.display='block'; document.getElementById('s_name').focus(); return; }
     const rec = {name:d.s_name.trim(), cls:d.s_cls, section:d.s_section.trim(), roll:toEn(d.s_roll.trim()), gender:d.s_gender, dob:d.s_dob, blood:d.s_blood,
       birthreg:d.s_birthreg.trim(), father:d.s_father.trim(), mother:d.s_mother.trim(), phone:d.s_phone.trim(), address:d.s_address.trim(), stipend:d.s_stipend, religion:d.s_religion, notes:d.s_notes.trim(), updated:Date.now()};
-    if (rec.roll && !s.alumni && activeStudents().some(x => x.id !== id && x.cls === rec.cls && (x.section||'') === rec.section && toEn(x.roll) === rec.roll)) {
-      err.textContent = `${CLASS_NAME[rec.cls]}-এ রোল ${bn(rec.roll)} আগে থেকেই আছে।`; err.style.display='block'; return;
+    let plan = [];
+    const owner = rec.roll && !s.alumni && activeStudents().find(x => x.id !== id && x.cls === rec.cls && (x.section||'') === rec.section && toEn(x.roll) === rec.roll);
+    if (owner) {
+      const f = e.target;
+      if (!f.dataset.shift) { err.innerHTML = `${CLASS_NAME[rec.cls]}-এ রোল ${bn(rec.roll)} আগে থেকেই ${esc(owner.name)}-এর।<button type="button" class="btn full" id="stuShift" style="margin-top:8px">এই শিক্ষার্থীকে রোল ${bn(rec.roll)}-এ বসান, পরেরদের রোল পিছিয়ে দিন</button>`; err.style.display='block';
+        document.getElementById('stuShift').addEventListener('click', () => { f.dataset.shift = '1'; f.requestSubmit(); }); return; }
+      delete f.dataset.shift;
+      plan = rollShift(rec.cls, rec.section, parseInt(rec.roll), 1, id); applyRollShift(plan);
     }
     const sid = id || uid();
     if (!id && UI.newAlumni && d.s_alyear) UI.newAlumni = d.s_alyear;
@@ -1506,7 +1531,7 @@ function studentSheet(id){
     else DB.students.push({id:sid, created:Date.now(), ...rec});
     UI.newAlumni = null;
     const ph = getPhoto(); if (ph !== undefined) setPhoto(sid, ph);
-    if (save()) toast(id?'প্রোফাইল হালনাগাদ হয়েছে':'শিক্ষার্থীর প্রোফাইল সংরক্ষিত হয়েছে');
+    if (save()) toast((id?'প্রোফাইল হালনাগাদ হয়েছে':'শিক্ষার্থীর প্রোফাইল সংরক্ষিত হয়েছে') + shiftMsg(plan), plan.length ? 4000 : undefined);
     closeSheet(); render();
   });
 }
@@ -3703,7 +3728,7 @@ function bindView(r){
     if (s) s.addEventListener('input', () => {
       UI.stuQuery = s.value;
       const q = s.value.trim().toLowerCase();
-      const list = activeStudents().filter(x => (UI.stuClass==='all' || x.cls===UI.stuClass) && (!q || [x.name,x.roll,bn(x.roll||''),x.father,x.mother,x.phone].join(' ').toLowerCase().includes(q)));
+      const list = activeStudents().filter(x => (UI.stuClass==='all' || x.cls===UI.stuClass) && (!q || [x.name,x.roll,bn(x.roll||''),x.father,x.mother,x.phone].join(' ').toLowerCase().includes(q))).sort(stuSort);
       document.getElementById('stuList').innerHTML = stuListHtml(list);
     });
   }
