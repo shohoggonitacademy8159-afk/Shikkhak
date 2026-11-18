@@ -229,6 +229,18 @@ img.ma{object-fit:cover;background:#E8EEF5}
 .psin{font:inherit;font-size:14px;color:var(--ink);border:1px solid #CBD6E2;border-radius:10px;padding:8px 10px;min-height:40px;width:100%;box-sizing:border-box}
 .psmsg{font-size:13.5px;line-height:1.6;background:#F3F8F6;border-radius:12px;padding:8px 10px;color:var(--ink);word-break:break-word}
 .psmsg.off{opacity:.55}
+.pstab{border:1px solid #9FB0C4;border-radius:12px;overflow:hidden;background:#fff}
+.pstab table{width:100%;border-collapse:collapse;table-layout:fixed}
+.pstab th{font-size:11.5px;line-height:1.25;font-weight:700;color:var(--ink);background:#EEF4F2;border:1px solid #C5D2DE;padding:5px 2px;text-align:center}
+.pstab th.l{width:34%;text-align:left;padding-left:8px}
+.pstab td{border:1px solid #D5DEE8;padding:0;height:46px;text-align:center}
+.pstab td.l{text-align:left}
+.pstab tr.off td{background:#FAFAFA}
+.pck{width:100%;height:100%;min-height:46px;border:0;background:transparent;font-size:20px;font-weight:800;color:#17663F;cursor:pointer}
+.pck:focus-visible{outline:3px solid #0F766E;outline-offset:-3px}
+.psnm{width:100%;min-height:46px;border:0;background:transparent;text-align:left;padding:6px 6px 6px 8px;font:inherit;font-size:13px;font-weight:600;color:var(--ink);display:flex;flex-direction:column;gap:1px;cursor:pointer}
+.psnm small{font-size:11px;font-weight:600;color:var(--mute);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+
 .btn:disabled{opacity:.45;cursor:not-allowed}
 button.psrow.pslog{flex-direction:row;align-items:center;width:100%;background:#fff;border:0;border-top:1px solid #EDF2EF;font:inherit;color:inherit;cursor:pointer}
 button.psrow.pslog:first-child{border-top:0}
@@ -286,7 +298,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '5.4';
+const WEB_VERSION = '5.5';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -3299,7 +3311,7 @@ const NAV = [['home','হোম','home'],['routine','রুটিন','clock'],[
 const smsOk = () => !!(BR && BR.sendSms && BR.smsStatus);
 const PS_LVL = {ex:['অতি উত্তম','অতি উত্তম','#17663F','#E3F4EA'], g:['উত্তম','উত্তম','#1F4E8C','#E6EFFA'], d:['চলমান','অগ্রগতি হচ্ছে','#7A4A00','#FFF1D6'], s:['সহায়তা','সহায়তা দরকার','#B42318','#FDE8E6']};
 const PS_LVL_ORDER = ['s','d','g','ex'];
-const PS_HW = {done:['কাজ জমা','জমা দিয়েছে','#17663F','#E3F4EA'], part:['আংশিক','আংশিক জমা দিয়েছে','#7A4A00','#FFF1D6'], no:['জমা দেয়নি','জমা দেয়নি','#B42318','#FDE8E6']};
+const PS_HW = {done:['জমা দিয়েছে','জমা দিয়েছে','#17663F','#E3F4EA'], part:['অসম্পূর্ণ','অসম্পূর্ণ','#7A4A00','#FFF1D6'], no:['জমা দেয়নি','জমা দেয়নি','#B42318','#FDE8E6']};
 const PS_CLS = {pre:'প্রাক', '1':'১ম', '2':'২য়', '3':'৩য়', '4':'৪র্থ', '5':'৫ম'};
 const PS_SUBJ_SHORT = {bangla:'বাংলা', english:'ইংরেজি', math:'গণিত', science:'বিজ্ঞান', bgs:'বাওবি', religion:'ধর্ম', pe:'শারীরিক শিক্ষা', arts:'শিল্পকলা', art:'চারুকলা', 'pre-lang':'ভাষা', 'pre-math':'গণিত', 'pre-env':'পরিবেশ', all:'সার্বিক'};
 const PS_ATT = {p:'উপস্থিত', a:'অনুপস্থিত', l:'ছুটি'};
@@ -3356,7 +3368,7 @@ function psDaily(s, date){
   if (!att && st.l == null && !st.h && !st.r && !hw) return null;
   const head = `${psName(s)} (${PS_CLS[s.cls] || ''}, রোল ${bn(s.roll || '–')}) ${psDM(date)}:`;
   const a = att === 'a' ? 'আজ অনুপস্থিত।' : att === 'l' ? 'আজ ছুটিতে।' : att === 'p' ? 'উপস্থিত।' : '';
-  const l = st.l === 1 ? 'পড়া শিখেছে।' : st.l === 0 ? 'পড়া শেখেনি।' : '';
+  const l = st.l === 1 ? 'পড়া দিয়েছে।' : st.l === 0 ? 'পড়া পারেনি।' : '';
   const h = st.h ? `বাড়ির কাজ ${PS_HW[st.h][1]}।` : '';
   const sg = psSign();
   return psFit([
@@ -3377,7 +3389,7 @@ function psWeekly(s, end){
   const head = `${psName(s)} (${PS_CLS[s.cls] || ''}, রোল ${bn(s.roll || '–')}) সাপ্তাহিক ${psDM(days[0])}-${psDM(end)}:`;
   const parts = [];
   if (marked) parts.push(`উপস্থিত ${bn(p)}/${bn(marked)} দিন${lv ? `, ছুটি ${bn(lv)} দিন` : ''}।`);
-  if (lessonDays) parts.push(`পড়া শিখেছে ${bn(learned)}/${bn(lessonDays)} দিন।`);
+  if (lessonDays) parts.push(`পড়া দিয়েছে ${bn(learned)}/${bn(lessonDays)} দিন।`);
   if (hwDays) parts.push(`বাড়ির কাজ জমা ${bn(hwDone)}/${bn(hwDays)} দিন।`);
   const sg = psSign();
   return psFit([[head, ...parts, remark && `মন্তব্য: ${psClip(remark, 50)}`, sg], [head, ...parts, sg], [head, ...parts]], DB.smsCfg.maxSeg);
@@ -3499,24 +3511,60 @@ function psChips(cl){
 function psBtns(attr, sid, map, cur){
   return Object.entries(map).map(([k, v]) => `<button ${attr}="${sid}" data-v="${k}" aria-pressed="${cur === k}" style="${cur === k ? `background:${v[3]};color:${v[2]};border-color:${v[2]}` : ''}">${v[0]}</button>`).join('');
 }
+const PS_YN = {y:['দিয়েছে','পড়া দিয়েছে','#17663F','#E3F4EA'], n:['পারেনি','পড়া পারেনি','#B42318','#FDE8E6']};
+function psCell(attr, sid, k, v, cur){
+  const on = cur === k;
+  return `<td><button class="pck${on ? ' on' : ''}" ${attr}="${sid}" data-v="${k}" aria-pressed="${on}" aria-label="${v[1]}"${on ? ` style="background:${v[3]};color:${v[2]}"` : ''}>${on ? '✓' : ''}</button></td>`;
+}
 function psDailyView(cl){
   const P = UI.ps, d = P.date, list = sortedStudents(P.cls), rec = psRec(d, P.cls) || {hw:'', s:{}}, S0 = rec.s || {};
   const filled = list.filter(s => { const x = S0[s.id]; return x && (x.l != null || x.h); }).length;
-  const yn = {y:['পড়া শিখেছে','পড়া শিখেছে','#17663F','#E3F4EA'], n:['শেখেনি','পড়া শেখেনি','#B42318','#FDE8E6']};
+  const wd = new Date(d + 'T00:00:00').toLocaleDateString('bn-BD', {weekday:'long'});
   return `${psChips(cl)}
-    <div class="field"><label for="psDate">তারিখ</label><input type="date" id="psDate" value="${d}" max="${todayISO()}"></div>
-    <div class="field"><label for="psHw">আজকের বাড়ির কাজ (পুরো শ্রেণির জন্য)</label><textarea id="psHw" rows="2" maxlength="200" placeholder="যেমন: বাংলা বই পৃ. ২৫ পড়া, গণিত অনুশীলনী ৩.২">${esc(rec.hw || '')}</textarea></div>
-    <div class="card" style="gap:10px"><div class="top"><b style="font-size:15px">${CLASS_NAME[P.cls]} · ${bn(list.length)} জন</b><span class="t2" style="font-size:13px">তথ্য দেওয়া ${bn(filled)} জন</span></div>
-      <button class="btn" data-ps-allok ${filled < list.length ? '' : 'disabled'}>বাকি সবাই: পড়া শিখেছে ও কাজ জমা</button></div>
-    <div class="list">${list.map(s => { const x = S0[s.id] || {}, a = psAtt(d, s.id);
-      return `<div class="psrow">
-        <div style="display:flex;align-items:center;gap:10px"><span class="rollb">${s.roll ? esc(bn(s.roll)) : '–'}</span>
-          <span class="grow"><span class="t1" style="font-weight:600;font-size:14px">${esc(s.name)}</span><span class="t2" style="font-size:12px">${a ? 'হাজিরা: ' + PS_ATT[a] : 'হাজিরা নেওয়া হয়নি'}${psPhone(s.phone) ? '' : ' · <b style="color:#B42318">নম্বর নেই</b>'}</span></span></div>
-        <div class="psbtns" role="group" aria-label="পড়া">${psBtns('data-ps-l', s.id, yn, x.l == null ? null : x.l ? 'y' : 'n')}</div>
-        <div class="psbtns three" role="group" aria-label="বাড়ির কাজ">${psBtns('data-ps-h', s.id, PS_HW, x.h || null)}</div>
-        <input class="psin" data-ps-r="${s.id}" value="${esc(x.r || '')}" maxlength="80" placeholder="মন্তব্য (ঐচ্ছিক)" aria-label="${esc(s.name)}-এর মন্তব্য">
-      </div>`; }).join('')}</div>
-    <p class="hint" style="text-align:center">হাজিরা আসে "শিক্ষার্থী উপস্থিতি" থেকে। আবার চাপলে বাছাই বাতিল হয়। সব পরিবর্তন সাথে সাথে সংরক্ষিত হয়।</p>`;
+    <div class="row2"><div class="field"><label for="psDate">তারিখ</label><input type="date" id="psDate" value="${d}" max="${todayISO()}"></div>
+      <div class="field"><label>&nbsp;</label><button class="btn" data-ps-print style="min-height:48px">${ic('doc', 18)} ছক প্রিন্ট / PDF</button></div></div>
+    <div class="field"><label for="psHw">আজকের বাড়ির কাজ (পুরো শ্রেণির জন্য, ঐচ্ছিক)</label><textarea id="psHw" rows="2" maxlength="200" placeholder="যেমন: বাংলা বই পৃ. ২৫ পড়া, গণিত অনুশীলনী ৩.২">${esc(rec.hw || '')}</textarea></div>
+    <div class="top" style="margin:2px 2px 0"><b style="font-size:15px">${CLASS_NAME[P.cls]} · ${psDM(d)} ${wd}</b><span class="t2" style="font-size:13px">পূরণ ${bn(filled)}/${bn(list.length)}</span></div>
+    <div class="pstab"><table>
+      <thead><tr><th rowspan="2" class="l">শিক্ষার্থীর নাম</th><th colspan="2">পড়া</th><th colspan="3">বাড়ির কাজ</th></tr>
+      <tr><th>দিয়েছে</th><th>পারেনি</th><th>জমা দিয়েছে</th><th>অসম্পূর্ণ</th><th>জমা দেয়নি</th></tr></thead>
+      <tbody>${list.map((s, i) => { const x = S0[s.id] || {}, a = psAtt(d, s.id), off = a === 'a' || a === 'l';
+        const l = x.l == null ? null : x.l ? 'y' : 'n';
+        return `<tr class="${off ? 'off' : ''}"><td class="l"><button class="psnm" data-ps-rm="${s.id}"><span>${esc(bn(s.roll || (i + 1)))}. ${esc(s.name)}</span>
+          ${off ? `<small style="color:#B42318">${PS_ATT[a]}</small>` : ''}${x.r ? `<small>✎ ${esc(x.r)}</small>` : ''}${psPhone(s.phone) ? '' : '<small style="color:#9A6B00">নম্বর নেই</small>'}</button></td>
+          ${Object.entries(PS_YN).map(([k, v]) => psCell('data-ps-l', s.id, k, v, l)).join('')}
+          ${Object.entries(PS_HW).map(([k, v]) => psCell('data-ps-h', s.id, k, v, x.h || null)).join('')}</tr>`; }).join('')}</tbody></table></div>
+    <button class="btn full" data-ps-allok ${filled < list.length ? '' : 'disabled'}>বাকি সবাই: পড়া দিয়েছে ও কাজ জমা দিয়েছে</button>
+    <p class="hint" style="text-align:center">ঘরে চাপলে ✓ হয়, আবার চাপলে মুছে যায়। নামে চাপলে মন্তব্য লেখা যায়। অনুপস্থিতি আসে "শিক্ষার্থী উপস্থিতি" থেকে।</p>`;
+}
+function psRemarkSheet(sid){
+  const P = UI.ps, s = DB.students.find(x => x.id === sid); if (!s) return;
+  const x = ((psRec(P.date, P.cls) || {}).s || {})[sid] || {};
+  openSheet(`<h2 style="font-size:18px;margin-bottom:4px">${esc(s.name)}</h2><p class="t2" style="font-size:13px;margin-bottom:12px">${CLASS_NAME[s.cls]} · রোল ${esc(bn(s.roll || '–'))} · ${psDM(P.date)}</p>
+    <div class="field"><label for="psRmIn">শিক্ষকের মন্তব্য</label><textarea id="psRmIn" rows="3" maxlength="100" placeholder="যেমন: খুব মনোযোগী, হাতের লেখা সুন্দর করতে হবে">${esc(x.r || '')}</textarea></div>
+    <div class="row2" style="margin-top:12px"><button class="btn big" data-close>বাতিল</button><button class="btn big solid" data-ps-rmsave="${sid}">সংরক্ষণ</button></div>`);
+  setTimeout(() => { const t = document.getElementById('psRmIn'); if (t) t.focus(); }, 50);
+}
+function psDailyDoc(cls, d){
+  const T = DB.teacher, list = sortedStudents(cls), rec = psRec(d, cls) || {hw:'', s:{}}, S0 = rec.s || {};
+  const wd = new Date(d + 'T00:00:00').toLocaleDateString('bn-BD', {weekday:'long'});
+  const [y, m, dd] = d.split('-'), hasR = list.some(s => (S0[s.id] || {}).r);
+  const tick = on => on ? '✓' : '';
+  return `<!DOCTYPE html><html lang="bn"><head><meta charset="utf-8"><title>দৈনিক রিপোর্ট - ${CLASS_NAME[cls]}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>@page{size:A4 portrait;margin:10mm}html,body{margin:0}body{font-family:'Hind Siliguri','Noto Sans Bengali',sans-serif;color:#000}
+  .h{text-align:center;margin-bottom:8px}.s{font-size:20px;font-weight:700}.sub{font-size:14px;margin-top:2px}.hw{font-size:13px;margin:6px 0 8px}
+  table{width:100%;border-collapse:collapse}th,td{border:1px solid #000;padding:4px 5px;font-size:13px;text-align:center}th{font-weight:700;background:#F1F1F1}
+  td.l,th.l{text-align:left}td.c{font-size:16px;font-weight:700;width:12%}tr{break-inside:avoid;page-break-inside:avoid}.ab{font-size:11px}
+  .sg{display:flex;justify-content:flex-end;margin-top:40px;font-size:13px}.sg div{border-top:1px solid #000;padding-top:3px;min-width:160px;text-align:center}</style></head><body>
+  <div class="h"><div class="s">${esc(T.school || '')}</div><div class="sub">দৈনিক রিপোর্ট — ${CLASS_NAME[cls]} · তারিখ: ${bn(+dd)}/${bn(+m)}/${bn(y)} (${wd})</div></div>
+  ${rec.hw ? `<div class="hw"><b>আজকের বাড়ির কাজ:</b> ${esc(rec.hw)}</div>` : ''}
+  <table><thead><tr><th rowspan="2" class="l">শিক্ষার্থীর নাম</th><th colspan="2">পড়া</th><th colspan="3">বাড়ির কাজ</th>${hasR ? '<th rowspan="2">মন্তব্য</th>' : ''}</tr>
+  <tr><th>দিয়েছে</th><th>পারেনি</th><th>জমা দিয়েছে</th><th>অসম্পূর্ণ</th><th>জমা দেয়নি</th></tr></thead><tbody>
+  ${list.map((s, i) => { const x = S0[s.id] || {}, a = psAtt(d, s.id);
+    return `<tr><td class="l">${esc(bn(s.roll || (i + 1)))}. ${esc(s.name)}${a === 'a' || a === 'l' ? ` <span class="ab">(${PS_ATT[a]})</span>` : ''}</td>
+    <td class="c">${tick(x.l === 1)}</td><td class="c">${tick(x.l === 0)}</td><td class="c">${tick(x.h === 'done')}</td><td class="c">${tick(x.h === 'part')}</td><td class="c">${tick(x.h === 'no')}</td>${hasR ? `<td class="l" style="font-size:12px">${esc(x.r || '')}</td>` : ''}</tr>`; }).join('')}
+  </tbody></table><div class="sg"><div>শ্রেণি শিক্ষকের স্বাক্ষর</div></div></body></html>`;
 }
 function psLearnView(cl){
   const P = UI.ps, subs = [['all', 'সার্বিক'], ...psSubjects(P.cls)];
@@ -3619,8 +3667,11 @@ function psClick(ds){
   if (ds.psType) { P.type = ds.psType; P.resend = false; return render(); }
   if (ds.psL) { const r = psRecW(P.date, P.cls), x = r.s[ds.psL] = r.s[ds.psL] || {}; const v = ds.v === 'y' ? 1 : 0; if (x.l === v) delete x.l; else x.l = v; save(); return render(); }
   if (ds.psH) { const r = psRecW(P.date, P.cls), x = r.s[ds.psH] = r.s[ds.psH] || {}; if (x.h === ds.v) delete x.h; else x.h = ds.v; save(); return render(); }
-  if ('psAllok' in ds) { const r = psRecW(P.date, P.cls); sortedStudents(P.cls).forEach(s => { const x = r.s[s.id] = r.s[s.id] || {}; if (psAtt(P.date, s.id) === 'a' || psAtt(P.date, s.id) === 'l') return; if (x.l == null) x.l = 1; if (!x.h) x.h = 'done'; }); save(); toast('অনুপস্থিত ছাড়া বাকি সবার তথ্য দেওয়া হয়েছে'); return render(); }
+  if ('psAllok' in ds) { const r = psRecW(P.date, P.cls); sortedStudents(P.cls).forEach(s => { const x = r.s[s.id] = r.s[s.id] || {}; if (psAtt(P.date, s.id) === 'a' || psAtt(P.date, s.id) === 'l') return; if (x.l == null) x.l = 1; if (!x.h) x.h = 'done'; }); save(); toast('অনুপস্থিত ছাড়া বাকি সবার ঘরে ✓ দেওয়া হয়েছে'); return render(); }
   if (ds.psLv) { const M = DB.learn[P.ym] = DB.learn[P.ym] || {}, x = M[ds.psLv] = M[ds.psLv] || {}; if (x[P.subj] === ds.v) delete x[P.subj]; else x[P.subj] = ds.v; save(); return render(); }
+  if (ds.psRm) return psRemarkSheet(ds.psRm);
+  if (ds.psRmsave) { const t = document.getElementById('psRmIn'), r = psRecW(P.date, P.cls), x = r.s[ds.psRmsave] = r.s[ds.psRmsave] || {}; const v = (t && t.value || '').trim(); if (v) x.r = v; else delete x.r; save(); closeSheet(); return render(); }
+  if ('psPrint' in ds) return printDoc(`দৈনিক রিপোর্ট - ${CLASS_NAME[P.cls]} - ${psDM(P.date)}`, psDailyDoc(P.cls, P.date));
   if ('psSend' in ds) { if (!smsOk()) return; return psWithPerm(psConfirmSend); }
   if ('psPerm' in ds) { closeSheet(); try { BR.smsRequestPermission(); } catch(e) { toast('অনুমতি চাওয়া যায়নি'); } return; }
   if ('psGo' in ds) { closeSheet(); const j = psCreateJob(); save(); render(); psStart(j); return; }
