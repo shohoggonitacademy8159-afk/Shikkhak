@@ -309,7 +309,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '5.8';
+const WEB_VERSION = '5.9';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -3393,7 +3393,7 @@ const psAtt = (date, sid) => ((DB.attendance.students[date] || {})[sid]) || null
 /* ---- report text (one per student) ---- */
 function psDaily(s, date){
   const rec = psRec(date, s.cls), att = psAtt(date, s.id), hw = rec && rec.hw ? rec.hw.trim() : '', st = (rec && rec.s && rec.s[s.id]) || {};
-  const subs = psDailySubs(s.cls, rec), en = subs.map(([k, n]) => [k, n, psMark(rec, k, s.id)]).filter(([, , x]) => x.l != null || x.h);
+  const subs = psDailySubs(s.cls, rec).filter(([k]) => s.cls === 'pre' || k !== 'all'), en = subs.map(([k, n]) => [k, n, psMark(rec, k, s.id)]).filter(([, , x]) => x.l != null || x.h);
   if (!att && !en.length && !st.r && !hw) return null;
   const head = `${psName(s)} (${PS_CLS[s.cls] || ''}, রোল ${bn(s.roll || '–')}) ${psDM(date)}:`;
   const a = att === 'a' ? 'আজ অনুপস্থিত।' : att === 'l' ? 'আজ ছুটিতে।' : att === 'p' ? 'উপস্থিত।' : '';
@@ -3415,7 +3415,7 @@ function psDaily(s, date){
   }
   return psFit([
     [head, a, ...detail, hwT, rm, sg], [head, a, ...detail, hwT, sg], [head, a, ...detail, hwS, sg], [head, a, ...detail, sg],
-    [head, a, counts, sg], [head, a, counts]], DB.smsCfg.maxSeg);
+    [head, a, counts, sg]], DB.smsCfg.maxSeg);
 }
 function psWeekly(s, end){
   const days = []; for (let i = 6; i >= 0; i--) days.push(shiftDate(end, -i));
@@ -3423,7 +3423,7 @@ function psWeekly(s, end){
   let subsUsed = 1;
   days.forEach(d => { const a = psAtt(d, s.id); if (a) { marked++; if (a === 'p') p++; if (a === 'l') lv++; }
     const r = psRec(d, s.cls); if (!r) return;
-    const subs = psDailySubs(s.cls, r); subsUsed = Math.max(subsUsed, subs.length);
+    const subs = psDailySubs(s.cls, r).filter(([k]) => s.cls === 'pre' || k !== 'all'); subsUsed = Math.max(subsUsed, subs.length);
     subs.forEach(([k, n]) => { const x = psMark(r, k, s.id);
       if (x.l != null) { lT++; if (x.l === 1) lOk++; else weak[n] = (weak[n] || 0) + 1; }
       if (x.h) { hT++; if (x.h === 'done') hOk++; else weak[n] = (weak[n] || 0) + 1; } });
@@ -3442,14 +3442,14 @@ function psWeekly(s, end){
     if (w.length) parts.push(`${w.join(', ')}-এ বেশি মনোযোগ দরকার।`);
   }
   const sg = psSign();
-  return psFit([[head, ...parts, remark && `মন্তব্য: ${psClip(remark, 50)}`, sg], [head, ...parts, sg], [head, ...parts]], DB.smsCfg.maxSeg);
+  return psFit([[head, ...parts, remark && `মন্তব্য: ${psClip(remark, 50)}`, sg], [head, ...parts, sg]], DB.smsCfg.maxSeg);
 }
 function psMonthly(s, ym){
   const c = {p:0, a:0, l:0}; let marked = 0;
   Object.keys(DB.attendance.students).forEach(d => { if (!d.startsWith(ym)) return; const v = DB.attendance.students[d][s.id]; if (c[v] !== undefined) { c[v]++; marked++; } });
   const L = ((DB.learn[ym] || {})[s.id]) || {};
   const subj = Object.entries(L).filter(([k, v]) => k !== 'all' && PS_LVL[v]);
-  if (!marked && !subj.length && !L.all) return null;
+  if (!marked && !subj.length) return null;
   const [y, m] = ym.split('-');
   let mon = ym; try { mon = new Date(ym + '-01T00:00:00').toLocaleDateString('bn-BD', {month:'long'}); } catch(e) {}
   const head = `${psName(s)} (${PS_CLS[s.cls] || ''}, রোল ${bn(s.roll || '–')}) ${mon} ${bn(y)}:`;
@@ -3458,11 +3458,10 @@ function psMonthly(s, ym){
   const detail = subj.length ? 'শিখন: ' + subj.map(([k, v]) => `${psSubjName(s.cls, k)}-${PS_LVL[v][1]}`).join(', ') + '।' : '';
   const weak = subj.filter(([, v]) => v === 's').map(([k]) => psSubjName(s.cls, k));
   let overall = '';
-  if (L.all) overall = `সার্বিক শিখন: ${PS_LVL[L.all][1]}।`;
-  else if (subj.length) { const cnt = {}; subj.forEach(([, v]) => cnt[v] = (cnt[v] || 0) + 1); const top = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a] || PS_LVL_ORDER.indexOf(b) - PS_LVL_ORDER.indexOf(a))[0]; overall = `সার্বিক শিখন ${PS_LVL[top][1]}।`; }
+  if (subj.length) { const cnt = {}; subj.forEach(([, v]) => cnt[v] = (cnt[v] || 0) + 1); const top = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a] || PS_LVL_ORDER.indexOf(b) - PS_LVL_ORDER.indexOf(a))[0]; overall = `শিখন অবস্থা ${PS_LVL[top][1]}।`; }
   const care = weak.length ? `${weak.join(', ')}-এ বাড়তি যত্ন প্রয়োজন।` : '';
   const sg = psSign();
-  return psFit([[head, att, detail, care || overall, sg], [head, att, care || overall, sg], [head, att, care || overall], [head, att]], DB.smsCfg.maxSeg);
+  return psFit([[head, att, detail, care || overall, sg], [head, att, care || overall, sg], [head, att, sg]], DB.smsCfg.maxSeg);
 }
 function psPeriod(P){ return P.type === 'monthly' ? P.sym : P.sdate; }
 function psJobKey(P){ return `${P.type}|${psPeriod(P)}`; }
@@ -3675,10 +3674,10 @@ function psSendView(cl){
     : `<div class="field"><label for="psSdate">${P.type === 'weekly' ? 'সপ্তাহের শেষ দিন (আগের ৭ দিনের হিসাব)' : 'তারিখ'}</label><input type="date" id="psSdate" value="${P.sdate}" max="${todayISO()}"></div>`;
   const opts = `<div class="row2">
       <div class="field"><label for="psScope">শ্রেণি</label><select id="psScope"><option value="all">সব শ্রেণি</option>${cl.map(([k, l]) => `<option value="${k}" ${P.scope === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
-      <div class="field"><label for="psMax">মেসেজের দৈর্ঘ্য</label><select id="psMax">${[1, 2, 3].map(n => `<option value="${n}" ${C.maxSeg === n ? 'selected' : ''}>সর্বোচ্চ ${bn(n)} SMS</option>`).join('')}</select></div></div>
-    <div class="row2">
-      <div class="field"><label for="psSign">শেষে বিদ্যালয়ের নাম</label><input id="psSign" maxlength="25" value="${esc(C.sign)}" placeholder="যেমন: চরপাড়া সপ্রাবি"></div>
-      ${sims.length > 1 ? `<div class="field"><label for="psSim">কোন সিম থেকে</label><select id="psSim">${sims.map(x => `<option value="${x.id}" ${+C.sim === +x.id ? 'selected' : ''}>${esc(x.label)}</option>`).join('')}</select></div>` : '<div></div>'}</div>`;
+      <div class="field"><label for="psMax">মেসেজের দৈর্ঘ্য</label><select id="psMax">${[1, 2, 3, 4].map(n => `<option value="${n}" ${C.maxSeg === n ? 'selected' : ''}>সর্বোচ্চ ${bn(n)} SMS</option>`).join('')}</select></div></div>
+    <div class="field"><label for="psSign">মেসেজের শেষে বিদ্যালয়ের নাম / পরিচয়</label><textarea id="psSign" rows="2" maxlength="200" placeholder="যেমন: প্রধান শিক্ষক, চরপাড়া সরকারি প্রাথমিক বিদ্যালয়, সদর, জামালপুর">${esc(C.sign)}</textarea>
+      <span class="t2" style="font-size:12px;margin-top:4px">${bn((C.sign || '').trim().split(/\s+/).filter(Boolean).length)} শব্দ · ${bn((C.sign || '').trim().length)} অক্ষর। নাম লম্বা হলে প্রতিটি মেসেজে বেশি SMS লাগতে পারে — দরকারে উপরে "সর্বোচ্চ ৩ বা ৪ SMS" দিন। নাম সব মেসেজে থাকবে।</span></div>
+    ${sims.length > 1 ? `<div class="field"><label for="psSim">কোন সিম থেকে</label><select id="psSim">${sims.map(x => `<option value="${x.id}" ${+C.sim === +x.id ? 'selected' : ''}>${esc(x.label)}</option>`).join('')}</select></div>` : ''}`;
   const sum = `<div class="card" style="gap:10px">
       <div class="row2"><button class="btn" data-ps-pickall ${pickable.length ? '' : 'disabled'}>সবাইকে নির্বাচন</button><button class="btn" data-ps-picknone ${picked.length ? '' : 'disabled'}>নির্বাচন বাতিল</button></div>
       <div class="sumrow">${pill('নির্বাচিত ' + bn(picked.length) + ' জন', '#1F4E8C', '#E6EFFA')}${pill('যাবে ' + bn(ok.length) + ' জন · ' + bn(segs) + ' SMS', '#17663F', '#E3F4EA')}${noNum ? pill('নম্বর নেই ' + bn(noNum) + ' জন — যাবে না', '#B42318', '#FDE8E6') : ''}${skipDup ? pill('আগে পাঠানো ' + bn(skipDup) + ' জন — যাবে না', '#3E5070', '#EEF1F6') : ''}</div>
@@ -3776,7 +3775,7 @@ function bindParentSms(){
   on('psMax', 'change', el => { DB.smsCfg.maxSeg = +el.value; save(); render(); });
   on('psSim', 'change', el => { DB.smsCfg.sim = +el.value; save(); });
   on('psResend', 'change', el => { P.resend = el.checked; render(); });
-  on('psSign', 'change', el => { DB.smsCfg.sign = el.value.trim(); save(); render(); });
+  on('psSign', 'change', el => { DB.smsCfg.sign = el.value.replace(/\s+/g, ' ').trim(); save(); render(); });
   let t;
   on('psHw', 'input', el => { psRecW(P.date, P.cls).hw = el.value; clearTimeout(t); t = setTimeout(save, 400); });
   document.querySelectorAll('[data-ps-r]').forEach(el => el.addEventListener('input', () => {
