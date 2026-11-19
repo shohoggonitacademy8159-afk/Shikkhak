@@ -373,7 +373,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '6.8';
+const WEB_VERSION = '6.9';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -3051,8 +3051,12 @@ const barOf = iso => { const d = dParse(iso); return d ? BAR[d.getDay()] : ''; }
 // One day: the date and weekday; more than one day: both dates.
 const lvRange = (a, b) => (!a || !b || a === b) ? `${dFmt(a)} তারিখ ${barOf(a)}` : `${dFmt(a)} তারিখ থেকে ${dFmt(b)} তারিখ পর্যন্ত`;
 const lvRangeShort = (a, b) => (!a || !b || a === b) ? `${dFmt(a)} (${barOf(a)})` : `${dFmt(a)} – ${dFmt(b)}`;
-const lvWhy = R => R ? (/(কারণে|কাজে|জন্য|হওয়ায়|থাকায়|প্রয়োজনে|উপলক্ষে|উদ্দেশ্যে)$/.test(R) ? esc(R) : esc(R) + ' কারণে') : '.......................... কারণে';
+const lvWhy = R => R ? (/(কারণে|কাজে|জন্য|হওয়ায়|থাকায়|প্রয়োজনে|উপলক্ষে|উদ্দেশ্যে)$/.test(R) ? esc(R) : esc(R) + ' কারণে') : '.......................... প্রয়োজনে';
 const lvUsedTxt = (tid, type, yr, nm) => { const u = lvUsed(tid, type, yr); return u ? `চলতি বছরে আমি ইতোমধ্যে ${bn(u)} দিন ${nm} ভোগ করেছি।` : `চলতি বছরে আমি এখনো কোনো ${nm} ভোগ করিনি।`; };
+const BN_NUMW = ['','এক','দুই','তিন','চার','পাঁচ','ছয়','সাত','আট','নয়','দশ','এগারো','বারো','তেরো','চৌদ্দ','পনেরো','ষোলো','সতেরো','আঠারো','উনিশ','বিশ','একুশ','বাইশ','তেইশ','চব্বিশ','পঁচিশ','ছাব্বিশ','সাতাশ','আটাশ','ঊনত্রিশ','ত্রিশ','একত্রিশ','বত্রিশ','তেত্রিশ','চৌত্রিশ','পঁয়ত্রিশ','ছত্রিশ','সাঁইত্রিশ','আটত্রিশ','ঊনচল্লিশ','চল্লিশ'];
+const BN_NUMW_X = {45:'পঁয়তাল্লিশ', 50:'পঞ্চাশ', 60:'ষাট', 90:'নব্বই', 120:'একশত বিশ', 180:'একশত আশি'};
+// "৩ (তিন) দিন" — number with the word in brackets, as written in applications
+const nDays = n => { const w = BN_NUMW[n] || BN_NUMW_X[n]; return `${bn(n)}${w ? ` (${w})` : ''} দিন`; };
 const isHeadT = t => /প্রধান শিক্ষক/.test((t && t.designation) || '');
 function lvUsed(tid, type, year, exceptId){
   return (DB.leaves || []).filter(l => l.tid === tid && l.type === type && (l.from || '').startsWith(year) && l.id !== exceptId).reduce((a, l) => a + (l.days || 0), 0);
@@ -3061,8 +3065,9 @@ function lvLetter(L){
   const T = DB.teacher, t = DB.teachers.find(x => x.id === L.tid) || {name: T.name, designation: T.designation};
   const head = isHeadT(t), n = lvDays(L.from, L.to), nm = LV_TYPES[L.type][0], R = (L.reason || '').trim();
   const r = x => x ? esc(x) : '..........................';
-  const span = n === 1 ? `আগামী ${lvRange(L.from, L.to)} ১ (এক) দিন` : `আগামী ${lvRange(L.from, L.to)} মোট ${bn(n)} দিন`;
-  const me = head ? `আমি ${esc(T.school)}-এ প্রধান শিক্ষক পদে কর্মরত আছি।` : `আমি অত্র বিদ্যালয়ে ${esc(t.designation || 'সহকারী শিক্ষক')} পদে কর্মরত আছি।`;
+  const span = `আগামী ${lvRange(L.from, L.to)} ${nDays(n)}`;
+  const nmT = t.name ? esc(t.name) + ', ' : '';
+  const me = head ? `যথাবিহিত সম্মানপূর্বক বিনীত নিবেদন এই যে, আমি ${nmT}${esc(T.school)}-এ প্রধান শিক্ষক পদে কর্মরত আছি।` : `যথাবিহিত সম্মানপূর্বক বিনীত নিবেদন এই যে, আমি ${nmT}অত্র বিদ্যালয়ে ${esc(t.designation || 'সহকারী শিক্ষক')} পদে কর্মরত আছি।`;
   const addr = L.addr.trim() ? `<p>ছুটিকালীন আমার ঠিকানা: ${esc(L.addr.trim())}।</p>` : '';
   let to = HT_ADDR(), via = '', subject = '', body = '', pray = '', sign = [esc(t.name), esc(t.designation || ''), esc(T.school)];
   const sanction = head ? UEO() : HT_ADDR();
@@ -3091,7 +3096,7 @@ function lvLetter(L){
       body = `<p>${me} ${lvWhy(R)} ${span} আমার কর্মস্থল ত্যাগ করা প্রয়োজন।</p>${addr}`;
       pray = `উক্ত সময়ে কর্মস্থল ত্যাগের অনুমতি প্রদান করে বাধিত করবেন।`; break;
     case 'joining': to = head ? UEO() : HT_ADDR(); subject = `ছুটি শেষে কাজে যোগদানপত্র।`;
-      body = `<p>${me} আমি ${lvRange(L.from, L.to)} ${n === 1 ? '১ (এক)' : 'মোট ' + bn(n)} দিনের ${r(R)} ভোগ করেছি। ছুটি শেষে আজ ${dFmt(L.date)} তারিখ ${barOf(L.date)} পূর্বাহ্নে আমি কাজে যোগদান করলাম।</p>`;
+      body = `<p>${me} আমি ${lvRange(L.from, L.to)} ${nDays(n)}ের ${r(R)} ভোগ করেছি। ছুটি শেষে আজ ${dFmt(L.date)} তারিখ ${barOf(L.date)} পূর্বাহ্নে আমি কাজে যোগদান করলাম।</p>`;
       pray = `আমার এই যোগদানপত্র গ্রহণ করে বাধিত করবেন।`; break;
     case 'student': {
       to = HT_ADDR(); subject = `${bn(n)} দিনের ছুটির জন্য আবেদন।`;
