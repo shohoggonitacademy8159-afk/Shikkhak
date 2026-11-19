@@ -240,9 +240,9 @@ img.ma{object-fit:cover;background:#E8EEF5}
 .rtt{width:100%;border-collapse:collapse;min-width:100%}
 .rtt th{font-size:12px;font-weight:700;background:#EEF4F2;border:1px solid #C5D2DE;padding:4px 2px;text-align:center;line-height:1.2}
 .rtt th small{display:block;font-size:10px;font-weight:600;color:var(--mute);white-space:nowrap}
-.rtt th.d{width:44px;min-width:44px;font-size:12.5px}
-.rtt td{border:1px solid #D5DEE8;padding:0;text-align:center;min-width:56px;height:52px}
-.rtt th.br,.rtt td.br{width:18px;min-width:18px;background:#F4F6F8;padding:0}
+.rtt th.d{width:40px;min-width:40px;font-size:12px}
+.rtt td{border:1px solid #D5DEE8;padding:0;text-align:center;min-width:47px;height:52px}
+.rtt th.br,.rtt td.br{width:16px;min-width:16px;background:#F4F6F8;padding:0}
 .rtt th.br span{writing-mode:vertical-rl;transform:rotate(180deg);font-size:10.5px;color:var(--mute)}
 .rtt.all td{min-width:62px}.rtt.all tr.dstart th,.rtt.all tr.dstart td{border-top:2px solid #7C8FA6}
 .rtc{width:100%;height:100%;min-height:52px;border:0;background:transparent;font:inherit;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:2px;cursor:pointer;color:var(--ink)}
@@ -270,6 +270,25 @@ img.ma{object-fit:cover;background:#E8EEF5}
 .rskind{min-height:38px;border-radius:9px;border:1px solid #9FB0C4;background:#E0F2EF;color:#0F766E;font:inherit;font-size:11.5px;font-weight:700;padding:0 6px}
 .rskind.br{background:#F4F6F8;color:#3E5070}
 .rsdel{min-height:38px;width:34px;border-radius:9px;border:1px solid #F1B8B0;background:#fff;color:#B42318;font-weight:800}
+.rtsh{border-top:1px solid #E1E8EF;padding-top:8px;display:flex;flex-direction:column;gap:4px}
+.rtsh .top b{font-size:14px}.rtsh .top .t2{font-size:12px;text-align:right}
+.rtg{display:flex;justify-content:space-between;gap:8px;font-size:12.5px;background:#F3F8F6;border-radius:8px;padding:4px 8px}
+.rtg.br{background:#FFF1D6;color:#7A4A00;font-weight:600}
+.rtwarn{background:#FDE8E6;color:#8A1C12;border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.55;display:flex;flex-direction:column;gap:2px}
+.rtok{background:#E3F4EA;color:#17663F;border-radius:12px;padding:8px 12px;font-size:13px;font-weight:700}
+.rt3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.rt3 .btn{min-height:44px;font-size:13.5px;padding:0 6px}
+.rsh{font-weight:700;font-size:14px;margin:12px 0 6px}
+.rsbox{border:1px solid #C5D2DE;border-radius:14px;padding:10px;margin-top:12px;display:flex;flex-direction:column;gap:8px;background:#FBFDFC}
+.rsname{font-weight:700}
+.rsline{display:grid;grid-template-columns:1.1fr 1fr 1fr;gap:6px;align-items:center;font-size:13px;font-weight:600}
+.rsline.brk{grid-template-columns:1.3fr 1fr 1fr 34px;background:#FFF6E5;border-radius:10px;padding:4px}
+.rsline .psin,.rsrow2 .psin{padding:6px 4px;font-size:13px;min-height:40px}
+.rsgrp{border-top:1px dashed #C5D2DE;padding-top:8px;display:flex;flex-direction:column;gap:6px}
+.rsrow2{display:grid;grid-template-columns:34px 1fr 1fr 32px 32px 32px;gap:4px;align-items:center;font-size:13px}
+.rsrow2 .rsman{grid-column:2 / -1;font-size:11px;color:#7A4A00;font-weight:600;margin-top:-2px}
+.rsmv{min-height:40px;border-radius:9px;border:1px solid #C5D2DE;background:#fff;font-size:12px;color:#0F766E}.rsmv:disabled{opacity:.3}
+.rtt td.na{color:#9AA8B6;background:#FAFBFC;font-size:13px}
+.rtt th.asm{background:#E6EFFA}
 .pschk{flex:none;width:30px;height:30px;border-radius:8px;border:2px solid #9FB0C4;background:#fff;font-size:18px;font-weight:800;color:#fff;line-height:1;cursor:pointer}
 .pschk.on{background:#0F766E;border-color:#0F766E}
 .pschk:disabled{opacity:.35;cursor:not-allowed}
@@ -343,7 +362,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '6.1';
+const WEB_VERSION = '6.2';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -3336,300 +3355,495 @@ function tbAddSheet(){
   });
 }
 
-/* ---------- ক্লাস রুটিন (এক বা দুই শিফট) ---------- */
-/* DB.routine = {twoShift, days:[...], shifts:[{id,name,classes:[...],slots:[{id,label,start,end,kind:'period'|'break'}]}],
-                 grid:{cls:{day:{slotId:{sub, t}}}}, me:teacherId} */
+/* ---------- ক্লাস রুটিন (v2: স্কুল ও অধিদপ্তরের আলাদা রুটিন, ১/২ শিফট, ডাইনামিক পিরিয়ড) ---------- */
+/* DB.routine = {v:2, me, school:Plan, dir:Plan, legacy?}
+   Plan   = {mode:1|2, days:[...], year, layouts:{1:Layout, 2:Layout}, grids:{1:{cls:{day:{pid:{sub,t}}}}, 2:{...}}}
+   Layout = {shifts:[{id, name, asm:{start,end}, start, breaks:[{id,label,start,end}], groups:[{id, name, classes:[], len, periods:[{id,start,end,manual}]}]}]}
+   Period counts and times are only defaults; everything is editable. */
 const RT_DAYS = [['sat','শনিবার','শনি'],['sun','রবিবার','রবি'],['mon','সোমবার','সোম'],['tue','মঙ্গলবার','মঙ্গল'],['wed','বুধবার','বুধ'],['thu','বৃহস্পতিবার','বৃহঃ']];
 const RT_DAY_OF_JS = ['sun','mon','tue','wed','thu','fri','sat'];
 const RT_SUB = {bangla:'বাংলা', english:'ইংরেজি', math:'গণিত', science:'বিজ্ঞান', bgs:'বাওবি', religion:'ধর্ম', pe:'শারীরিক ও মানসিক স্বাস্থ্য', arts:'শিল্পকলা',
   skill:'পঠন-লিখন দক্ষতা', remedial:'নিরাময়মূলক', cocur:'সহপাঠ্যক্রম', 'pre-lang':'ভাষা ও যোগাযোগ', 'pre-math':'গণিত', 'pre-env':'পরিবেশ পরিচিতি', art:'চারু ও কারুকলা', ppe:'শারীরিক কার্যক্রম'};
 const RT_SHORT = {pe:'শা. ও মা. স্বাস্থ্য', skill:'দক্ষতা', remedial:'নিরাময়', cocur:'সহপাঠ্য', 'pre-lang':'ভাষা', 'pre-env':'পরিবেশ', art:'চারু-কারু', ppe:'শারীরিক'};
 const RT_COL = {bangla:'#1E8A55', english:'#2563C9', math:'#7C4DCC', science:'#0E8C82', bgs:'#C27C0E', religion:'#B4235A', pe:'#E0701A', arts:'#D23F74', skill:'#4F46E5', remedial:'#6B7280', cocur:'#0F766E', 'pre-lang':'#1E8A55', 'pre-math':'#7C4DCC', 'pre-env':'#0E8C82', art:'#D23F74', ppe:'#E0701A'};
+const RT_PNO = ['১ম','২য়','৩য়','৪র্থ','৫ম','৬ষ্ঠ','৭ম','৮ম','৯ম','১০ম'];
+const rtPNo = i => RT_PNO[i] || bn(i + 1) + 'তম';
 function rtSubjects(cls){
   const base = cls === 'pre' ? ['pre-lang','pre-math','pre-env','art','ppe','cocur']
     : (cls === '1' || cls === '2') ? ['bangla','english','math','pe','arts','skill','remedial','cocur']
     : ['bangla','english','math','science','bgs','religion','pe','arts','skill','remedial','cocur'];
-  const custom = ((DB.customSubjects || {})[cls] || []).map(s => s.id);
-  return [...base, ...custom];
+  return [...base, ...((DB.customSubjects || {})[cls] || []).map(s => s.id)];
 }
 function rtSubName(id, cls, short){
+  if (!id) return '';
   if (RT_SUB[id]) return short && RT_SHORT[id] ? RT_SHORT[id] : RT_SUB[id];
   const c = ((DB.customSubjects || {})[cls] || []).find(s => s.id === id);
   return c ? c.name : id;
 }
 const rtColor = id => RT_COL[id] || '#3E5070';
-function rtSlotsDefault(n, start, assembly, breakAfter){
-  // n periods; times in minutes from midnight
-  const out = []; let t = start; const mk = (label, len, kind) => { out.push({id:uid(), label, start:rtHM(t), end:rtHM(t + len), kind}); t += len; };
-  if (assembly) mk('সমাবেশ', 15, 'break');
-  const names = ['১ম','২য়','৩য়','৪র্থ','৫ম','৬ষ্ঠ','৭ম'];
-  for (let i = 0; i < n; i++) { mk(names[i] + ' পিরিয়ড', 40, 'period'); if (breakAfter && i === breakAfter - 1) mk('বিরতি', 30, 'break'); }
-  return out;
-}
 const rtHM = m => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
-const rtMin = hm => { const [h, m] = (hm || '0:0').split(':').map(Number); return h * 60 + m; };
-function rtTime(hm){ // 13:05 → ১:০৫
-  if (!hm) return ''; let [h, m] = hm.split(':').map(Number); h = h % 12 || 12;
-  return bn(h) + ':' + bn(String(m).padStart(2, '0'));
+const rtMin = hm => { const [h, m] = String(hm || '0:0').split(':').map(Number); return (h || 0) * 60 + (m || 0); };
+function rtTime(hm){ if (!hm) return ''; let [h, m] = hm.split(':').map(Number); h = h % 12 || 12; return bn(h) + ':' + bn(String(m).padStart(2, '0')); }
+const rtOver = (a1, b1, a2, b2) => a1 < b2 && a2 < b1;
+const rtDayName = (d, short) => (RT_DAYS.find(x => x[0] === d) || [d, d, d])[short ? 2 : 1];
+
+/* ---- defaults (only starting values) ---- */
+const rtMkP = n => Array.from({length:n}, () => ({id:uid(), start:'', end:'', manual:false}));
+function rtDefaultLayout(mode){
+  if (mode === 1) return {shifts:[{id:uid(), name:'এক শিফট', asm:{start:'09:00', end:'09:15'}, start:'09:15',
+    breaks:[{id:uid(), label:'মধ্যাহ্ন বিরতি', start:'13:00', end:'14:00'}],
+    groups:[{id:uid(), name:'প্রাক-প্রাথমিক, ১ম ও ২য় শ্রেণি', classes:['pre','1','2'], len:45, periods:rtMkP(3)},
+            {id:uid(), name:'৩য়–৫ম শ্রেণি', classes:['3','4','5'], len:45, periods:rtMkP(6)}]}]};
+  return {shifts:[
+    {id:uid(), name:'১ম শিফট', asm:{start:'09:00', end:'09:15'}, start:'09:15', breaks:[],
+      groups:[{id:uid(), name:'১ম শিফট', classes:['pre','1','2'], len:40, periods:rtMkP(3)}]},
+    {id:uid(), name:'২য় শিফট', asm:{start:'11:45', end:'11:55'}, start:'12:00',
+      breaks:[{id:uid(), label:'মধ্যাহ্ন বিরতি', start:'13:20', end:'14:00'}],
+      groups:[{id:uid(), name:'২য় শিফট', classes:['3','4','5'], len:40, periods:rtMkP(6)}]}]};
 }
-function rtData(){
-  let R = DB.routine;
-  if (!R || typeof R !== 'object' || !Array.isArray(R.shifts)) {
-    R = DB.routine = {twoShift:true, days:['sun','mon','tue','wed','thu'], grid:{}, me:null,
-      shifts:[{id:'s1', name:'১ম শিফট', classes:['pre','1','2'], slots:rtSlotsDefault(4, 9 * 60, true, 0)},
-              {id:'s2', name:'২য় শিফট', classes:['3','4','5'], slots:rtSlotsDefault(5, 12 * 60, true, 2)}]};
-  }
-  R.grid = R.grid || {}; R.days = R.days && R.days.length ? R.days : ['sun','mon','tue','wed','thu'];
+function rtNewPlan(){
+  const P = {mode:2, days:['sun','mon','tue','wed','thu'], year:String(new Date().getFullYear()), layouts:{1:rtDefaultLayout(1), 2:rtDefaultLayout(2)}, grids:{1:{}, 2:{}}};
+  [1, 2].forEach(m => P.layouts[m].shifts.forEach(rtRetime));
+  return P;
+}
+/* Auto times: periods follow one another from the shift's class start; a period never sits inside a break.
+   Periods the teacher timed by hand (manual) keep their time. */
+function rtRetime(sh){
+  sh.groups.forEach(g => {
+    let t = rtMin(sh.start || sh.asm.end), len = Math.max(5, +g.len || 40);
+    g.periods.forEach(p => {
+      if (p.manual && p.start && p.end) { t = Math.max(t, rtMin(p.end)); return; }
+      let s = t, moved = true;
+      while (moved) { moved = false; for (const b of sh.breaks) if (rtOver(s, s + len, rtMin(b.start), rtMin(b.end))) { s = rtMin(b.end); moved = true; } }
+      p.start = rtHM(s); p.end = rtHM(s + len); p.manual = false; t = s + len;
+    });
+  });
+}
+/* a hand-timed period may never overlap a break: such periods go back to automatic */
+function rtEnforceBreaks(sh){
+  let fixed = 0;
+  sh.groups.forEach(g => g.periods.forEach(p => { if (p.manual && sh.breaks.some(b => rtOver(rtMin(p.start), rtMin(p.end), rtMin(b.start), rtMin(b.end)))) { p.manual = false; fixed++; } }));
+  rtRetime(sh); return fixed;
+}
+
+/* ---- migration from v1 (one slot list per shift) ---- */
+function rtMigrateV1(old){
+  const R = {v:2, me:old.me || null, school:rtNewPlan(), dir:rtNewPlan(), legacy:old};
+  const P = R.school; P.mode = old.twoShift === false ? 1 : 2;
+  if (Array.isArray(old.days) && old.days.length) P.days = old.days.slice();
+  const L = P.layouts[P.mode], G = P.grids[P.mode] = {};
+  CLASSES.forEach(([cls]) => {
+    const os = (old.shifts || []).find(s => (s.classes || []).includes(cls)); if (!os) return;
+    const oldP = (os.slots || []).filter(s => s.kind === 'period'), og = (old.grid || {})[cls] || {};
+    let used = 0; Object.values(og).forEach(day => oldP.forEach((s, i) => { if (day[s.id]) used = Math.max(used, i + 1); }));
+    const hit = rtFindGroup(L, cls); if (!hit) return;
+    while (hit.group.periods.length < used) hit.group.periods.push({id:uid(), start:'', end:'', manual:false});
+    Object.entries(og).forEach(([day, cells]) => oldP.forEach((s, i) => { if (cells[s.id]) { G[cls] = G[cls] || {}; G[cls][day] = G[cls][day] || {}; G[cls][day][hit.group.periods[i].id] = Object.assign({}, cells[s.id]); } }));
+  });
+  L.shifts.forEach(rtRetime);
   return R;
 }
-function rtShifts(){ const R = rtData(); return R.twoShift ? R.shifts : [R.shifts[0]]; }
-function rtShiftOf(cls){ const R = rtData(); return rtShifts().find(s => s.classes.includes(cls)) || rtShifts()[0]; }
-const rtCell = (cls, day, slotId) => ((((rtData().grid[cls] || {})[day]) || {})[slotId]) || null;
-function rtSetCell(cls, day, slotId, v){
-  const G = rtData().grid; G[cls] = G[cls] || {}; G[cls][day] = G[cls][day] || {};
-  if (v && (v.sub || v.t)) G[cls][day][slotId] = v; else delete G[cls][day][slotId];
+function rtRoot(){
+  let R = DB.routine;
+  if (R && !R.v && Array.isArray(R.shifts)) R = DB.routine = rtMigrateV1(R);
+  if (!R || R.v !== 2) R = DB.routine = {v:2, me:null, school:rtNewPlan(), dir:rtNewPlan()};
+  ['school', 'dir'].forEach(k => { const P = R[k] = R[k] || rtNewPlan();
+    P.layouts = P.layouts || {}; P.grids = P.grids || {};
+    [1, 2].forEach(m => { if (!P.layouts[m]) { P.layouts[m] = rtDefaultLayout(m); P.layouts[m].shifts.forEach(rtRetime); } P.grids[m] = P.grids[m] || {}; });
+    P.mode = P.mode === 1 ? 1 : 2; P.days = P.days && P.days.length ? P.days : ['sun','mon','tue','wed','thu']; P.year = P.year || String(new Date().getFullYear()); });
+  return R;
+}
+function rtState(){ if (!UI.rt) UI.rt = {kind:'school', tab:'class', cls:null, tid:null}; if (!UI.rt.kind) UI.rt.kind = 'school'; return UI.rt; }
+const rtPlan = () => rtRoot()[rtState().kind];
+const rtLayout = (P = rtPlan()) => P.layouts[P.mode];
+const rtGrid = (P = rtPlan()) => (P.grids[P.mode] = P.grids[P.mode] || {});
+function rtFindGroup(L, cls){ for (const shift of L.shifts) for (const group of shift.groups) if (group.classes.includes(cls)) return {shift, group}; return null; }
+const rtGroupOf = cls => rtFindGroup(rtLayout(), cls);
+function rtClasses(){ return rtLayout().shifts.flatMap(s => s.groups.flatMap(g => g.classes)); }
+const rtCell = (cls, day, pid) => ((((rtGrid()[cls] || {})[day]) || {})[pid]) || null;
+function rtSetCell(cls, day, pid, v){
+  const G = rtGrid(); G[cls] = G[cls] || {}; G[cls][day] = G[cls][day] || {};
+  if (v && (v.sub || v.t)) G[cls][day][pid] = v; else delete G[cls][day][pid];
 }
 function rtTeachers(){ return DB.teachers.slice().sort((a, b) => (parseInt(a.serial) || 99) - (parseInt(b.serial) || 99)); }
 function rtTName(id, short){
   const t = DB.teachers.find(x => x.id === id); if (!t) return '';
   if (!short) return t.name;
-  const w = t.name.replace(/^(মোঃ|মোছাঃ|মো\.|মোসাঃ|মিসেস|শ্রী|শ্রীমতি|মুহাম্মদ|মোহাম্মদ)\s*/,'').trim().split(/\s+/);
+  const w = t.name.replace(/^(মোঃ|মোছাঃ|মো\.|মোসাঃ|মিসেস|শ্রী|শ্রীমতি|মুহাম্মদ|মোহাম্মদ)\s*/, '').trim().split(/\s+/);
   return w[0] || t.name;
 }
-/* all classes in shift order */
-function rtClasses(){ return rtShifts().flatMap(s => s.classes); }
-/* who teaches at which time — for clash warnings */
+/* columns of one class's day: assembly, periods and the breaks that fall inside its day */
+function rtItems(cls){
+  const hit = rtGroupOf(cls); if (!hit) return [];
+  const {shift, group} = hit, ps = group.periods;
+  const items = [{kind:'asm', label:'সমাবেশ', start:shift.asm.start, end:shift.asm.end}];
+  ps.forEach((p, i) => items.push({kind:'period', id:p.id, no:i, label:rtPNo(i) + ' পিরিয়ড', start:p.start, end:p.end, manual:p.manual}));
+  const first = ps.length ? Math.min(...ps.map(p => rtMin(p.start))) : 0, last = ps.length ? Math.max(...ps.map(p => rtMin(p.end))) : 0;
+  shift.breaks.forEach(b => { if (rtMin(b.start) >= first && rtMin(b.start) < last) items.push({kind:'break', label:b.label, start:b.start, end:b.end}); });
+  return items.sort((a, b) => rtMin(a.start) - rtMin(b.start) || (a.kind === 'asm' ? -1 : 1));
+}
+/* time columns of a whole shift (union of every group's periods + assembly + breaks) — the directorate layout */
+function rtColumns(shift){
+  const cols = [{kind:'asm', label:'সমাবেশ', start:shift.asm.start, end:shift.asm.end}];
+  const seen = {};
+  shift.groups.forEach(g => g.periods.forEach((p, i) => { const k = p.start + '-' + p.end;
+    if (!seen[k]) { seen[k] = {kind:'period', start:p.start, end:p.end, nos:new Set()}; cols.push(seen[k]); } seen[k].nos.add(i); }));
+  let last = 0; shift.groups.forEach(g => g.periods.forEach(p => { last = Math.max(last, rtMin(p.end)); }));
+  shift.breaks.forEach(b => { if (rtMin(b.start) < last) cols.push({kind:'break', label:b.label, start:b.start, end:b.end}); });
+  cols.forEach(c => { if (c.nos) c.label = c.nos.size === 1 ? rtPNo([...c.nos][0]) + ' পিরিয়ড' : 'পিরিয়ড'; });
+  return cols.sort((a, b) => rtMin(a.start) - rtMin(b.start) || (a.kind === 'asm' ? -1 : 1));
+}
+const rtPeriodAt = (cls, col) => { const hit = rtGroupOf(cls); return hit && hit.group.periods.find(p => p.start === col.start && p.end === col.end) || null; };
+
+/* ---- clash checks ---- */
 function rtBusy(){
-  const R = rtData(), map = {};
-  rtShifts().forEach(sh => sh.classes.forEach(cls => R.days.forEach(day => sh.slots.forEach(sl => {
-    if (sl.kind !== 'period') return; const c = rtCell(cls, day, sl.id); if (!c || !c.t) return;
-    (map[day + '|' + c.t] = map[day + '|' + c.t] || []).push({cls, slot:sl, a:rtMin(sl.start), b:rtMin(sl.end)});
-  }))));
+  const P = rtPlan(), map = {};
+  rtLayout(P).shifts.forEach(sh => sh.groups.forEach(g => g.classes.forEach(cls => P.days.forEach(day => g.periods.forEach((p, i) => {
+    const c = rtCell(cls, day, p.id); if (!c || !c.t) return;
+    (map[day + '|' + c.t] = map[day + '|' + c.t] || []).push({cls, p, no:i, a:rtMin(p.start), b:rtMin(p.end)});
+  })))));
   return map;
 }
 function rtClashes(){
   const busy = rtBusy(), bad = new Set();
   Object.entries(busy).forEach(([k, list]) => { const day = k.split('|')[0];
     for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
-      const x = list[i], y = list[j]; if (x.a < y.b && y.a < x.b) { bad.add(x.cls + '|' + day + '|' + x.slot.id); bad.add(y.cls + '|' + day + '|' + y.slot.id); } } });
+      const x = list[i], y = list[j]; if (rtOver(x.a, x.b, y.a, y.b)) { bad.add(x.cls + '|' + day + '|' + x.p.id); bad.add(y.cls + '|' + day + '|' + y.p.id); } } });
   return bad;
 }
-function rtState(){ if (!UI.rt) UI.rt = {tab:'class', cls:null, tid:null}; return UI.rt; }
-const rtDayName = (d, short) => (RT_DAYS.find(x => x[0] === d) || [d, d, d])[short ? 2 : 1];
-
-/* ---- weekly sample fill (can be changed cell by cell) ---- */
+/* time problems in a layout: {msg, hard} — hard ones are blocked from being created */
+function rtTimeIssues(L){
+  const out = [];
+  L.shifts.forEach((sh, si) => {
+    const A = rtMin(sh.asm.start), B = rtMin(sh.asm.end);
+    if (B <= A) out.push({msg:`${sh.name}: সমাবেশের শেষ সময় শুরুর আগে`, hard:true});
+    sh.breaks.forEach(b => { if (rtMin(b.end) <= rtMin(b.start)) out.push({msg:`${sh.name}: "${b.label}"-এর সময় ঠিক নয়`, hard:true}); });
+    sh.groups.forEach(g => {
+      const nm = L.shifts.length > 1 && sh.groups.length === 1 ? sh.name : g.name;
+      g.periods.forEach((p, i) => {
+        const s = rtMin(p.start), e = rtMin(p.end);
+        if (e <= s) out.push({msg:`${nm}: ${rtPNo(i)} পিরিয়ডের শেষ সময় শুরুর আগে`, hard:true});
+        if (rtOver(s, e, A, B)) out.push({msg:`${nm}: ${rtPNo(i)} পিরিয়ড সমাবেশের সময়ে পড়েছে`, hard:true});
+        sh.breaks.forEach(b => { if (rtOver(s, e, rtMin(b.start), rtMin(b.end))) out.push({msg:`${nm}: ${rtPNo(i)} পিরিয়ড "${b.label}"-এর মধ্যে পড়েছে`, hard:true}); });
+        g.periods.forEach((q, j) => { if (j > i && rtOver(s, e, rtMin(q.start), rtMin(q.end))) out.push({msg:`${nm}: ${rtPNo(i)} ও ${rtPNo(j)} পিরিয়ডের সময় মিলে গেছে`, hard:true}); });
+        if (i > 0 && s < rtMin(g.periods[i - 1].start)) out.push({msg:`${nm}: ${rtPNo(i)} পিরিয়ড আগের পিরিয়ডের আগে শুরু হচ্ছে — ক্রম দেখে নিন`, hard:false});
+        if (s < B) out.push({msg:`${nm}: ${rtPNo(i)} পিরিয়ড সমাবেশ শেষ হওয়ার আগে শুরু`, hard:false});
+      });
+    });
+    const next = L.shifts[si + 1];
+    if (next) { const end = Math.max(0, ...sh.groups.flatMap(g => g.periods.map(p => rtMin(p.end))));
+      if (end > rtMin(next.asm.start)) out.push({msg:`${sh.name} শেষ হচ্ছে ${rtTime(rtHM(end))}-এ, অথচ ${next.name}-এর সমাবেশ ${rtTime(next.asm.start)}-এ`, hard:false}); }
+  });
+  const seen = new Set(); return out.filter(x => !seen.has(x.msg) && seen.add(x.msg));
+}
+/* moving a class to another group keeps its subjects by period number */
+function rtMoveClass(L, G, cls, toGroup){
+  const from = rtFindGroup(L, cls); if (!from || from.group === toGroup) return;
+  const need = from.group.periods.reduce((m, p, i) => Object.values(G[cls] || {}).some(d => d[p.id]) ? i + 1 : m, 0);
+  while (toGroup.periods.length < need) toGroup.periods.push({id:uid(), start:'', end:'', manual:false});
+  const map = {}; from.group.periods.forEach((p, i) => { if (toGroup.periods[i]) map[p.id] = toGroup.periods[i].id; });
+  Object.values(G[cls] || {}).forEach(day => Object.keys(day).forEach(pid => { const v = day[pid]; delete day[pid]; if (map[pid]) day[map[pid]] = v; }));
+  from.group.classes = from.group.classes.filter(c => c !== cls); toGroup.classes.push(cls);
+  toGroup.classes.sort((a, b) => CLASSES.findIndex(x => x[0] === a) - CLASSES.findIndex(x => x[0] === b));
+}
+/* switching 1 ⇄ 2 shift: an empty side is filled from the other side by period number */
+function rtSetMode(P, m){
+  if (P.mode === m) return;
+  const from = P.mode; P.mode = m;
+  const Lf = P.layouts[from], Lt = P.layouts[m], Gf = P.grids[from] || {}, Gt = P.grids[m] = P.grids[m] || {};
+  CLASSES.forEach(([cls]) => {
+    const hasT = Object.values(Gt[cls] || {}).some(d => Object.keys(d).length), src = Gf[cls]; if (hasT || !src) return;
+    const a = rtFindGroup(Lf, cls), b = rtFindGroup(Lt, cls); if (!a || !b) return;
+    Object.entries(src).forEach(([day, cells]) => a.group.periods.forEach((p, i) => { if (cells[p.id] && b.group.periods[i]) { Gt[cls] = Gt[cls] || {}; Gt[cls][day] = Gt[cls][day] || {}; Gt[cls][day][b.group.periods[i].id] = Object.assign({}, cells[p.id]); } }));
+  });
+}
+/* weekly sample: Bangla, English, Maths daily, the rest spread over the week (works for any period count) */
 function rtSampleFill(cls){
-  const R = rtData(), sh = rtShiftOf(cls), periods = sh.slots.filter(s => s.kind === 'period');
-  const plan = cls === 'pre' ? {'pre-lang':5, 'pre-math':5, 'pre-env':4, art:3, ppe:3}
-    : (cls === '1' || cls === '2') ? {bangla:5, english:5, math:5, pe:2, arts:2, skill:1}
-    : {bangla:5, english:5, math:5, science:3, bgs:3, religion:2, arts:1, pe:1};
-  const core = Object.keys(plan).filter(k => plan[k] >= 5).slice(0, periods.length);
-  const rest = []; Object.entries(plan).forEach(([k, n]) => { if (!core.includes(k)) for (let i = 0; i < n; i++) rest.push(k); });
-  R.days.forEach((day, di) => periods.forEach((sl, pi) => {
-    const old = rtCell(cls, day, sl.id) || {};
-    let sub;
-    if (pi < core.length && di < 5) sub = core[pi];
-    else sub = rest.length ? rest.shift() : (cls === 'pre' ? 'cocur' : 'remedial');
-    rtSetCell(cls, day, sl.id, {sub, t:old.t});
+  const P = rtPlan(), hit = rtGroupOf(cls); if (!hit) return;
+  const n = hit.group.periods.length;
+  const core = cls === 'pre' ? ['pre-lang','pre-math','pre-env'] : ['bangla','english','math'];
+  const others = cls === 'pre' ? ['art','ppe','pre-env','cocur'] : (cls === '1' || cls === '2') ? ['pe','arts','skill','pe','arts','remedial','cocur']
+    : ['science','bgs','religion','science','bgs','arts','pe','religion','science','skill','remedial','cocur'];
+  let k = 0;
+  P.days.forEach((day, di) => hit.group.periods.forEach((p, pi) => {
+    const old = rtCell(cls, day, p.id) || {};
+    const sub = n >= core.length ? (pi < core.length ? core[pi] : others[k++ % others.length]) : core[(pi + di) % core.length];
+    rtSetCell(cls, day, p.id, {sub, t:old.t});
   }));
 }
 
-/* ---- views ---- */
-function routine(){
-  const R = rtData(), U = rtState();
-  const head = topHeader('রুটিন', 'clock');
-  const tabs = `<div class="tabs2" style="grid-template-columns:repeat(3,minmax(0,1fr))" role="tablist">${[['class','শ্রেণির রুটিন'],['teacher','শিক্ষকের রুটিন'],['all','পুরো ছক']].map(([k, l]) => `<button role="tab" class="${U.tab === k ? 'on' : ''}" data-rt-tab="${k}">${l}</button>`).join('')}</div>`;
-  const tools = `<div class="row2"><button class="btn" data-rt-setup>${ic('gear', 18)} শিফট ও সময়</button><button class="btn" data-rt-print>${ic('doc', 18)} প্রিন্ট / PDF</button></div>`;
-  const shiftInfo = `<div class="card" style="gap:6px">${rtShifts().map(s => { const p = s.slots.filter(x => x.kind === 'period').length;
-      return `<div style="display:flex;justify-content:space-between;gap:8px;font-size:13.5px"><b>${esc(s.name)}</b><span class="t2">${s.classes.map(c => CLASS_NAME[c]).join(', ') || '—'} · ${s.slots.length ? rtTime(s.slots[0].start) + '–' + rtTime(s.slots[s.slots.length - 1].end) : ''} · ${bn(p)} পিরিয়ড</span></div>`; }).join('')}</div>`;
-  const body = U.tab === 'teacher' ? rtTeacherView() : U.tab === 'all' ? rtAllView() : rtClassView();
-  return head + `<div class="sec" style="padding-top:16px">${tabs}${shiftInfo}${tools}${body}</div>`;
-}
+/* ---- screens ---- */
 function rtTodayKey(){ return RT_DAY_OF_JS[new Date().getDay()]; }
-function rtNowSlot(sh){ const n = new Date(), m = n.getHours() * 60 + n.getMinutes(); return sh.slots.find(s => rtMin(s.start) <= m && m < rtMin(s.end)); }
-function rtGridTable(cls, editable, clash){
-  const R = rtData(), sh = rtShiftOf(cls), today = rtTodayKey(), now = rtNowSlot(sh);
-  const head = `<tr><th class="d">বার</th>${sh.slots.map(s => s.kind === 'break' ? `<th class="br"><span>${esc(s.label)}</span></th>` : `<th>${esc(s.label.replace(' পিরিয়ড', ''))}<small>${rtTime(s.start)}–${rtTime(s.end)}</small></th>`).join('')}</tr>`;
-  const rows = R.days.map(day => `<tr class="${day === today ? 'today' : ''}"><th class="d">${rtDayName(day, true)}</th>${sh.slots.map(s => {
-      if (s.kind === 'break') return `<td class="br"></td>`;
-      const c = rtCell(cls, day, s.id) || {}, bad = clash && clash.has(cls + '|' + day + '|' + s.id), live = day === today && now && now.id === s.id;
-      const inner = c.sub ? `<b style="color:${rtColor(c.sub)}">${esc(rtSubName(c.sub, cls, true))}</b>${c.t ? `<small>${esc(rtTName(c.t, true))}</small>` : ''}` : (editable ? '<span class="plus">+</span>' : '');
-      return editable ? `<td class="${bad ? 'bad' : ''}${live ? ' live' : ''}"><button class="rtc" data-rt-cell="${cls}|${day}|${s.id}" aria-label="${rtDayName(day)} ${esc(s.label)}">${inner}</button></td>` : `<td class="${bad ? 'bad' : ''}${live ? ' live' : ''}"><div class="rtc">${inner}</div></td>`;
-    }).join('')}</tr>`).join('');
-  return `<div class="rtwrap"><table class="rtt">${head}${rows}</table></div>`;
+const rtNowM = () => { const n = new Date(); return n.getHours() * 60 + n.getMinutes(); };
+function rtHeadInfo(P){
+  const T = DB.teacher;
+  return [T.emis && `বিদ্যালয়ের কোড: ${bn(T.emis)}`, T.upazila && `উপজেলা: ${T.upazila}`, T.district && `জেলা: ${T.district}`, `শিক্ষাবর্ষ: ${bn(P.year)}`].filter(Boolean).join(' · ');
+}
+function routine(){
+  const U = rtState(), P = rtPlan(), L = rtLayout(P), issues = rtTimeIssues(L);
+  const seg = (attr, cur, opts) => `<div class="tabs2" style="grid-template-columns:repeat(${opts.length},minmax(0,1fr))" role="tablist">${opts.map(([k, l]) => `<button role="tab" class="${String(cur) === String(k) ? 'on' : ''}" data-${attr}="${k}" aria-selected="${String(cur) === String(k)}">${l}</button>`).join('')}</div>`;
+  const shiftCard = L.shifts.map(sh => `<div class="rtsh"><div class="top"><b>${esc(sh.name)}</b><span class="t2">সমাবেশ ${rtTime(sh.asm.start)}–${rtTime(sh.asm.end)} · ক্লাস শুরু ${rtTime(sh.start)}</span></div>
+      ${sh.groups.map(g => { const ps = g.periods; return `<div class="rtg"><span>${g.classes.map(c => PS_CLS[c]).join(', ') || '—'}</span><span>${bn(ps.length)} পিরিয়ড${ps.length ? ` · ${rtTime(ps[0].start)}–${rtTime(ps[ps.length - 1].end)}` : ''}</span></div>`; }).join('')}
+      ${sh.breaks.map(b => `<div class="rtg br"><span>${esc(b.label)}</span><span>${rtTime(b.start)}–${rtTime(b.end)} · কোনো ক্লাস নেই</span></div>`).join('')}</div>`).join('');
+  const emptyDir = U.kind === 'dir' && !Object.values(rtGrid(P)).some(c => Object.values(c).some(d => Object.keys(d).length));
+  const body = U.tab === 'teacher' ? rtTeacherView() : U.tab === 'all' ? rtAllView() : rtClassView();
+  return topHeader('রুটিন', 'clock') + `<div class="sec" style="padding-top:16px">
+    ${seg('rt-kind', U.kind, [['school','স্কুলের রুটিন'],['dir','অধিদপ্তরের রুটিন']])}
+    ${seg('rt-mode', P.mode, [[1,'১ শিফট'],[2,'২ শিফট']])}
+    <div class="card" style="gap:8px"><div style="text-align:center"><b style="font-size:15.5px">${esc(DB.teacher.school || 'বিদ্যালয়ের নাম')}</b><div class="t2" style="font-size:12.5px">${esc(rtHeadInfo(P))}</div>
+      <div style="font-size:12.5px;font-weight:700;color:#0F766E;margin-top:2px">${U.kind === 'dir' ? 'অধিদপ্তর নির্ধারিত ফরম্যাট' : 'স্কুলের নিজস্ব রুটিন'} · ${P.mode === 1 ? '১ শিফট' : '২ শিফট'}</div></div>${shiftCard}</div>
+    ${issues.length ? `<div class="rtwarn">${issues.map(x => `<div>${x.hard ? '⛔' : '⚠️'} ${esc(x.msg)}</div>`).join('')}<button class="btn" data-rt-setup style="margin-top:6px">ঠিক করুন</button></div>` : ''}
+    ${emptyDir ? `<div class="card" style="gap:8px;border:2px dashed #9FB0C4"><b style="font-size:14px">অধিদপ্তরের রুটিন এখনো খালি</b><p class="t2" style="font-size:13px;line-height:1.6">এটি স্কুলের রুটিন থেকে আলাদা সংরক্ষিত থাকে। চাইলে স্কুলের রুটিন থেকে একবার কপি করে নিয়ে বদলাতে পারেন — পরে একটির পরিবর্তন অন্যটিতে যাবে না।</p><button class="btn solid" data-rt-copy>স্কুলের রুটিন থেকে কপি করুন</button></div>` : ''}
+    <div class="rt3"><button class="btn" data-rt-setup>${ic('gear', 18)} পিরিয়ড ও সময়</button><button class="btn" data-rt-print="print">${ic('doc', 18)} প্রিন্ট</button><button class="btn" data-rt-print="pdf">${ic('doc', 18)} PDF</button></div>
+    ${seg('rt-tab', U.tab, [['class','শ্রেণির রুটিন'],['teacher','শিক্ষকের রুটিন'],['all','পুরো ছক']])}
+    ${body}</div>`;
+}
+function rtHeadCell(it){
+  if (it.kind === 'period') return `<th>${rtPNo(it.no)}<small>${rtTime(it.start)}–${rtTime(it.end)}</small></th>`;
+  return `<th class="br${it.kind === 'asm' ? ' asm' : ''}"><span>${esc(it.label)}</span></th>`;
+}
+function rtCellBtn(cls, day, pid, clash, editable, today, now){
+  const c = rtCell(cls, day, pid) || {}, bad = clash.has(cls + '|' + day + '|' + pid), live = day === today && now && now.id === pid;
+  const inner = c.sub || c.t ? `${c.sub ? `<b style="color:${rtColor(c.sub)}">${esc(rtSubName(c.sub, cls, true))}</b>` : ''}${c.t ? `<small>${esc(rtTName(c.t, true))}</small>` : ''}` : (editable ? '<span class="plus">+</span>' : '');
+  return `<td class="${bad ? 'bad' : ''}${live ? ' live' : ''}">${editable ? `<button class="rtc" data-rt-cell="${cls}|${day}|${pid}" aria-label="${rtDayName(day)}">${inner}</button>` : `<div class="rtc">${inner}</div>`}</td>`;
+}
+function rtClassTable(cls, clash){
+  const P = rtPlan(), items = rtItems(cls), today = rtTodayKey(), m = rtNowM();
+  const now = items.find(x => x.kind === 'period' && rtMin(x.start) <= m && m < rtMin(x.end));
+  return `<div class="rtwrap"><table class="rtt"><tr><th class="d">বার</th>${items.map(rtHeadCell).join('')}</tr>
+    ${P.days.map(day => `<tr class="${day === today ? 'today' : ''}"><th class="d">${rtDayName(day, true)}</th>${items.map(it => it.kind === 'period' ? rtCellBtn(cls, day, it.id, clash, true, today, now) : '<td class="br"></td>').join('')}</tr>`).join('')}</table></div>`;
 }
 function rtClassView(){
   const U = rtState(), cl = rtClasses();
   if (!U.cls || !cl.includes(U.cls)) U.cls = cl[0] || '1';
-  const R = rtData(), clash = rtClashes(), sh = rtShiftOf(U.cls);
+  const P = rtPlan(), clash = rtClashes(), hit = rtGroupOf(U.cls);
+  if (!hit) return '<p class="t2">এই শ্রেণি কোনো শিফটে দেওয়া নেই — "পিরিয়ড ও সময়" থেকে যোগ করুন।</p>';
   const count = {}; let empty = 0;
-  R.days.forEach(day => sh.slots.forEach(s => { if (s.kind !== 'period') return; const c = rtCell(U.cls, day, s.id); if (c && c.sub) count[c.sub] = (count[c.sub] || 0) + 1; else empty++; }));
-  const myClash = [...clash].filter(k => k.startsWith(U.cls + '|')).length;
+  P.days.forEach(day => hit.group.periods.forEach(p => { const c = rtCell(U.cls, day, p.id); if (c && c.sub) count[c.sub] = (count[c.sub] || 0) + 1; else empty++; }));
+  const myClash = [...clash].some(k => k.startsWith(U.cls + '|'));
   return `<div class="chips" role="tablist" aria-label="শ্রেণি">${cl.map(c => `<button class="${c === U.cls ? 'on' : ''}" data-rt-cls="${c}">${CLASS_NAME[c]}</button>`).join('')}</div>
-    <div class="top" style="margin:2px"><b style="font-size:15px">${CLASS_NAME[U.cls]} · ${esc(sh.name)}</b><span class="t2" style="font-size:12.5px">ঘরে চাপ দিয়ে বিষয় ও শিক্ষক দিন</span></div>
-    ${rtGridTable(U.cls, true, clash)}
-    ${myClash ? `<p style="font-size:13px;font-weight:600;color:#B42318;background:#FDE8E6;border-radius:12px;padding:8px 12px">লাল ঘর: একই শিক্ষক একই সময়ে অন্য শ্রেণিতেও আছেন — ঠিক করে নিন।</p>` : ''}
+    <div class="top" style="margin:2px"><b style="font-size:15px">${CLASS_NAME[U.cls]} · ${esc(hit.shift.name)} · ${bn(hit.group.periods.length)} পিরিয়ড</b><span class="t2" style="font-size:12.5px">ঘরে চাপ দিয়ে বিষয় ও শিক্ষক দিন</span></div>
+    ${rtClassTable(U.cls, clash)}
+    ${myClash ? `<p class="rtwarn" style="font-weight:600">লাল ঘর: একই শিক্ষক একই সময়ে অন্য শ্রেণিতেও আছেন — ঠিক করে নিন।</p>` : ''}
     <div class="card" style="gap:8px"><b style="font-size:14px">সপ্তাহে কোন বিষয় কত পিরিয়ড</b>
       <div class="sumrow">${Object.entries(count).map(([k, n]) => pill(rtSubName(k, U.cls, true) + ' ' + bn(n), rtColor(k), '#F3F6F9')).join('') || '<span class="t2" style="font-size:13px">এখনো কিছু দেওয়া হয়নি</span>'}${empty && Object.keys(count).length ? pill('খালি ' + bn(empty), '#3E5070', '#EEF1F6') : ''}</div>
       <div class="row2"><button class="btn" data-rt-sample>নমুনা দিয়ে পূরণ</button><button class="btn" data-rt-clear ${Object.keys(count).length ? '' : 'disabled'}>এই শ্রেণি খালি করুন</button></div>
-      <p class="hint">নমুনায় বাংলা, ইংরেজি ও গণিত প্রতিদিন থাকে; বাকি বিষয় সপ্তাহে ভাগ করা হয়। নেপের রুটিন অনুযায়ী প্রয়োজনমতো ঘর বদলে নিন — শিক্ষক আগে দেওয়া থাকলে থেকে যায়।</p></div>`;
+      <p class="hint">নমুনায় বাংলা, ইংরেজি ও গণিত প্রতিদিন থাকে, বাকি বিষয় সপ্তাহে ভাগ হয় — যত পিরিয়ডই থাকুক। প্রয়োজনমতো ঘর বদলে নিন; আগে দেওয়া শিক্ষক থেকে যান।</p></div>`;
 }
 function rtTeacherView(){
-  const U = rtState(), R = rtData(), T = rtTeachers();
+  const U = rtState(), R = rtRoot(), P = rtPlan(), T = rtTeachers();
   if (!T.length) return `<div class="card empty"><p class="t2" style="font-size:14px">আগে "শিক্ষক" অংশে শিক্ষকদের নাম যোগ করুন।</p><button class="btn solid" data-go="teachers">শিক্ষক তালিকা</button></div>`;
   if (!U.tid || !T.some(t => t.id === U.tid)) U.tid = R.me && T.some(t => t.id === R.me) ? R.me : (T.find(t => t.me) || T[0]).id;
-  const busy = rtBusy(), clash = rtClashes(), today = rtTodayKey();
+  const busy = rtBusy(), clash = rtClashes(), today = rtTodayKey(), nowM = rtNowM();
   let total = 0;
-  const days = R.days.map(day => { const list = (busy[day + '|' + U.tid] || []).slice().sort((a, b) => a.a - b.a); total += list.length;
-      const nowM = new Date().getHours() * 60 + new Date().getMinutes();
-      return `<div class="rtday${day === today ? ' today' : ''}"><div class="rtdh"><b>${rtDayName(day)}</b>${day === today ? `<span class="sumrow">${pill('আজ', '#fff', '#0F766E')}</span>` : ''}<span class="t2">${bn(list.length)} পিরিয়ড</span></div>
-        ${list.length ? list.map(x => { const c = rtCell(x.cls, day, x.slot.id) || {}, bad = clash.has(x.cls + '|' + day + '|' + x.slot.id), live = day === today && x.a <= nowM && nowM < x.b;
-          return `<div class="rtitem${bad ? ' bad' : ''}${live ? ' live' : ''}"><span class="tm">${rtTime(x.slot.start)}–${rtTime(x.slot.end)}</span><span class="grow"><span><b>${CLASS_NAME[x.cls]}</b> · ${esc(rtSubName(c.sub, x.cls))}</span><small>${esc(x.slot.label)}${live ? ' · এখন চলছে' : ''}${bad ? ' · একই সময়ে দুই শ্রেণি!' : ''}</small></span></div>`; }).join('')
-        : '<p class="t2" style="font-size:13px;padding:4px 2px">কোনো ক্লাস নেই</p>'}</div>`; }).join('');
+  const days = P.days.map(day => { const list = (busy[day + '|' + U.tid] || []).slice().sort((a, b) => a.a - b.a); total += list.length;
+    return `<div class="rtday${day === today ? ' today' : ''}"><div class="rtdh"><b>${rtDayName(day)}</b>${day === today ? `<span class="sumrow">${pill('আজ', '#fff', '#0F766E')}</span>` : ''}<span class="t2">${bn(list.length)} পিরিয়ড</span></div>
+      ${list.length ? list.map(x => { const c = rtCell(x.cls, day, x.p.id) || {}, bad = clash.has(x.cls + '|' + day + '|' + x.p.id), live = day === today && x.a <= nowM && nowM < x.b;
+        return `<div class="rtitem${bad ? ' bad' : ''}${live ? ' live' : ''}"><span class="tm">${rtTime(x.p.start)}–${rtTime(x.p.end)}</span><span class="grow"><span><b>${CLASS_NAME[x.cls]}</b> · ${esc(rtSubName(c.sub, x.cls) || 'বিষয় দেওয়া নেই')}</span><small>${rtPNo(x.no)} পিরিয়ড${live ? ' · এখন চলছে' : ''}${bad ? ' · একই সময়ে দুই শ্রেণি!' : ''}</small></span></div>`; }).join('')
+      : '<p class="t2" style="font-size:13px;padding:4px 2px">কোনো ক্লাস নেই</p>'}</div>`; }).join('');
   return `<div class="field"><label for="rtT">শিক্ষক</label><select id="rtT">${T.map(t => `<option value="${t.id}" ${t.id === U.tid ? 'selected' : ''}>${esc(t.name)}${t.designation ? ' — ' + esc(t.designation) : ''}</option>`).join('')}</select></div>
     <div class="card" style="gap:8px"><div class="top"><b style="font-size:15px">${esc(rtTName(U.tid))}</b><span class="sumrow">${pill('সপ্তাহে ' + bn(total) + ' পিরিয়ড', '#0F766E', '#E0F2EF')}</span></div>
       <label style="display:flex;gap:8px;align-items:center;font-size:13px"><input type="checkbox" id="rtMe" ${R.me === U.tid ? 'checked' : ''} style="width:20px;height:20px"> এটি আমার রুটিন (রুটিন খুললেই এটি দেখাবে)</label></div>
     ${days}`;
 }
 function rtAllView(){
-  const R = rtData(), clash = rtClashes();
-  return rtShifts().map(sh => { const per = sh.slots.filter(s => s.kind === 'period');
-    return `<h2 style="font-size:16px;margin:6px 2px 0">${esc(sh.name)} <span class="t2" style="font-size:12.5px;font-weight:400">${sh.slots.length ? rtTime(sh.slots[0].start) + '–' + rtTime(sh.slots[sh.slots.length - 1].end) : ''}</span></h2>
-    <div class="rtwrap"><table class="rtt all"><tr><th class="d">বার</th><th class="d">শ্রেণি</th>${per.map(s => `<th>${esc(s.label.replace(' পিরিয়ড', ''))}<small>${rtTime(s.start)}–${rtTime(s.end)}</small></th>`).join('')}</tr>
-    ${R.days.map(day => sh.classes.map((cls, i) => `<tr class="${i === 0 ? 'dstart' : ''}">${i === 0 ? `<th class="d" rowspan="${sh.classes.length}">${rtDayName(day, true)}</th>` : ''}<th class="d">${PS_CLS[cls]}</th>${per.map(s => {
-        const c = rtCell(cls, day, s.id) || {}, bad = clash.has(cls + '|' + day + '|' + s.id);
-        return `<td class="${bad ? 'bad' : ''}"><button class="rtc" data-rt-cell="${cls}|${day}|${s.id}">${c.sub ? `<b style="color:${rtColor(c.sub)}">${esc(rtSubName(c.sub, cls, true))}</b>${c.t ? `<small>${esc(rtTName(c.t, true))}</small>` : ''}` : '<span class="plus">+</span>'}</button></td>`; }).join('')}</tr>`).join('')).join('')}
-    </table></div>`; }).join('') + `<p class="hint" style="text-align:center">এখানে শুধু পিরিয়ডগুলো দেখানো হয়েছে; প্রিন্টে বিরতিও থাকবে। ঘরে চাপ দিয়ে এখান থেকেও বদলানো যায়।</p>`;
+  const P = rtPlan(), L = rtLayout(P), clash = rtClashes();
+  return L.shifts.map(sh => { const cols = rtColumns(sh), classes = sh.groups.flatMap(g => g.classes);
+    return `<h2 style="font-size:16px;margin:6px 2px 0">${esc(sh.name)}</h2>
+    <div class="rtwrap"><table class="rtt all"><tr><th class="d">বার</th><th class="d">শ্রেণি</th>${cols.map(c => c.kind === 'period' ? `<th>${c.nos.size === 1 ? rtPNo([...c.nos][0]) : ''}<small>${rtTime(c.start)}–${rtTime(c.end)}</small></th>` : rtHeadCell(c)).join('')}</tr>
+    ${P.days.map(day => classes.map((cls, i) => `<tr class="${i === 0 ? 'dstart' : ''}">${i === 0 ? `<th class="d" rowspan="${classes.length}">${rtDayName(day, true)}</th>` : ''}<th class="d">${PS_CLS[cls]}</th>${cols.map(c => {
+        if (c.kind !== 'period') return '<td class="br"></td>';
+        const p = rtPeriodAt(cls, c); return p ? rtCellBtn(cls, day, p.id, clash, true, '', null) : '<td class="na">—</td>'; }).join('')}</tr>`).join('')).join('')}
+    </table></div>`; }).join('') + `<p class="hint" style="text-align:center">"—" মানে ওই সময়ে এই শ্রেণির ক্লাস নেই। ঘরে চাপ দিয়ে এখান থেকেও বদলানো যায়।</p>`;
 }
 
 /* ---- cell editor ---- */
 function rtCellSheet(key){
-  const [cls, day, sid] = key.split('|'), sh = rtShiftOf(cls), sl = sh.slots.find(s => s.id === sid); if (!sl) return;
-  const c = rtCell(cls, day, sid) || {}, busy = rtBusy(), a = rtMin(sl.start), b = rtMin(sl.end);
+  const [cls, day, pid] = key.split('|'), hit = rtGroupOf(cls); if (!hit) return;
+  const i = hit.group.periods.findIndex(p => p.id === pid), p = hit.group.periods[i]; if (!p) return;
+  const c = rtCell(cls, day, pid) || {}, busy = rtBusy(), a = rtMin(p.start), b = rtMin(p.end);
   UI.rtEdit = {key, sub:c.sub || '', t:c.t || '', all:false};
-  const busyWith = tid => (busy[day + '|' + tid] || []).filter(x => !(x.cls === cls && x.slot.id === sid) && x.a < b && a < x.b).map(x => CLASS_NAME[x.cls]);
-  const draw = () => {
+  const busyWith = tid => (busy[day + '|' + tid] || []).filter(x => !(x.cls === cls && x.p.id === pid) && rtOver(x.a, x.b, a, b)).map(x => CLASS_NAME[x.cls]);
+  UI.rtDraw = () => {
     const E = UI.rtEdit;
     document.getElementById('rtEd').innerHTML = `
       <div style="font-weight:700;font-size:14px;margin:4px 0 6px">বিষয়</div>
       <div class="rtpick">${rtSubjects(cls).map(id => `<button class="${E.sub === id ? 'on' : ''}" data-rt-sub="${id}" style="${E.sub === id ? `background:${rtColor(id)};border-color:${rtColor(id)}` : `color:${rtColor(id)}`}">${esc(rtSubName(id, cls))}</button>`).join('')}<button class="${!E.sub ? 'on' : ''}" data-rt-sub="">খালি</button></div>
       <div style="font-weight:700;font-size:14px;margin:12px 0 6px">শিক্ষক</div>
       <div class="rtpick t">${rtTeachers().map(t => { const bz = busyWith(t.id); return `<button class="${E.t === t.id ? 'on' : ''}" data-rt-t="${t.id}"><span>${esc(t.name)}</span>${bz.length ? `<small style="color:${E.t === t.id ? '#FFE0DB' : '#B42318'}">এ সময়ে ব্যস্ত: ${bz.join(', ')}</small>` : ''}</button>`; }).join('')}<button class="${!E.t ? 'on' : ''}" data-rt-t="">শিক্ষক নির্ধারিত নয়</button></div>
-      <label style="display:flex;gap:8px;align-items:center;font-size:13.5px;margin-top:12px"><input type="checkbox" id="rtAllDays" ${E.all ? 'checked' : ''} style="width:20px;height:20px"> সপ্তাহের সব দিনে এই সময়ে একই দিন</label>`;
+      <label style="display:flex;gap:8px;align-items:center;font-size:13.5px;margin-top:12px"><input type="checkbox" id="rtAllDays" ${E.all ? 'checked' : ''} style="width:20px;height:20px"> সপ্তাহের সব দিনে এই পিরিয়ডে একই দিন</label>`;
     document.getElementById('rtAllDays').addEventListener('change', e => { UI.rtEdit.all = e.target.checked; });
   };
-  openSheet(`<h2 style="font-size:18px;margin-bottom:2px">${CLASS_NAME[cls]} · ${rtDayName(day)}</h2><p class="t2" style="font-size:13px">${esc(sl.label)} · ${rtTime(sl.start)}–${rtTime(sl.end)}</p>
+  openSheet(`<h2 style="font-size:18px;margin-bottom:2px">${CLASS_NAME[cls]} · ${rtDayName(day)}</h2><p class="t2" style="font-size:13px">${rtPNo(i)} পিরিয়ড · ${rtTime(p.start)}–${rtTime(p.end)}</p>
     <div id="rtEd" style="max-height:58vh;overflow:auto"></div>
     <div class="row2" style="margin-top:12px"><button class="btn big" data-close>বাতিল</button><button class="btn big solid" data-rt-save>সংরক্ষণ</button></div>`);
-  UI.rtDraw = draw; draw();
+  UI.rtDraw();
 }
 
-/* ---- shift & time setup ---- */
+/* ---- period & time settings (changes apply at once; the table behind updates live) ---- */
 function rtSetupSheet(){
-  const R = rtData();
-  UI.rtSet = JSON.parse(JSON.stringify({twoShift:R.twoShift, days:R.days, shifts:R.shifts}));
-  const draw = () => {
-    const S = UI.rtSet;
-    const shifts = S.shifts.slice(0, S.twoShift ? 2 : 1);
-    document.getElementById('rtSet').innerHTML = `
-      <div class="rtpick" style="grid-template-columns:1fr 1fr"><button class="${S.twoShift ? 'on' : ''}" data-rs-two="1">দুই শিফট</button><button class="${!S.twoShift ? 'on' : ''}" data-rs-two="0">এক শিফট</button></div>
-      <div style="font-weight:700;font-size:14px;margin:12px 0 6px">ক্লাসের দিন</div>
-      <div class="rtpick" style="grid-template-columns:repeat(3,1fr)">${RT_DAYS.map(([k, n]) => `<button class="${S.days.includes(k) ? 'on' : ''}" data-rs-day="${k}">${n}</button>`).join('')}</div>
-      ${shifts.map((sh, si) => `<div class="card" style="gap:8px;margin-top:12px;border:1px solid #D5DEE8">
-        <input class="psin" data-rs-name="${si}" value="${esc(sh.name)}" aria-label="শিফটের নাম" style="font-weight:700">
-        ${S.twoShift ? `<div style="font-size:13px;font-weight:600">শ্রেণি</div><div class="rtpick" style="grid-template-columns:repeat(6,1fr)">${CLASSES.map(([c]) => `<button class="${sh.classes.includes(c) ? 'on' : ''}" data-rs-cls="${si}|${c}">${PS_CLS[c]}</button>`).join('')}</div>` : ''}
-        <div style="font-size:13px;font-weight:600">সময়সূচি</div>
-        ${sh.slots.map((sl, k) => `<div class="rsrow"><input class="psin" data-rs-lbl="${si}|${k}" value="${esc(sl.label)}" aria-label="নাম"><input type="time" class="psin" data-rs-st="${si}|${k}" value="${sl.start}" aria-label="শুরু"><input type="time" class="psin" data-rs-en="${si}|${k}" value="${sl.end}" aria-label="শেষ"><button class="rskind${sl.kind === 'break' ? ' br' : ''}" data-rs-kind="${si}|${k}" title="পিরিয়ড/বিরতি">${sl.kind === 'break' ? 'বিরতি' : 'পিরিয়ড'}</button><button class="rsdel" data-rs-del="${si}|${k}" aria-label="মুছুন">✕</button></div>`).join('')}
-        <div class="row2"><button class="btn" data-rs-add="${si}|period">+ পিরিয়ড</button><button class="btn" data-rs-add="${si}|break">+ বিরতি</button></div></div>`).join('')}
-      <p class="hint">সময় বদলালে আগের রুটিনের বিষয়-শিক্ষক ঠিক থাকে। নেপের রুটিনে দুই শিফটে ১ম–২য় শ্রেণিতে ৪টি ও ৩য়–৫ম শ্রেণিতে ৫টি পিরিয়ড; সময় আপনার উপজেলার নির্দেশনা অনুযায়ী দিন।</p>`;
-    const sync = () => document.querySelectorAll('[data-rs-lbl],[data-rs-st],[data-rs-en],[data-rs-name]').forEach(el => {
-      const d = el.dataset; if (d.rsName != null) { S.shifts[+d.rsName].name = el.value; return; }
-      const [si, k] = (d.rsLbl || d.rsSt || d.rsEn).split('|').map(Number), sl = S.shifts[si].slots[k];
-      if (d.rsLbl != null) sl.label = el.value; else if (d.rsSt != null) sl.start = el.value; else sl.end = el.value; });
-    UI.rtSync = sync;
-  };
-  openSheet(`<h2 style="font-size:18px;margin-bottom:8px">শিফট ও সময়</h2><div id="rtSet" style="max-height:62vh;overflow:auto"></div>
-    <div class="row2" style="margin-top:12px"><button class="btn big" data-close>বাতিল</button><button class="btn big solid" data-rs-save>সংরক্ষণ</button></div>`);
-  UI.rtSetDraw = draw; draw();
+  openSheet(`<h2 style="font-size:18px;margin-bottom:2px">পিরিয়ড ও সময়</h2><p class="t2" style="font-size:12.5px;margin-bottom:8px" id="rsSub"></p><div id="rtSet" style="max-height:66vh;overflow:auto"></div>
+    <button class="btn big solid full" data-close style="margin-top:12px">সম্পন্ন</button>`);
+  rtSetDraw();
+}
+function rtSetDraw(){
+  const box = document.getElementById('rtSet'); if (!box) return;
+  const U = rtState(), P = rtPlan(), L = rtLayout(P), T = DB.teacher, issues = rtTimeIssues(L);
+  document.getElementById('rsSub').textContent = `${U.kind === 'dir' ? 'অধিদপ্তরের রুটিন' : 'স্কুলের রুটিন'} · ${P.mode === 1 ? '১ শিফট' : '২ শিফট'} — এখানে বদলালে শুধু এই রুটিনে বদলাবে`;
+  const tin = (attr, v, lbl) => `<input type="time" class="psin" ${attr} value="${v}" aria-label="${lbl}">`;
+  box.innerHTML = `
+    <div class="rtpick" style="grid-template-columns:1fr 1fr"><button class="${P.mode === 1 ? 'on' : ''}" data-rs-mode="1">১ শিফট</button><button class="${P.mode === 2 ? 'on' : ''}" data-rs-mode="2">২ শিফট</button></div>
+    <div class="rsh">ক্লাসের দিন</div>
+    <div class="rtpick" style="grid-template-columns:repeat(3,1fr)">${RT_DAYS.map(([k, n]) => `<button class="${P.days.includes(k) ? 'on' : ''}" data-rs-day="${k}">${n}</button>`).join('')}</div>
+    <div class="rsh">রুটিনের উপরের তথ্য</div>
+    <div class="row2"><div class="field"><label>শিক্ষাবর্ষ</label><input class="psin" data-rs-info="year" value="${esc(P.year)}" inputmode="numeric" maxlength="9"></div><div class="field"><label>বিদ্যালয়ের কোড (EMIS)</label><input class="psin" data-rs-info="emis" value="${esc(T.emis || '')}" inputmode="numeric" maxlength="20"></div></div>
+    <div class="row2"><div class="field"><label>উপজেলা</label><input class="psin" data-rs-info="upazila" value="${esc(T.upazila || '')}" maxlength="40"></div><div class="field"><label>জেলা</label><input class="psin" data-rs-info="district" value="${esc(T.district || '')}" maxlength="40"></div></div>
+    ${issues.length ? `<div class="rtwarn">${issues.map(x => `<div>${x.hard ? '⛔' : '⚠️'} ${esc(x.msg)}</div>`).join('')}</div>` : '<div class="rtok">✓ সময়ে কোনো সংঘর্ষ নেই</div>'}
+    ${L.shifts.map((sh, si) => `<div class="rsbox">
+      <input class="psin rsname" data-rs-sname="${si}" value="${esc(sh.name)}" aria-label="শিফটের নাম">
+      <div class="rsline"><span>সমাবেশ</span>${tin(`data-rs-asm="${si}|start"`, sh.asm.start, 'সমাবেশ শুরু')}${tin(`data-rs-asm="${si}|end"`, sh.asm.end, 'সমাবেশ শেষ')}</div>
+      <div class="rsline"><span>ক্লাস শুরু</span>${tin(`data-rs-start="${si}"`, sh.start, 'ক্লাস শুরু')}<span></span></div>
+      ${sh.breaks.map((b, bi) => `<div class="rsline brk"><input class="psin" data-rs-blbl="${si}|${bi}" value="${esc(b.label)}" aria-label="বিরতির নাম">${tin(`data-rs-bt="${si}|${bi}|start"`, b.start, 'বিরতি শুরু')}${tin(`data-rs-bt="${si}|${bi}|end"`, b.end, 'বিরতি শেষ')}<button class="rsdel" data-rs-bdel="${si}|${bi}" aria-label="বিরতি মুছুন">✕</button></div>`).join('')}
+      <button class="btn" data-rs-badd="${si}" style="min-height:40px">+ বিরতি</button>
+      ${sh.groups.map((g, gi) => `<div class="rsgrp">
+        <div class="top"><b style="font-size:14px">${esc(sh.groups.length > 1 ? g.name : 'পিরিয়ড')}</b><span class="t2" style="font-size:12.5px">${bn(g.periods.length)}টি পিরিয়ড</span></div>
+        <div class="rtpick" style="grid-template-columns:repeat(6,1fr)">${CLASSES.map(([c]) => { const where = rtFindGroup(L, c), on = where && where.group === g;
+          return `<button class="${on ? 'on' : ''}" data-rs-cls="${si}|${gi}|${c}" title="${CLASS_NAME[c]}">${PS_CLS[c]}</button>`; }).join('')}</div>
+        <div class="rsline"><span>পিরিয়ডের দৈর্ঘ্য</span><select class="psin" data-rs-len="${si}|${gi}">${[30,35,40,45,50,55,60].concat([+g.len]).filter((v, i, a) => a.indexOf(v) === i).sort((a, b) => a - b).map(v => `<option value="${v}" ${+g.len === v ? 'selected' : ''}>${bn(v)} মিনিট</option>`).join('')}</select><span></span></div>
+        ${g.periods.map((p, pi) => `<div class="rsrow2"><b>${rtPNo(pi)}</b>${tin(`data-rs-pt="${si}|${gi}|${pi}|start"`, p.start, rtPNo(pi) + ' শুরু')}${tin(`data-rs-pt="${si}|${gi}|${pi}|end"`, p.end, rtPNo(pi) + ' শেষ')}
+          <button class="rsmv" data-rs-mv="${si}|${gi}|${pi}|-1" ${pi ? '' : 'disabled'} aria-label="উপরে">▲</button><button class="rsmv" data-rs-mv="${si}|${gi}|${pi}|1" ${pi < g.periods.length - 1 ? '' : 'disabled'} aria-label="নিচে">▼</button><button class="rsdel" data-rs-pdel="${si}|${gi}|${pi}" aria-label="মুছুন">✕</button>
+          ${p.manual ? '<small class="rsman">হাতে দেওয়া সময়</small>' : ''}</div>`).join('')}
+        <div class="rt3"><button class="btn" data-rs-padd="${si}|${gi}">＋ পিরিয়ড</button><button class="btn" data-rs-prem="${si}|${gi}" ${g.periods.length ? '' : 'disabled'}>－ পিরিয়ড</button><button class="btn" data-rs-auto="${si}|${gi}">স্বয়ংক্রিয় সময়</button></div>
+      </div>`).join('')}
+    </div>`).join('')}
+    <p class="hint">পিরিয়ড যোগ/বাদ দিলে বা দৈর্ঘ্য বদলালে পরের সময়গুলো নিজে থেকে সরে যায়; বিরতির সময়ে কোনো পিরিয়ড বসে না। কোনো পিরিয়ডের সময় হাতে বদলালে সেটি "হাতে দেওয়া" থাকে — "স্বয়ংক্রিয় সময়" চাপলে আবার হিসাব হয়। ক্রম বদলালে সেই পিরিয়ডের বিষয়-শিক্ষকও সাথে সরে যায়।</p>`;
+  box.querySelectorAll('input,select').forEach(el => el.addEventListener('change', () => rtSetChange(el)));
+}
+function rtAfterLayoutChange(msg){
+  const L = rtLayout(); let fixed = 0; L.shifts.forEach(sh => { fixed += rtEnforceBreaks(sh); });
+  save(); render(); rtSetDraw();
+  if (fixed) toast(`${bn(fixed)}টি পিরিয়ড বিরতির সময়ে পড়ছিল — সেগুলোর সময় স্বয়ংক্রিয় করা হয়েছে`, 4000); else if (msg) toast(msg);
+}
+function rtSetChange(el){
+  const d = el.dataset, P = rtPlan(), L = rtLayout(P), v = el.value;
+  if (d.rsInfo) { if (d.rsInfo === 'year') P.year = toEn(v).trim() || P.year; else DB.teacher[d.rsInfo] = d.rsInfo === 'emis' ? toEn(v).trim() : v.trim(); save(); return render(); }
+  if (d.rsSname != null) { L.shifts[+d.rsSname].name = v.trim() || L.shifts[+d.rsSname].name; return rtAfterLayoutChange(); }
+  if (d.rsAsm) { const [si, k] = d.rsAsm.split('|'); if (!v) return rtSetDraw(); L.shifts[+si].asm[k] = v; return rtAfterLayoutChange(); }
+  if (d.rsStart != null) { if (!v) return rtSetDraw(); L.shifts[+d.rsStart].start = v; L.shifts[+d.rsStart].groups.forEach(g => g.periods.forEach(p => { p.manual = false; })); rtRetime(L.shifts[+d.rsStart]); return rtAfterLayoutChange(); }
+  if (d.rsBlbl) { const [si, bi] = d.rsBlbl.split('|').map(Number); L.shifts[si].breaks[bi].label = v.trim() || 'বিরতি'; return rtAfterLayoutChange(); }
+  if (d.rsBt) { const [si, bi, k] = d.rsBt.split('|'), b = L.shifts[+si].breaks[+bi], nb = Object.assign({}, b, {[k]:v});
+    if (!v || rtMin(nb.end) <= rtMin(nb.start)) { toast('বিরতির শেষ সময় শুরুর পরে হতে হবে'); return rtSetDraw(); }
+    b[k] = v; rtRetime(L.shifts[+si]); return rtAfterLayoutChange(); }
+  if (d.rsLen) { const [si, gi] = d.rsLen.split('|').map(Number); L.shifts[si].groups[gi].len = +v; rtRetime(L.shifts[si]); return rtAfterLayoutChange(); }
+  if (d.rsPt) { const [si, gi, pi, k] = d.rsPt.split('|'), sh = L.shifts[+si], g = sh.groups[+gi], p = g.periods[+pi];
+    const n = Object.assign({}, p, {[k]:v}), s = rtMin(n.start), e = rtMin(n.end);
+    let why = !v ? 'সময় দিন' : e <= s ? 'শেষ সময় শুরুর পরে হতে হবে' : '';
+    if (!why) sh.breaks.forEach(b => { if (rtOver(s, e, rtMin(b.start), rtMin(b.end))) why = `"${b.label}" (${rtTime(b.start)}–${rtTime(b.end)})-এর মধ্যে পিরিয়ড রাখা যাবে না`; });
+    if (!why && rtOver(s, e, rtMin(sh.asm.start), rtMin(sh.asm.end))) why = 'সমাবেশের সময়ে পিরিয়ড রাখা যাবে না';
+    if (!why) g.periods.forEach((q, j) => { if (j !== +pi && rtOver(s, e, rtMin(q.start), rtMin(q.end))) why = `${rtPNo(j)} পিরিয়ডের সময়ের সাথে মিলে যাচ্ছে`; });
+    if (why) { toast(why, 3500); return rtSetDraw(); }
+    p[k] = v; p.manual = true; rtRetime(sh); return rtAfterLayoutChange(); }
 }
 function rtSetupClick(ds){
-  const S = UI.rtSet; if (!S) return; UI.rtSync && UI.rtSync();
-  if (ds.rsTwo != null) { S.twoShift = ds.rsTwo === '1';
-    if (!S.twoShift) S.shifts[0].classes = CLASSES.map(c => c[0]);   // 2nd shift is kept aside, not deleted
-    else { if (!S.shifts[1]) S.shifts.push({id:'s2', name:'২য় শিফট', classes:['3','4','5'], slots:rtSlotsDefault(5, 12 * 60, true, 2)});
-      if (!S.shifts[1].classes.length) S.shifts[1].classes = ['3','4','5'];
-      S.shifts[0].classes = CLASSES.map(c => c[0]).filter(c => !S.shifts[1].classes.includes(c)); } }
-  else if (ds.rsDay) { const i = S.days.indexOf(ds.rsDay); if (i >= 0) { if (S.days.length > 1) S.days.splice(i, 1); } else S.days.push(ds.rsDay); S.days.sort((a, b) => RT_DAYS.findIndex(x => x[0] === a) - RT_DAYS.findIndex(x => x[0] === b)); }
-  else if (ds.rsCls) { const [si, c] = ds.rsCls.split('|'); S.shifts.forEach((sh, k) => { sh.classes = sh.classes.filter(x => x !== c); if (k === +si) sh.classes.push(c); });
-    S.shifts.forEach(sh => sh.classes.sort((a, b) => CLASSES.findIndex(x => x[0] === a) - CLASSES.findIndex(x => x[0] === b))); }
-  else if (ds.rsKind) { const [si, k] = ds.rsKind.split('|').map(Number), sl = S.shifts[si].slots[k]; sl.kind = sl.kind === 'break' ? 'period' : 'break'; }
-  else if (ds.rsDel) { const [si, k] = ds.rsDel.split('|').map(Number); S.shifts[si].slots.splice(k, 1); }
-  else if (ds.rsAdd) { const [si, kind] = ds.rsAdd.split('|'), sl = S.shifts[+si].slots, last = sl[sl.length - 1], st = last ? rtMin(last.end) : 9 * 60, len = kind === 'break' ? 20 : 40;
-    const n = sl.filter(x => x.kind === 'period').length; const names = ['১ম','২য়','৩য়','৪র্থ','৫ম','৬ষ্ঠ','৭ম','৮ম'];
-    sl.push({id:uid(), label:kind === 'break' ? 'বিরতি' : (names[n] || bn(n + 1)) + ' পিরিয়ড', start:rtHM(st), end:rtHM(st + len), kind}); }
-  else if ('rsSave' in ds) {
-    for (const sh of S.shifts.slice(0, S.twoShift ? 2 : 1)) for (const sl of sh.slots) if (!sl.start || !sl.end || rtMin(sl.end) <= rtMin(sl.start)) return toast(`${sh.name}: "${sl.label}"-এর সময় ঠিক নয়`);
-    const R = rtData(); R.twoShift = S.twoShift; R.days = S.days; R.shifts = S.shifts;
-    save(); closeSheet(); toast('শিফট ও সময় সংরক্ষিত হয়েছে'); return render();
-  }
-  UI.rtSetDraw();
+  const P = rtPlan(), L = rtLayout(P);
+  if (ds.rsMode) { rtSetMode(P, +ds.rsMode); save(); render(); return rtSetDraw(); }
+  if (ds.rsDay) { const i = P.days.indexOf(ds.rsDay); if (i >= 0) { if (P.days.length > 1) P.days.splice(i, 1); else toast('অন্তত একটি দিন রাখতে হবে'); } else P.days.push(ds.rsDay);
+    P.days.sort((a, b) => RT_DAYS.findIndex(x => x[0] === a) - RT_DAYS.findIndex(x => x[0] === b)); save(); render(); return rtSetDraw(); }
+  if (ds.rsBadd != null) { const sh = L.shifts[+ds.rsBadd], last = Math.max(rtMin(sh.start), ...sh.groups.flatMap(g => g.periods.map(p => rtMin(p.end))));
+    sh.breaks.push({id:uid(), label:'বিরতি', start:rtHM(last), end:rtHM(last + 20)}); rtRetime(sh); return rtAfterLayoutChange('বিরতি যোগ হয়েছে — সময় ঠিক করে দিন'); }
+  if (ds.rsBdel) { const [si, bi] = ds.rsBdel.split('|').map(Number); L.shifts[si].breaks.splice(bi, 1); rtRetime(L.shifts[si]); return rtAfterLayoutChange('বিরতি বাদ দেওয়া হয়েছে'); }
+  if (ds.rsCls) { const [si, gi, c] = ds.rsCls.split('|'), g = L.shifts[+si].groups[+gi], where = rtFindGroup(L, c);
+    if (where && where.group === g) return toast('অন্য শিফট/দলে চাপ দিয়ে শ্রেণিটি সেখানে নিন');
+    rtMoveClass(L, rtGrid(P), c, g); L.shifts.forEach(rtRetime); return rtAfterLayoutChange(`${CLASS_NAME[c]} সরানো হয়েছে — বিষয়গুলো পিরিয়ড নম্বর অনুযায়ী থেকে গেছে`); }
+  if (ds.rsPadd) { const [si, gi] = ds.rsPadd.split('|').map(Number); L.shifts[si].groups[gi].periods.push({id:uid(), start:'', end:'', manual:false}); rtRetime(L.shifts[si]); return rtAfterLayoutChange('পিরিয়ড যোগ হয়েছে'); }
+  if (ds.rsPrem || ds.rsPdel) { const [si, gi, pi0] = (ds.rsPrem || ds.rsPdel).split('|').map(Number), g = L.shifts[si].groups[gi], pi = ds.rsPdel ? pi0 : g.periods.length - 1, p = g.periods[pi]; if (!p) return;
+    const used = g.classes.some(c => P.days.some(d => rtCell(c, d, p.id)));
+    const go = () => { g.periods.splice(pi, 1); g.classes.forEach(c => Object.values(rtGrid(P)[c] || {}).forEach(day => { delete day[p.id]; })); rtRetime(L.shifts[si]); rtAfterLayoutChange(`${rtPNo(pi)} পিরিয়ড বাদ দেওয়া হয়েছে`); };
+    if (!used) return go();
+    UI.rtPending = go;
+    return openSheet(`<h2 style="font-size:18px;margin-bottom:8px">${rtPNo(pi)} পিরিয়ড বাদ দেবেন?</h2><p class="t2" style="font-size:14px;line-height:1.6;margin-bottom:16px">এই পিরিয়ডে দেওয়া বিষয় ও শিক্ষক মুছে যাবে।</p>
+      <div class="row2"><button class="btn big" data-rs-back>না, ফিরে যান</button><button class="btn big danger solid" data-rs-confirm>বাদ দিন</button></div>`); }
+  if ('rsConfirm' in ds) { const f = UI.rtPending; UI.rtPending = null; rtSetupSheet(); if (f) f(); return; }
+  if ('rsBack' in ds) { UI.rtPending = null; return rtSetupSheet(); }
+  if (ds.rsMv) { const [si, gi, pi, dir] = ds.rsMv.split('|').map(Number), ps = L.shifts[si].groups[gi].periods, j = pi + dir; if (j < 0 || j >= ps.length) return;
+    [ps[pi], ps[j]] = [ps[j], ps[pi]]; ps.forEach(p => { p.manual = false; }); rtRetime(L.shifts[si]); return rtAfterLayoutChange(`${rtPNo(pi)} ও ${rtPNo(j)} পিরিয়ডের ক্রম বদলানো হয়েছে`); }
+  if (ds.rsAuto) { const [si, gi] = ds.rsAuto.split('|').map(Number); L.shifts[si].groups[gi].periods.forEach(p => { p.manual = false; }); rtRetime(L.shifts[si]); return rtAfterLayoutChange('সময় স্বয়ংক্রিয়ভাবে সাজানো হয়েছে'); }
 }
 
-/* ---- printing (CSS only) ---- */
+/* ---- printing (CSS only, bold borders, A4 landscape) ---- */
 function rtPrintDoc(){
-  const R = rtData(), U = rtState(), T = DB.teacher;
-  const css = `@page{size:A4 landscape;margin:8mm}html,body{margin:0}body{font-family:'Hind Siliguri','Noto Sans Bengali',sans-serif;color:#000}
-  section{page-break-after:always}section:last-child{page-break-after:auto}.h{text-align:center;margin-bottom:6px}.s{font-size:19px;font-weight:700}.sub{font-size:13.5px}
-  table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{border:1px solid #000;text-align:center;padding:3px 2px;font-size:12px;vertical-align:middle}th{background:#EFEFEF}th small{display:block;font-weight:400;font-size:10.5px}
-  td b{display:block;font-size:12px}td small{display:block;font-size:10.5px}th.d{width:60px}th.br,td.br{width:22px;background:#F5F5F5}th.br span,td.br span{writing-mode:vertical-rl;font-size:11px}tr{break-inside:avoid}
-  .sg{display:flex;justify-content:flex-end;margin-top:26px;font-size:13px}.sg div{border-top:1px solid #000;padding-top:3px;min-width:160px;text-align:center}`;
-  const headCells = sh => sh.slots.map(s => s.kind === 'break' ? `<th class="br"><span>${esc(s.label)}</span></th>` : `<th>${esc(s.label)}<small>${rtTime(s.start)}–${rtTime(s.end)}</small></th>`).join('');
-  const cell = (cls, day, s) => { const c = rtCell(cls, day, s.id) || {}; return `<td>${c.sub ? `<b>${esc(rtSubName(c.sub, cls))}</b>` : ''}${c.t ? `<small>${esc(rtTName(c.t))}</small>` : ''}</td>`; };
+  const U = rtState(), P = rtPlan(), L = rtLayout(P), T = DB.teacher, dir = U.kind === 'dir';
+  const css = `@page{size:A4 landscape;margin:8mm}html,body{margin:0}body{font-family:'Hind Siliguri','Noto Sans Bengali',sans-serif;color:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  section{page-break-after:always}section:last-child{page-break-after:auto}.h{text-align:center;margin-bottom:6px}.s{font-size:20px;font-weight:700}.i{font-size:12.5px}.t{font-size:15px;font-weight:700;margin-top:3px}
+  table{width:100%;border-collapse:collapse;table-layout:fixed;border:2px solid #000}th,td{border:1.6px solid #000;text-align:center;padding:3px 2px;font-size:12px;vertical-align:middle}
+  th{background:#E6E6E6;font-weight:700}th small{display:block;font-weight:600;font-size:10.5px}td b{display:block;font-size:12px}td small{display:block;font-size:10.5px}
+  th.d{width:62px}th.n{width:30px}.br{width:24px;background:#F2F2F2}.br span{writing-mode:vertical-rl;transform:rotate(180deg);font-size:11px;font-weight:700}td.na{color:#777}
+  tr{break-inside:avoid;page-break-inside:avoid}.sg{display:flex;justify-content:space-between;margin-top:28px;font-size:13px}.sg div{border-top:1.5px solid #000;padding-top:3px;min-width:170px;text-align:center}
+  .nt{font-size:11.5px;margin-top:5px}thead{display:table-header-group}tr.grp{display:none}
+  tbody tr:has(th.d:not(:empty)) th,tbody tr:has(th.d:not(:empty)) td{border-top:2.6px solid #000}
+  table.tight th,table.tight td{padding:1px 2px;font-size:11px}table.tight td b{font-size:11px}table.tight td small{font-size:9.5px}`;
+  const head = title => `<div class="h"><div class="s">${esc(T.school || '')}</div><div class="i">${esc(rtHeadInfo(P))}</div><div class="t">${title}</div></div>`;
+  const sign = `<div class="sg"><div>শ্রেণি শিক্ষক / রুটিন প্রণয়নকারী</div><div>প্রধান শিক্ষকের স্বাক্ষর ও সিল</div></div>`;
+  const cellTxt = (cls, day, pid, withT) => { const c = rtCell(cls, day, pid) || {}; return `${c.sub ? `<b>${esc(rtSubName(c.sub, cls))}</b>` : ''}${withT && c.t ? `<small>${esc(rtTName(c.t))}</small>` : ''}`; };
+  const colHead = c => c.kind === 'period' ? `<th>${c.label && c.label !== 'পিরিয়ড' ? esc(c.label) : ''}<small>${rtTime(c.start)}–${rtTime(c.end)}</small></th>` : `<th class="br"><span>${esc(c.label)}</span></th>`;
+  const fullTable = (sh, withT, serial) => { const cols = rtColumns(sh), classes = sh.groups.flatMap(g => g.classes), rows = P.days.length * classes.length; let n = 0;
+    return `<table class="${rows > 24 ? 'tight' : ''}"><thead><tr>${serial ? '<th class="n">ক্র. নং</th>' : ''}<th class="d">বার</th><th class="d">শ্রেণি</th>${cols.map(colHead).join('')}</tr></thead><tbody>
+      ${P.days.map(day => `<tr class="grp">${serial ? '' : ''}</tr>` + classes.map((cls, i) => `<tr>${serial ? `<td>${bn(++n)}</td>` : ''}<th class="d">${i === 0 ? rtDayName(day) : ''}</th><th class="d">${CLASS_NAME[cls]}</th>${cols.map(c => {
+        if (c.kind !== 'period') return '<td class="br"></td>';
+        const p = rtPeriodAt(cls, c); return p ? `<td>${cellTxt(cls, day, p.id, withT)}</td>` : '<td class="na">—</td>'; }).join('')}</tr>`).join('')).join('')}</tbody></table>
+      <div class="nt">সমাবেশ: ${rtTime(sh.asm.start)}–${rtTime(sh.asm.end)} · ক্লাস শুরু: ${rtTime(sh.start)}${sh.breaks.map(b => ` · ${esc(b.label)}: ${rtTime(b.start)}–${rtTime(b.end)} (এ সময়ে কোনো ক্লাস নেই)`).join('')}</div>`; };
   let pages = '';
-  if (U.tab === 'class') {
-    const cls = U.cls, sh = rtShiftOf(cls);
-    pages = `<section><div class="h"><div class="s">${esc(T.school || '')}</div><div class="sub">ক্লাস রুটিন — ${CLASS_NAME[cls]} · ${esc(sh.name)}</div></div>
-      <table><tr><th class="d">বার</th>${headCells(sh)}</tr>${R.days.map(day => `<tr><th class="d">${rtDayName(day)}</th>${sh.slots.map(s => s.kind === 'break' ? '<td class="br"></td>' : cell(cls, day, s)).join('')}</tr>`).join('')}</table>
-      <div class="sg"><div>প্রধান শিক্ষকের স্বাক্ষর</div></div></section>`;
+  if (dir) {
+    pages = L.shifts.map(sh => `<section>${head(`অধিদপ্তর নির্ধারিত ফরম্যাট অনুযায়ী সাপ্তাহিক শ্রেণি রুটিন${L.shifts.length > 1 ? ' — ' + esc(sh.name) : ''}`)}${fullTable(sh, false, true)}${sign}</section>`).join('');
+  } else if (U.tab === 'class' && U.cls && rtGroupOf(U.cls)) {
+    const cls = U.cls, hit = rtGroupOf(cls), items = rtItems(cls);
+    pages = `<section>${head(`সাপ্তাহিক ক্লাস রুটিন — ${CLASS_NAME[cls]} (${esc(hit.shift.name)})`)}
+      <table><tr><th class="d">বার</th>${items.map(it => it.kind === 'period' ? `<th>${rtPNo(it.no)} পিরিয়ড<small>${rtTime(it.start)}–${rtTime(it.end)}</small></th>` : `<th class="br"><span>${esc(it.label)}</span></th>`).join('')}</tr>
+      ${P.days.map(day => `<tr><th class="d">${rtDayName(day)}</th>${items.map(it => it.kind === 'period' ? `<td>${cellTxt(cls, day, it.id, true)}</td>` : '<td class="br"></td>').join('')}</tr>`).join('')}</table><div class="nt">${items.filter(x => x.kind !== 'period').map(x => `${esc(x.label)}: ${rtTime(x.start)}–${rtTime(x.end)}`).join(' · ')}</div>${sign}</section>`;
   } else if (U.tab === 'teacher' && U.tid) {
-    const busy = rtBusy(), slotsAll = [];
-    rtShifts().forEach(sh => sh.slots.forEach(s => { if (s.kind === 'period') slotsAll.push({sh, s}); }));
-    slotsAll.sort((a, b) => rtMin(a.s.start) - rtMin(b.s.start));
-    pages = `<section><div class="h"><div class="s">${esc(T.school || '')}</div><div class="sub">শিক্ষকের রুটিন — ${esc(rtTName(U.tid))}</div></div>
-      <table><tr><th class="d">বার</th>${slotsAll.map(x => `<th>${esc(x.sh.name)}<br>${esc(x.s.label)}<small>${rtTime(x.s.start)}–${rtTime(x.s.end)}</small></th>`).join('')}</tr>
-      ${R.days.map(day => `<tr><th class="d">${rtDayName(day)}</th>${slotsAll.map(x => { const hit = (busy[day + '|' + U.tid] || []).find(y => y.slot.id === x.s.id);
-        if (!hit) return '<td></td>'; const c = rtCell(hit.cls, day, x.s.id) || {}; return `<td><b>${CLASS_NAME[hit.cls]}</b><small>${esc(rtSubName(c.sub, hit.cls))}</small></td>`; }).join('')}</tr>`).join('')}</table>
-      <div class="sg"><div>প্রধান শিক্ষকের স্বাক্ষর</div></div></section>`;
+    const busy = rtBusy(), cols = [];
+    L.shifts.forEach(sh => sh.groups.forEach(g => g.periods.forEach((p, i) => { const k = p.start + '-' + p.end; if (!cols.some(c => c.k === k)) cols.push({k, start:p.start, end:p.end}); })));
+    cols.sort((a, b) => rtMin(a.start) - rtMin(b.start));
+    pages = `<section>${head(`শিক্ষকের সাপ্তাহিক রুটিন — ${esc(rtTName(U.tid))}`)}
+      <table><tr><th class="d">বার</th>${cols.map(c => `<th><small>${rtTime(c.start)}–${rtTime(c.end)}</small></th>`).join('')}</tr>
+      ${P.days.map(day => `<tr><th class="d">${rtDayName(day)}</th>${cols.map(c => { const hit = (busy[day + '|' + U.tid] || []).filter(y => y.p.start === c.start && y.p.end === c.end);
+        return `<td>${hit.map(h => `<b>${CLASS_NAME[h.cls]}</b><small>${esc(rtSubName((rtCell(h.cls, day, h.p.id) || {}).sub, h.cls))}</small>`).join('')}</td>`; }).join('')}</tr>`).join('')}</table>${sign}</section>`;
   } else {
-    pages = rtShifts().map(sh => `<section><div class="h"><div class="s">${esc(T.school || '')}</div><div class="sub">সাপ্তাহিক ক্লাস রুটিন — ${esc(sh.name)}${sh.slots.length ? ` (${rtTime(sh.slots[0].start)}–${rtTime(sh.slots[sh.slots.length - 1].end)})` : ''}</div></div>
-      <table><tr><th class="d">বার</th><th class="d">শ্রেণি</th>${headCells(sh)}</tr>
-      ${R.days.map((day, di) => sh.classes.map((cls, i) => `<tr>${i === 0 ? `<th class="d" rowspan="${sh.classes.length}">${rtDayName(day)}</th>` : ''}<th class="d">${CLASS_NAME[cls]}</th>${sh.slots.map(s => s.kind === 'break' ? (di === 0 && i === 0 ? `<td class="br" rowspan="${R.days.length * sh.classes.length}"><span>${esc(s.label)}</span></td>` : '') : cell(cls, day, s)).join('')}</tr>`).join('')).join('')}</table>
-      <div class="sg"><div>প্রধান শিক্ষকের স্বাক্ষর</div></div></section>`).join('');
+    pages = L.shifts.map(sh => `<section>${head(`সাপ্তাহিক শ্রেণি রুটিন${L.shifts.length > 1 ? ' — ' + esc(sh.name) : ''}`)}${fullTable(sh, true, false)}${sign}</section>`).join('');
   }
   return `<!DOCTYPE html><html lang="bn"><head><meta charset="utf-8"><title>ক্লাস রুটিন</title><link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;600;700&display=swap" rel="stylesheet"><style>${css}</style></head><body>${pages}</body></html>`;
 }
 
 function rtClick(ds){
-  const U = rtState();
-  if (ds.rtTab) { U.tab = ds.rtTab; window.scrollTo(0, 0); return render(); }
+  const U = rtState(), R = rtRoot();
+  if (ds.rtKind) { U.kind = ds.rtKind; return render(); }
+  if (ds.rtMode) { rtSetMode(rtPlan(), +ds.rtMode); save(); return render(); }
+  if (ds.rtTab) { U.tab = ds.rtTab; return render(); }
   if (ds.rtCls) { U.cls = ds.rtCls; return render(); }
   if (ds.rtCell) return rtCellSheet(ds.rtCell);
   if (ds.rtSub != null) { UI.rtEdit.sub = ds.rtSub; return UI.rtDraw(); }
   if (ds.rtT != null) { UI.rtEdit.t = ds.rtT; return UI.rtDraw(); }
-  if ('rtSave' in ds) { const E = UI.rtEdit, [cls, day, sid] = E.key.split('|'), v = E.sub || E.t ? {sub:E.sub, t:E.t} : null;
-    (E.all ? rtData().days : [day]).forEach(d => rtSetCell(cls, d, sid, v)); save(); closeSheet();
-    const bad = [...rtClashes()].some(k => k.startsWith(cls + '|') && k.endsWith('|' + sid));
-    if (bad) toast('সতর্কতা: এই শিক্ষক একই সময়ে অন্য শ্রেণিতেও আছেন', 4000); return render(); }
-  if ('rtSample' in ds) { const cls = U.cls, has = rtData().days.some(d => Object.keys(((rtData().grid[cls] || {})[d]) || {}).length);
+  if ('rtSave' in ds) { const E = UI.rtEdit, [cls, day, pid] = E.key.split('|'), v = E.sub || E.t ? {sub:E.sub, t:E.t} : null;
+    (E.all ? rtPlan().days : [day]).forEach(d => rtSetCell(cls, d, pid, v)); save(); closeSheet();
+    if ([...rtClashes()].some(k => k.startsWith(cls + '|') && k.endsWith('|' + pid))) toast('সতর্কতা: এই শিক্ষক একই সময়ে অন্য শ্রেণিতেও আছেন', 4000);
+    return render(); }
+  if ('rtSample' in ds) { const cls = U.cls, has = rtPlan().days.some(d => Object.keys(((rtGrid()[cls] || {})[d]) || {}).length);
     const go = () => { rtSampleFill(cls); save(); toast(`${CLASS_NAME[cls]}-এর নমুনা রুটিন বসানো হয়েছে`); render(); };
     return has ? confirmSheet('নমুনা দিয়ে পূরণ করবেন?', `${CLASS_NAME[cls]}-এর বিষয়গুলো নমুনা অনুযায়ী বদলে যাবে (শিক্ষক থেকে যাবেন)।`, 'পূরণ করুন', go) : go(); }
-  if ('rtClear' in ds) { const cls = U.cls; return confirmSheet('এই শ্রেণির রুটিন খালি করবেন?', `${CLASS_NAME[cls]}-এর সব ঘরের বিষয় ও শিক্ষক মুছে যাবে।`, 'খালি করুন', () => { delete rtData().grid[cls]; save(); }); }
+  if ('rtClear' in ds) { const cls = U.cls; return confirmSheet('এই শ্রেণির রুটিন খালি করবেন?', `${CLASS_NAME[cls]}-এর সব ঘরের বিষয় ও শিক্ষক মুছে যাবে (শুধু এই রুটিনে)।`, 'খালি করুন', () => { delete rtGrid()[cls]; save(); }); }
+  if ('rtCopy' in ds) { const S = JSON.parse(JSON.stringify(R.school)); R.dir = S; save(); toast('স্কুলের রুটিন কপি হয়েছে — এখন থেকে দুটি আলাদা'); return render(); }
   if ('rtSetup' in ds) return rtSetupSheet();
-  if ('rtPrint' in ds) return printDoc('ক্লাস রুটিন', rtPrintDoc());
+  if (ds.rtPrint) {
+    const hard = rtTimeIssues(rtLayout()).filter(x => x.hard);
+    if (hard.length) { toast('আগে সময়ের সংঘর্ষ ঠিক করুন: ' + hard[0].msg, 4500); return rtSetupSheet(); }
+    if (ds.rtPrint === 'pdf') toast('প্রিন্টের পর্দায় "Save as PDF / PDF হিসেবে সংরক্ষণ" বাছুন', 5000);
+    const t = rtState(), name = `${t.kind === 'dir' ? 'অধিদপ্তর' : 'স্কুল'} রুটিন ${rtPlan().mode === 1 ? '১ শিফট' : '২ শিফট'}`;
+    return printDoc(name, rtPrintDoc());
+  }
 }
 function bindRoutine(){
   const t = document.getElementById('rtT'); if (t) t.addEventListener('change', () => { rtState().tid = t.value; render(); });
-  const me = document.getElementById('rtMe'); if (me) me.addEventListener('change', () => { rtData().me = me.checked ? rtState().tid : null; save(); });
+  const me = document.getElementById('rtMe'); if (me) me.addEventListener('change', () => { rtRoot().me = me.checked ? rtState().tid : null; save(); });
 }
 
 /* ---------- placeholders ---------- */
