@@ -366,7 +366,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '6.3';
+const WEB_VERSION = '6.4';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -3399,11 +3399,11 @@ function rtDefaultLayout(mode){
     groups:[{id:uid(), name:'প্রাক-প্রাথমিক, ১ম ও ২য় শ্রেণি', classes:['pre','1','2'], len:45, periods:rtMkP(3)},
             {id:uid(), name:'৩য়–৫ম শ্রেণি', classes:['3','4','5'], len:45, periods:rtMkP(6)}]}]};
   return {shifts:[
-    {id:uid(), name:'১ম শিফট', asm:{start:'09:00', end:'09:15'}, start:'09:15', breaks:[],
-      groups:[{id:uid(), name:'১ম শিফট', classes:['pre','1','2'], len:40, periods:rtMkP(3)}]},
+    {id:uid(), name:'১ম শিফট', asm:null, start:'09:00', breaks:[],
+      groups:[{id:uid(), name:'১ম শিফট', classes:['pre','1','2'], len:55, fit:true, end:'11:45', periods:rtMkP(3)}]},
     {id:uid(), name:'২য় শিফট', asm:{start:'11:45', end:'11:55'}, start:'12:00',
       breaks:[{id:uid(), label:'মধ্যাহ্ন বিরতি', start:'13:20', end:'14:00'}],
-      groups:[{id:uid(), name:'২য় শিফট', classes:['3','4','5'], len:40, periods:rtMkP(6)}]}]};
+      groups:[{id:uid(), name:'২য় শিফট', classes:['3','4','5'], len:35, fit:true, end:'16:15', periods:rtMkP(6)}]}]};
 }
 function rtNewPlan(){
   const P = {mode:2, days:['sun','mon','tue','wed','thu'], year:String(new Date().getFullYear()), layouts:{1:rtDefaultLayout(1), 2:rtDefaultLayout(2)}, grids:{1:{}, 2:{}}};
@@ -3412,9 +3412,33 @@ function rtNewPlan(){
 }
 /* Auto times: periods follow one another from the shift's class start; a period never sits inside a break.
    Periods the teacher timed by hand (manual) keep their time. */
+/* "fit" groups: the periods share the time from class start to the group's end time evenly (5-minute steps when
+   possible), skipping breaks; hand-timed periods stay fixed and the rest fill the gaps around them. */
+function rtFitRange(ps, A, B, breaks){
+  if (!ps.length) return;
+  let segs = [[A, B]];
+  breaks.forEach(b => { const x = rtMin(b.start), y = rtMin(b.end); segs = segs.flatMap(([s, e]) => !rtOver(s, e, x, y) ? [[s, e]] : [[s, Math.min(e, x)], [Math.max(s, y), e]]).filter(([s, e]) => e > s); });
+  const total = segs.reduce((a, [s, e]) => a + e - s, 0);
+  if (total <= 0) { let t = B; ps.forEach(p => { p.start = rtHM(t); p.end = rtHM(t); }); return; }
+  const raw = segs.map(([s, e]) => (e - s) * ps.length / total), cnt = raw.map(Math.floor);
+  let left = ps.length - cnt.reduce((a, b) => a + b, 0);
+  raw.map((r, i) => [r - cnt[i], i]).sort((a, b) => b[0] - a[0]).forEach(([, i]) => { if (left > 0) { cnt[i]++; left--; } });
+  let k = 0;
+  segs.forEach(([s, e], si) => { const n = cnt[si]; if (!n) return;
+    const len = e - s, unit = len % 5 === 0 && len / 5 >= n ? 5 : 1, units = len / unit, base = Math.floor(units / n), rem = units % n;
+    let t = s; for (let i = 0; i < n; i++) { const d = (base + (i < rem ? 1 : 0)) * unit, p = ps[k++]; p.start = rtHM(t); p.end = rtHM(t + d); p.manual = false; t += d; } });
+}
 function rtRetime(sh){
   sh.groups.forEach(g => {
-    let t = rtMin(sh.start || sh.asm.end), len = Math.max(5, +g.len || 40);
+    if (g.fit && g.end) {
+      const fixed = g.periods.filter(p => p.manual && p.start && p.end);
+      let from = rtMin(sh.start || (sh.asm && sh.asm.end)), run = [];
+      const flush = to => { rtFitRange(run, from, to, sh.breaks); run = []; };
+      g.periods.forEach(p => { if (fixed.includes(p)) { flush(rtMin(p.start)); from = rtMin(p.end); } else run.push(p); });
+      flush(Math.max(from, rtMin(g.end)));
+      return;
+    }
+    let t = rtMin(sh.start || (sh.asm && sh.asm.end)), len = Math.max(5, +g.len || 40);
     g.periods.forEach(p => {
       if (p.manual && p.start && p.end) { t = Math.max(t, rtMin(p.end)); return; }
       let s = t, moved = true;
@@ -3454,8 +3478,25 @@ function rtRoot(){
   ['school', 'dir'].forEach(k => { const P = R[k] = R[k] || rtNewPlan();
     P.layouts = P.layouts || {}; P.grids = P.grids || {};
     [1, 2].forEach(m => { if (!P.layouts[m]) { P.layouts[m] = rtDefaultLayout(m); P.layouts[m].shifts.forEach(rtRetime); } P.grids[m] = P.grids[m] || {}; });
-    P.mode = P.mode === 1 ? 1 : 2; P.days = P.days && P.days.length ? P.days : ['sun','mon','tue','wed','thu']; P.year = P.year || String(new Date().getFullYear()); });
+    P.mode = P.mode === 1 ? 1 : 2; P.days = P.days && P.days.length ? P.days : ['sun','mon','tue','wed','thu']; P.year = P.year || String(new Date().getFullYear());
+    if (!P.v64) { rtApply2Shift(P); P.v64 = true; } });
   return R;
+}
+/* one-time: 2-shift timetable — 1st shift 9:00–11:45 (3 periods, no assembly), one assembly 11:45–11:55,
+   2nd shift 12:00–4:15 (6 periods) with the lunch break 1:20–2:00. Subjects/teachers stay on their periods. */
+function rtApply2Shift(P){
+  const L = P.layouts[2]; if (!L || L.shifts.length < 2) return;
+  const G = P.grids[2] || {}, used = (g, p) => g.classes.some(c => Object.values(G[c] || {}).some(d => d[p.id]));
+  const [a, b] = L.shifts, ga = a.groups[0], gb = b.groups[0]; if (!ga || !gb) return;
+  a.asm = null; a.start = '09:00'; ga.fit = true; ga.end = '11:45'; ga.len = 55;
+  while (ga.periods.length > 3 && !used(ga, ga.periods[ga.periods.length - 1])) ga.periods.pop();
+  while (ga.periods.length < 3) ga.periods.push({id:uid(), start:'', end:'', manual:false});
+  b.asm = {start:'11:45', end:'11:55'}; b.start = '12:00'; gb.fit = true; gb.end = '16:15'; gb.len = 35;
+  const lunch = b.breaks.find(x => /মধ্যাহ্ন/.test(x.label)) || b.breaks[0];
+  if (lunch) { lunch.start = '13:20'; lunch.end = '14:00'; } else b.breaks.push({id:uid(), label:'মধ্যাহ্ন বিরতি', start:'13:20', end:'14:00'});
+  while (gb.periods.length < 6) gb.periods.push({id:uid(), start:'', end:'', manual:false});
+  [ga, gb].forEach(g => g.periods.forEach(p => { p.manual = false; }));
+  L.shifts.forEach(rtRetime);
 }
 function rtState(){ if (!UI.rt) UI.rt = {kind:'school', tab:'class', cls:null, tid:null}; if (!UI.rt.kind) UI.rt.kind = 'school'; return UI.rt; }
 const rtPlan = () => rtRoot()[rtState().kind];
@@ -3480,7 +3521,7 @@ function rtTName(id, short){
 function rtItems(cls){
   const hit = rtGroupOf(cls); if (!hit) return [];
   const {shift, group} = hit, ps = group.periods;
-  const items = [{kind:'asm', label:'সমাবেশ', start:shift.asm.start, end:shift.asm.end}];
+  const items = shift.asm ? [{kind:'asm', label:'সমাবেশ', start:shift.asm.start, end:shift.asm.end}] : [];
   ps.forEach((p, i) => items.push({kind:'period', id:p.id, no:i, label:rtPNo(i) + ' পিরিয়ড', start:p.start, end:p.end, manual:p.manual}));
   const first = ps.length ? Math.min(...ps.map(p => rtMin(p.start))) : 0, last = ps.length ? Math.max(...ps.map(p => rtMin(p.end))) : 0;
   shift.breaks.forEach(b => { if (rtMin(b.start) >= first && rtMin(b.start) < last) items.push({kind:'break', label:b.label, start:b.start, end:b.end}); });
@@ -3488,7 +3529,7 @@ function rtItems(cls){
 }
 /* time columns of a whole shift (union of every group's periods + assembly + breaks) — the directorate layout */
 function rtColumns(shift){
-  const cols = [{kind:'asm', label:'সমাবেশ', start:shift.asm.start, end:shift.asm.end}];
+  const cols = shift.asm ? [{kind:'asm', label:'সমাবেশ', start:shift.asm.start, end:shift.asm.end}] : [];
   const seen = {};
   shift.groups.forEach(g => g.periods.forEach((p, i) => { const k = p.start + '-' + p.end;
     if (!seen[k]) { seen[k] = {kind:'period', start:p.start, end:p.end, nos:new Set()}; cols.push(seen[k]); } seen[k].nos.add(i); }));
@@ -3519,8 +3560,8 @@ function rtClashes(){
 function rtTimeIssues(L){
   const out = [];
   L.shifts.forEach((sh, si) => {
-    const A = rtMin(sh.asm.start), B = rtMin(sh.asm.end);
-    if (B <= A) out.push({msg:`${sh.name}: সমাবেশের শেষ সময় শুরুর আগে`, hard:true});
+    const A = sh.asm ? rtMin(sh.asm.start) : -1, B = sh.asm ? rtMin(sh.asm.end) : -1;
+    if (sh.asm && B <= A) out.push({msg:`${sh.name}: সমাবেশের শেষ সময় শুরুর আগে`, hard:true});
     sh.breaks.forEach(b => { if (rtMin(b.end) <= rtMin(b.start)) out.push({msg:`${sh.name}: "${b.label}"-এর সময় ঠিক নয়`, hard:true}); });
     sh.groups.forEach(g => {
       const nm = L.shifts.length > 1 && sh.groups.length === 1 ? sh.name : g.name;
@@ -3531,12 +3572,15 @@ function rtTimeIssues(L){
         sh.breaks.forEach(b => { if (rtOver(s, e, rtMin(b.start), rtMin(b.end))) out.push({msg:`${nm}: ${rtPNo(i)} পিরিয়ড "${b.label}"-এর মধ্যে পড়েছে`, hard:true}); });
         g.periods.forEach((q, j) => { if (j > i && rtOver(s, e, rtMin(q.start), rtMin(q.end))) out.push({msg:`${nm}: ${rtPNo(i)} ও ${rtPNo(j)} পিরিয়ডের সময় মিলে গেছে`, hard:true}); });
         if (i > 0 && s < rtMin(g.periods[i - 1].start)) out.push({msg:`${nm}: ${rtPNo(i)} পিরিয়ড আগের পিরিয়ডের আগে শুরু হচ্ছে — ক্রম দেখে নিন`, hard:false});
-        if (s < B) out.push({msg:`${nm}: ${rtPNo(i)} পিরিয়ড সমাবেশ শেষ হওয়ার আগে শুরু`, hard:false});
+        if (sh.asm && s < B) out.push({msg:`${nm}: ${rtPNo(i)} পিরিয়ড সমাবেশ শেষ হওয়ার আগে শুরু`, hard:false});
+        if (!p.manual && e - s > 0 && e - s < 20) out.push({msg:`${nm}: ${rtPNo(i)} পিরিয়ড মাত্র ${bn(e - s)} মিনিটের — পিরিয়ড কমান বা শেষ সময় বাড়ান`, hard:false});
       });
+      if (g.fit && g.end && g.periods.length && rtMin(g.periods[g.periods.length - 1].end) > rtMin(g.end)) out.push({msg:`${nm}: পিরিয়ড ${rtTime(g.end)}-এর পরে শেষ হচ্ছে`, hard:false});
     });
     const next = L.shifts[si + 1];
     if (next) { const end = Math.max(0, ...sh.groups.flatMap(g => g.periods.map(p => rtMin(p.end))));
-      if (end > rtMin(next.asm.start)) out.push({msg:`${sh.name} শেষ হচ্ছে ${rtTime(rtHM(end))}-এ, অথচ ${next.name}-এর সমাবেশ ${rtTime(next.asm.start)}-এ`, hard:false}); }
+      const nx = next.asm ? next.asm.start : next.start;
+      if (end > rtMin(nx)) out.push({msg:`${sh.name} শেষ হচ্ছে ${rtTime(rtHM(end))}-এ, অথচ ${next.name}${next.asm ? '-এর সমাবেশ' : ' শুরু'} ${rtTime(nx)}-এ`, hard:false}); }
   });
   const seen = new Set(); return out.filter(x => !seen.has(x.msg) && seen.add(x.msg));
 }
@@ -3586,7 +3630,7 @@ function rtHeadInfo(P){
 function routine(){
   const U = rtState(), P = rtPlan(), L = rtLayout(P), issues = rtTimeIssues(L);
   const seg = (attr, cur, opts) => `<div class="tabs2" style="grid-template-columns:repeat(${opts.length},minmax(0,1fr))" role="tablist">${opts.map(([k, l]) => `<button role="tab" class="${String(cur) === String(k) ? 'on' : ''}" data-${attr}="${k}" aria-selected="${String(cur) === String(k)}">${l}</button>`).join('')}</div>`;
-  const shiftCard = L.shifts.map(sh => `<div class="rtsh"><div class="top"><b>${esc(sh.name)}</b><span class="t2">সমাবেশ ${rtTime(sh.asm.start)}–${rtTime(sh.asm.end)} · ক্লাস শুরু ${rtTime(sh.start)}</span></div>
+  const shiftCard = L.shifts.map(sh => `<div class="rtsh"><div class="top"><b>${esc(sh.name)}</b><span class="t2">${sh.asm ? `সমাবেশ ${rtTime(sh.asm.start)}–${rtTime(sh.asm.end)} · ` : ''}ক্লাস ${rtTime(sh.start)}${sh.groups.length === 1 && sh.groups[0].periods.length ? '–' + rtTime(sh.groups[0].periods[sh.groups[0].periods.length - 1].end) : ''}</span></div>
       ${sh.groups.map(g => { const ps = g.periods; return `<div class="rtg"><span>${g.classes.map(c => PS_CLS[c]).join(', ') || '—'}</span><span>${bn(ps.length)} পিরিয়ড${ps.length ? ` · ${rtTime(ps[0].start)}–${rtTime(ps[ps.length - 1].end)}` : ''}</span></div>`; }).join('')}
       ${sh.breaks.map(b => `<div class="rtg br"><span>${esc(b.label)}</span><span>${rtTime(b.start)}–${rtTime(b.end)} · কোনো ক্লাস নেই</span></div>`).join('')}</div>`).join('');
   const emptyDir = U.kind === 'dir' && !Object.values(rtGrid(P)).some(c => Object.values(c).some(d => Object.keys(d).length));
@@ -3740,7 +3784,8 @@ function rtSetDraw(){
     ${issues.length ? `<div class="rtwarn">${issues.map(x => `<div>${x.hard ? '⛔' : '⚠️'} ${esc(x.msg)}</div>`).join('')}</div>` : '<div class="rtok">✓ সময়ে কোনো সংঘর্ষ নেই</div>'}
     ${L.shifts.map((sh, si) => `<div class="rsbox">
       <input class="psin rsname" data-rs-sname="${si}" value="${esc(sh.name)}" aria-label="শিফটের নাম">
-      <div class="rsline"><span>সমাবেশ</span>${tin(`data-rs-asm="${si}|start"`, sh.asm.start, 'সমাবেশ শুরু')}${tin(`data-rs-asm="${si}|end"`, sh.asm.end, 'সমাবেশ শেষ')}</div>
+      <div class="rsline"><span>সমাবেশ</span>${sh.asm ? `${tin(`data-rs-asm="${si}|start"`, sh.asm.start, 'সমাবেশ শুরু')}${tin(`data-rs-asm="${si}|end"`, sh.asm.end, 'সমাবেশ শেষ')}` : '<span class="t2" style="font-weight:400;grid-column:span 2">এই শিফটে আলাদা সমাবেশ নেই</span>'}</div>
+      <button class="btn" data-rs-asmtg="${si}" style="min-height:38px;font-size:13px">${sh.asm ? 'এই শিফটে সমাবেশ বাদ দিন' : '+ এই শিফটে সমাবেশ যোগ করুন'}</button>
       <div class="rsline"><span>ক্লাস শুরু</span>${tin(`data-rs-start="${si}"`, sh.start, 'ক্লাস শুরু')}<span></span></div>
       ${sh.breaks.map((b, bi) => `<div class="rsline brk"><input class="psin" data-rs-blbl="${si}|${bi}" value="${esc(b.label)}" aria-label="বিরতির নাম">${tin(`data-rs-bt="${si}|${bi}|start"`, b.start, 'বিরতি শুরু')}${tin(`data-rs-bt="${si}|${bi}|end"`, b.end, 'বিরতি শেষ')}<button class="rsdel" data-rs-bdel="${si}|${bi}" aria-label="বিরতি মুছুন">✕</button></div>`).join('')}
       <button class="btn" data-rs-badd="${si}" style="min-height:40px">+ বিরতি</button>
@@ -3748,14 +3793,16 @@ function rtSetDraw(){
         <div class="top"><b style="font-size:14px">${esc(sh.groups.length > 1 ? g.name : 'পিরিয়ড')}</b><span class="t2" style="font-size:12.5px">${bn(g.periods.length)}টি পিরিয়ড</span></div>
         <div class="rtpick" style="grid-template-columns:repeat(6,1fr)">${CLASSES.map(([c]) => { const where = rtFindGroup(L, c), on = where && where.group === g;
           return `<button class="${on ? 'on' : ''}" data-rs-cls="${si}|${gi}|${c}" title="${CLASS_NAME[c]}">${PS_CLS[c]}</button>`; }).join('')}</div>
-        <div class="rsline"><span>পিরিয়ডের দৈর্ঘ্য</span><select class="psin" data-rs-len="${si}|${gi}">${[30,35,40,45,50,55,60].concat([+g.len]).filter((v, i, a) => a.indexOf(v) === i).sort((a, b) => a - b).map(v => `<option value="${v}" ${+g.len === v ? 'selected' : ''}>${bn(v)} মিনিট</option>`).join('')}</select><span></span></div>
+        <div class="rtpick" style="grid-template-columns:1fr 1fr"><button class="${g.fit ? 'on' : ''}" data-rs-fit="${si}|${gi}|1">শেষ সময় পর্যন্ত সমান ভাগ</button><button class="${!g.fit ? 'on' : ''}" data-rs-fit="${si}|${gi}|0">নির্দিষ্ট দৈর্ঘ্য</button></div>
+        ${g.fit ? `<div class="rsline"><span>শেষ সময়</span>${tin(`data-rs-gend="${si}|${gi}"`, g.end || '', 'শেষ সময়')}<span class="t2" style="font-size:11.5px;font-weight:400">পিরিয়ড বাড়ালে/কমালে সময় নিজে ভাগ হবে</span></div>` : ''}
+        <div class="rsline" style="${g.fit ? 'display:none' : ''}"><span>পিরিয়ডের দৈর্ঘ্য</span><select class="psin" data-rs-len="${si}|${gi}">${[30,35,40,45,50,55,60].concat([+g.len]).filter((v, i, a) => a.indexOf(v) === i).sort((a, b) => a - b).map(v => `<option value="${v}" ${+g.len === v ? 'selected' : ''}>${bn(v)} মিনিট</option>`).join('')}</select><span></span></div>
         ${g.periods.map((p, pi) => `<div class="rsrow2"><b>${rtPNo(pi)}</b>${tin(`data-rs-pt="${si}|${gi}|${pi}|start"`, p.start, rtPNo(pi) + ' শুরু')}${tin(`data-rs-pt="${si}|${gi}|${pi}|end"`, p.end, rtPNo(pi) + ' শেষ')}
           <button class="rsmv" data-rs-mv="${si}|${gi}|${pi}|-1" ${pi ? '' : 'disabled'} aria-label="উপরে">▲</button><button class="rsmv" data-rs-mv="${si}|${gi}|${pi}|1" ${pi < g.periods.length - 1 ? '' : 'disabled'} aria-label="নিচে">▼</button><button class="rsdel" data-rs-pdel="${si}|${gi}|${pi}" aria-label="মুছুন">✕</button>
           ${p.manual ? '<small class="rsman">হাতে দেওয়া সময়</small>' : ''}</div>`).join('')}
         <div class="rt3"><button class="btn" data-rs-padd="${si}|${gi}">＋ পিরিয়ড</button><button class="btn" data-rs-prem="${si}|${gi}" ${g.periods.length ? '' : 'disabled'}>－ পিরিয়ড</button><button class="btn" data-rs-auto="${si}|${gi}">স্বয়ংক্রিয় সময়</button></div>
       </div>`).join('')}
     </div>`).join('')}
-    <p class="hint">পিরিয়ড যোগ/বাদ দিলে বা দৈর্ঘ্য বদলালে পরের সময়গুলো নিজে থেকে সরে যায়; বিরতির সময়ে কোনো পিরিয়ড বসে না। কোনো পিরিয়ডের সময় হাতে বদলালে সেটি "হাতে দেওয়া" থাকে — "স্বয়ংক্রিয় সময়" চাপলে আবার হিসাব হয়। ক্রম বদলালে সেই পিরিয়ডের বিষয়-শিক্ষকও সাথে সরে যায়।</p>`;
+    <p class="hint">"শেষ সময় পর্যন্ত সমান ভাগ" থাকলে পিরিয়ড যোগ/বাদ দিলেও শিফট একই সময়ে শেষ হয়, সময় নিজে ভাগ হয়। "নির্দিষ্ট দৈর্ঘ্য" হলে পরের সময়গুলো সরে যায়; বিরতির সময়ে কোনো পিরিয়ড বসে না। কোনো পিরিয়ডের সময় হাতে বদলালে সেটি "হাতে দেওয়া" থাকে — "স্বয়ংক্রিয় সময়" চাপলে আবার হিসাব হয়। ক্রম বদলালে সেই পিরিয়ডের বিষয়-শিক্ষকও সাথে সরে যায়।</p>`;
   box.querySelectorAll('input,select').forEach(el => el.addEventListener('change', () => rtSetChange(el)));
 }
 function rtAfterLayoutChange(msg){
@@ -3767,7 +3814,9 @@ function rtSetChange(el){
   const d = el.dataset, P = rtPlan(), L = rtLayout(P), v = el.value;
   if (d.rsInfo) { if (d.rsInfo === 'year') P.year = toEn(v).trim() || P.year; else DB.teacher[d.rsInfo] = d.rsInfo === 'emis' ? toEn(v).trim() : v.trim(); save(); return render(); }
   if (d.rsSname != null) { L.shifts[+d.rsSname].name = v.trim() || L.shifts[+d.rsSname].name; return rtAfterLayoutChange(); }
-  if (d.rsAsm) { const [si, k] = d.rsAsm.split('|'); if (!v) return rtSetDraw(); L.shifts[+si].asm[k] = v; return rtAfterLayoutChange(); }
+  if (d.rsAsm) { const [si, k] = d.rsAsm.split('|'); if (!v || !L.shifts[+si].asm) return rtSetDraw(); L.shifts[+si].asm[k] = v; return rtAfterLayoutChange(); }
+  if (d.rsGend) { const [si, gi] = d.rsGend.split('|').map(Number), sh = L.shifts[si]; if (!v || rtMin(v) <= rtMin(sh.start)) { toast('শেষ সময় ক্লাস শুরুর পরে হতে হবে'); return rtSetDraw(); }
+    sh.groups[gi].end = v; sh.groups[gi].periods.forEach(p => { p.manual = false; }); rtRetime(sh); return rtAfterLayoutChange(`পিরিয়ডগুলো ${rtTime(v)} পর্যন্ত ভাগ করা হয়েছে`); }
   if (d.rsStart != null) { if (!v) return rtSetDraw(); L.shifts[+d.rsStart].start = v; L.shifts[+d.rsStart].groups.forEach(g => g.periods.forEach(p => { p.manual = false; })); rtRetime(L.shifts[+d.rsStart]); return rtAfterLayoutChange(); }
   if (d.rsBlbl) { const [si, bi] = d.rsBlbl.split('|').map(Number); L.shifts[si].breaks[bi].label = v.trim() || 'বিরতি'; return rtAfterLayoutChange(); }
   if (d.rsBt) { const [si, bi, k] = d.rsBt.split('|'), b = L.shifts[+si].breaks[+bi], nb = Object.assign({}, b, {[k]:v});
@@ -3778,7 +3827,7 @@ function rtSetChange(el){
     const n = Object.assign({}, p, {[k]:v}), s = rtMin(n.start), e = rtMin(n.end);
     let why = !v ? 'সময় দিন' : e <= s ? 'শেষ সময় শুরুর পরে হতে হবে' : '';
     if (!why) sh.breaks.forEach(b => { if (rtOver(s, e, rtMin(b.start), rtMin(b.end))) why = `"${b.label}" (${rtTime(b.start)}–${rtTime(b.end)})-এর মধ্যে পিরিয়ড রাখা যাবে না`; });
-    if (!why && rtOver(s, e, rtMin(sh.asm.start), rtMin(sh.asm.end))) why = 'সমাবেশের সময়ে পিরিয়ড রাখা যাবে না';
+    if (!why && sh.asm && rtOver(s, e, rtMin(sh.asm.start), rtMin(sh.asm.end))) why = 'সমাবেশের সময়ে পিরিয়ড রাখা যাবে না';
     if (!why) g.periods.forEach((q, j) => { if (j !== +pi && rtOver(s, e, rtMin(q.start), rtMin(q.end))) why = `${rtPNo(j)} পিরিয়ডের সময়ের সাথে মিলে যাচ্ছে`; });
     if (why) { toast(why, 3500); return rtSetDraw(); }
     p[k] = v; p.manual = true; rtRetime(sh); return rtAfterLayoutChange(); }
@@ -3788,6 +3837,13 @@ function rtSetupClick(ds){
   if (ds.rsMode) { rtSetMode(P, +ds.rsMode); save(); render(); return rtSetDraw(); }
   if (ds.rsDay) { const i = P.days.indexOf(ds.rsDay); if (i >= 0) { if (P.days.length > 1) P.days.splice(i, 1); else toast('অন্তত একটি দিন রাখতে হবে'); } else P.days.push(ds.rsDay);
     P.days.sort((a, b) => RT_DAYS.findIndex(x => x[0] === a) - RT_DAYS.findIndex(x => x[0] === b)); save(); render(); return rtSetDraw(); }
+  if (ds.rsAsmtg != null) { const sh = L.shifts[+ds.rsAsmtg];
+    if (sh.asm) sh.asm = null; else { const st = rtMin(sh.start); sh.asm = {start:rtHM(Math.max(0, st - 15)), end:rtHM(Math.max(0, st - 5))}; }
+    rtRetime(sh); return rtAfterLayoutChange(sh.asm ? 'সমাবেশ যোগ হয়েছে — সময় দেখে নিন' : 'এই শিফটের সমাবেশ বাদ দেওয়া হয়েছে'); }
+  if (ds.rsFit) { const [si, gi, f] = ds.rsFit.split('|').map(Number), sh = L.shifts[si], g = sh.groups[gi];
+    g.fit = !!f; if (g.fit && !g.end) g.end = g.periods.length ? g.periods[g.periods.length - 1].end : rtHM(rtMin(sh.start) + 180);
+    if (!g.fit && g.periods.length) g.len = Math.max(5, Math.round(rtMins(g.periods[0].start, g.periods[0].end)));
+    g.periods.forEach(p => { p.manual = false; }); rtRetime(sh); return rtAfterLayoutChange(); }
   if (ds.rsBadd != null) { const sh = L.shifts[+ds.rsBadd], last = Math.max(rtMin(sh.start), ...sh.groups.flatMap(g => g.periods.map(p => rtMin(p.end))));
     sh.breaks.push({id:uid(), label:'বিরতি', start:rtHM(last), end:rtHM(last + 20)}); rtRetime(sh); return rtAfterLayoutChange('বিরতি যোগ হয়েছে — সময় ঠিক করে দিন'); }
   if (ds.rsBdel) { const [si, bi] = ds.rsBdel.split('|').map(Number); L.shifts[si].breaks.splice(bi, 1); rtRetime(L.shifts[si]); return rtAfterLayoutChange('বিরতি বাদ দেওয়া হয়েছে'); }
