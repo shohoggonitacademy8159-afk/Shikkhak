@@ -289,6 +289,10 @@ img.ma{object-fit:cover;background:#E8EEF5}
 .rsmv{min-height:40px;border-radius:9px;border:1px solid #C5D2DE;background:#fff;font-size:12px;color:#0F766E}.rsmv:disabled{opacity:.3}
 .rtt td.na{color:#9AA8B6;background:#FAFBFC;font-size:13px}
 .rtt th.asm{background:#E6EFFA}
+.rtt.rsheet th small{display:block;font-size:9.5px;font-weight:600;color:var(--mute);white-space:nowrap}
+.rtt.rsheet th.rtst{background:#D7EDE6;font-size:12.5px}.rtt.rsheet th.ac,.rtt.rsheet th.bc{min-width:44px;background:#F4F6F8}
+.rtt.rsheet td.mg{background:#F4F6F8;min-width:30px}.rtt.rsheet td.mg span{writing-mode:vertical-rl;transform:rotate(180deg);font-weight:800;font-size:13px;color:#0F766E;letter-spacing:1px}
+.rtt.rsheet td.mg.break span{color:#7A4A00}.rtt.rsheet tbody.day tr:first-child th,.rtt.rsheet tbody.day tr:first-child td{border-top:2px solid #7C8FA6}
 .pschk{flex:none;width:30px;height:30px;border-radius:8px;border:2px solid #9FB0C4;background:#fff;font-size:18px;font-weight:800;color:#fff;line-height:1;cursor:pointer}
 .pschk.on{background:#0F766E;border-color:#0F766E}
 .pschk:disabled{opacity:.35;cursor:not-allowed}
@@ -362,7 +366,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '6.2';
+const WEB_VERSION = '6.3';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -3646,15 +3650,50 @@ function rtTeacherView(){
       <label style="display:flex;gap:8px;align-items:center;font-size:13px"><input type="checkbox" id="rtMe" ${R.me === U.tid ? 'checked' : ''} style="width:20px;height:20px"> এটি আমার রুটিন (রুটিন খুললেই এটি দেখাবে)</label></div>
     ${days}`;
 }
+/* ---- full routine sheet in the directorate sample layout ("এক/দুই শিফটে পরিচালিত বিদ্যালয়ের জন্য ক্লাস রুটিন") ----
+   one table; two-shift: both shifts side by side with a shift title row; সমাবেশ and বিরতি are merged columns;
+   header cells show period, time and minutes; a class's cells in the other shift are "--". */
+const rtMins = (a, b) => rtMin(b) - rtMin(a);
+function rtSheet(opt){
+  const P = rtPlan(), L = rtLayout(P), clash = opt.clash || new Set(), two = L.shifts.length > 1;
+  const classes = L.shifts.flatMap(sh => sh.groups.flatMap(g => g.classes));
+  const cols = L.shifts.flatMap((sh, si) => rtColumns(sh).map(c => Object.assign({}, c, {si, sh})));
+  const tm = c => `<small>(${rtTime(c.start)}–${rtTime(c.end)})</small><small>${bn(rtMins(c.start, c.end))} মিনিট</small>`;
+  const head = c => c.kind === 'period' ? `<th class="pc">${c.label && c.label !== 'পিরিয়ড' ? esc(c.label) : 'পিরিয়ড'}${tm(c)}</th>`
+    : c.kind === 'break' ? `<th class="bc">${esc(c.label)}${tm(c)}</th>` : `<th class="ac">${tm(c)}</th>`;
+  const inShift = (cls, si) => L.shifts[si].groups.some(g => g.classes.includes(cls));
+  const inBreak = (cls, c) => { const hit = rtFindGroup(L, cls); if (!hit || hit.shift !== c.sh) return false;
+    const ps = hit.group.periods; if (!ps.length) return false;
+    return rtMin(c.start) >= Math.min(...ps.map(p => rtMin(p.start))) && rtMin(c.start) < Math.max(...ps.map(p => rtMin(p.end))); };
+  const serial = opt.serial && two, remarks = opt.remarks && two;
+  const top = two ? `<tr>${serial ? '<th rowspan="2" class="n">ক্রমিক নং</th>' : ''}<th rowspan="2" class="d">বার</th><th rowspan="2" class="d">শ্রেণি</th>${L.shifts.map((sh, si) => {
+      const cs = sh.groups.flatMap(g => g.classes); return `<th colspan="${cols.filter(c => c.si === si).length}" class="rtst">${esc(sh.name)}: ${cs.map(c => PS_CLS[c]).join(', ')} শ্রেণির জন্য</th>`; }).join('')}${remarks ? '<th rowspan="2" class="rm">মন্তব্য</th>' : ''}</tr>
+      <tr>${cols.map(head).join('')}</tr>`
+    : `<tr>${serial ? '<th class="n">ক্রমিক নং</th>' : ''}<th class="d">বার</th><th class="d">শ্রেণি</th>${cols.map(head).join('')}${remarks ? '<th class="rm">মন্তব্য</th>' : ''}</tr>`;
+  let n = 0;
+  const body = P.days.map(day => {
+    // merged সমাবেশ / বিরতি cells: one per run of consecutive classes that have it
+    const spans = cols.map(c => { if (c.kind === 'period') return null;
+      const ok = classes.map(cls => c.kind === 'asm' ? inShift(cls, c.si) : inBreak(cls, c)), start = {};
+      for (let i = 0; i < ok.length; i++) if (ok[i] && (i === 0 || !ok[i - 1])) { let j = i; while (j + 1 < ok.length && ok[j + 1]) j++; start[i] = j - i + 1; }
+      return {ok, start}; });
+    return `<tbody class="day">${classes.map((cls, i) => `<tr>${serial ? `<td class="n">${bn(++n)}</td>` : ''}${i === 0 ? `<th class="d" rowspan="${classes.length}">${rtDayName(day)}</th>` : ''}<th class="d">${PS_CLS[cls]}</th>${cols.map((c, ci) => {
+        if (c.kind !== 'period') { const sp = spans[ci];
+          if (!sp.ok[i]) return '<td class="na">--</td>';
+          return sp.start[i] ? `<td class="mg ${c.kind}" rowspan="${sp.start[i]}"><span>${c.kind === 'asm' ? 'সমাবেশ' : esc(c.label)}</span></td>` : ''; }
+        if (!inShift(cls, c.si)) return '<td class="na">--</td>';
+        const p = rtPeriodAt(cls, c); if (!p) return '<td class="na">--</td>';
+        if (opt.edit) return rtCellBtn(cls, day, p.id, clash, true, '', null);
+        const v = rtCell(cls, day, p.id) || {};
+        return `<td>${v.sub ? `<b>${esc(rtSubName(v.sub, cls))}</b>` : ''}${opt.withT && v.t ? `<small>${esc(rtTName(v.t))}</small>` : ''}</td>`; }).join('')}${remarks ? '<td></td>' : ''}</tr>`).join('')}</tbody>`; }).join('');
+  return `<table class="${opt.cls || ''}"><thead>${top}</thead>${body}</table>`;
+}
+const RT_NOTE = '* প্রয়োজনে বিষয়ের নির্ধারিত পিরিয়ড সংখ্যা ও বিদ্যালয়ের কর্মঘণ্টা ঠিক রেখে, শিক্ষকের দক্ষতা ও প্রশিক্ষণ বিবেচনা করে প্রধান শিক্ষক ক্লাস রুটিন পরিবর্তন করতে পারবেন।';
 function rtAllView(){
-  const P = rtPlan(), L = rtLayout(P), clash = rtClashes();
-  return L.shifts.map(sh => { const cols = rtColumns(sh), classes = sh.groups.flatMap(g => g.classes);
-    return `<h2 style="font-size:16px;margin:6px 2px 0">${esc(sh.name)}</h2>
-    <div class="rtwrap"><table class="rtt all"><tr><th class="d">বার</th><th class="d">শ্রেণি</th>${cols.map(c => c.kind === 'period' ? `<th>${c.nos.size === 1 ? rtPNo([...c.nos][0]) : ''}<small>${rtTime(c.start)}–${rtTime(c.end)}</small></th>` : rtHeadCell(c)).join('')}</tr>
-    ${P.days.map(day => classes.map((cls, i) => `<tr class="${i === 0 ? 'dstart' : ''}">${i === 0 ? `<th class="d" rowspan="${classes.length}">${rtDayName(day, true)}</th>` : ''}<th class="d">${PS_CLS[cls]}</th>${cols.map(c => {
-        if (c.kind !== 'period') return '<td class="br"></td>';
-        const p = rtPeriodAt(cls, c); return p ? rtCellBtn(cls, day, p.id, clash, true, '', null) : '<td class="na">—</td>'; }).join('')}</tr>`).join('')).join('')}
-    </table></div>`; }).join('') + `<p class="hint" style="text-align:center">"—" মানে ওই সময়ে এই শ্রেণির ক্লাস নেই। ঘরে চাপ দিয়ে এখান থেকেও বদলানো যায়।</p>`;
+  const P = rtPlan(), two = rtLayout(P).shifts.length > 1;
+  return `<div class="top" style="margin:2px"><b style="font-size:15px">${two ? 'দুই' : 'এক'} শিফটে পরিচালিত বিদ্যালয়ের ক্লাস রুটিন</b></div>
+    <div class="rtwrap">${rtSheet({edit:true, clash:rtClashes(), cls:'rtt all rsheet'})}</div>
+    <p class="hint" style="text-align:center">"--" মানে ওই সময়ে এই শ্রেণির ক্লাস নেই। ফাঁকা ঘরে চাপ দিয়ে বিষয় ও শিক্ষক দিন।</p>`;
 }
 
 /* ---- cell editor ---- */
@@ -3779,26 +3818,27 @@ function rtPrintDoc(){
   th{background:#E6E6E6;font-weight:700}th small{display:block;font-weight:600;font-size:10.5px}td b{display:block;font-size:12px}td small{display:block;font-size:10.5px}
   th.d{width:62px}th.n{width:30px}.br{width:24px;background:#F2F2F2}.br span{writing-mode:vertical-rl;transform:rotate(180deg);font-size:11px;font-weight:700}td.na{color:#777}
   tr{break-inside:avoid;page-break-inside:avoid}.sg{display:flex;justify-content:space-between;margin-top:28px;font-size:13px}.sg div{border-top:1.5px solid #000;padding-top:3px;min-width:170px;text-align:center}
-  .nt{font-size:11.5px;margin-top:5px}thead{display:table-header-group}tr.grp{display:none}
+  .nt{font-size:11.5px;margin-top:5px}thead{display:table-header-group}
+  table.rsheet th.rtst{font-size:13px;background:#D9D9D9}table.rsheet th.n{width:30px}table.rsheet th.d{width:52px}table.rsheet th.rm{width:52px}
+  table.rsheet th.ac,table.rsheet th.bc{width:46px;font-size:10.5px}table.rsheet th small{font-size:9.5px}
+  table.rsheet td.mg{background:#F2F2F2;padding:0}table.rsheet td.mg span{writing-mode:vertical-rl;transform:rotate(180deg);font-size:14px;font-weight:700;letter-spacing:1px}
+  table.rsheet td.na{color:#555}table.rsheet tbody.day{break-inside:avoid;page-break-inside:avoid}
+  table.rsheet tbody.day tr:first-child th,table.rsheet tbody.day tr:first-child td{border-top:2.6px solid #000}
+  table.rsheet th,table.rsheet td{padding:2px 2px;font-size:10.5px}table.rsheet td b{font-size:10.5px}table.rsheet td small{font-size:9px}
+  .fn{font-size:11px;margin-top:5px}tr.grp{display:none}
   tbody tr:has(th.d:not(:empty)) th,tbody tr:has(th.d:not(:empty)) td{border-top:2.6px solid #000}
   table.tight th,table.tight td{padding:1px 2px;font-size:11px}table.tight td b{font-size:11px}table.tight td small{font-size:9.5px}`;
   const head = title => `<div class="h"><div class="s">${esc(T.school || '')}</div><div class="i">${esc(rtHeadInfo(P))}</div><div class="t">${title}</div></div>`;
   const sign = `<div class="sg"><div>শ্রেণি শিক্ষক / রুটিন প্রণয়নকারী</div><div>প্রধান শিক্ষকের স্বাক্ষর ও সিল</div></div>`;
   const cellTxt = (cls, day, pid, withT) => { const c = rtCell(cls, day, pid) || {}; return `${c.sub ? `<b>${esc(rtSubName(c.sub, cls))}</b>` : ''}${withT && c.t ? `<small>${esc(rtTName(c.t))}</small>` : ''}`; };
   const colHead = c => c.kind === 'period' ? `<th>${c.label && c.label !== 'পিরিয়ড' ? esc(c.label) : ''}<small>${rtTime(c.start)}–${rtTime(c.end)}</small></th>` : `<th class="br"><span>${esc(c.label)}</span></th>`;
-  const fullTable = (sh, withT, serial) => { const cols = rtColumns(sh), classes = sh.groups.flatMap(g => g.classes), rows = P.days.length * classes.length; let n = 0;
-    return `<table class="${rows > 24 ? 'tight' : ''}"><thead><tr>${serial ? '<th class="n">ক্র. নং</th>' : ''}<th class="d">বার</th><th class="d">শ্রেণি</th>${cols.map(colHead).join('')}</tr></thead><tbody>
-      ${P.days.map(day => `<tr class="grp">${serial ? '' : ''}</tr>` + classes.map((cls, i) => `<tr>${serial ? `<td>${bn(++n)}</td>` : ''}<th class="d">${i === 0 ? rtDayName(day) : ''}</th><th class="d">${CLASS_NAME[cls]}</th>${cols.map(c => {
-        if (c.kind !== 'period') return '<td class="br"></td>';
-        const p = rtPeriodAt(cls, c); return p ? `<td>${cellTxt(cls, day, p.id, withT)}</td>` : '<td class="na">—</td>'; }).join('')}</tr>`).join('')).join('')}</tbody></table>
-      <div class="nt">সমাবেশ: ${rtTime(sh.asm.start)}–${rtTime(sh.asm.end)} · ক্লাস শুরু: ${rtTime(sh.start)}${sh.breaks.map(b => ` · ${esc(b.label)}: ${rtTime(b.start)}–${rtTime(b.end)} (এ সময়ে কোনো ক্লাস নেই)`).join('')}</div>`; };
   let pages = '';
   if (dir) {
-    pages = L.shifts.map(sh => `<section>${head(`অধিদপ্তর নির্ধারিত ফরম্যাট অনুযায়ী সাপ্তাহিক শ্রেণি রুটিন${L.shifts.length > 1 ? ' — ' + esc(sh.name) : ''}`)}${fullTable(sh, false, true)}${sign}</section>`).join('');
+    pages = `<section>${head(`${L.shifts.length > 1 ? 'দুই' : 'এক'} শিফটে পরিচালিত বিদ্যালয়ের ক্লাস রুটিন (অধিদপ্তর নির্ধারিত ফরম্যাট)`)}${rtSheet({serial:true, remarks:true, withT:false, cls:'rsheet'})}<div class="fn">${RT_NOTE}</div>${sign}</section>`;
   } else if (U.tab === 'class' && U.cls && rtGroupOf(U.cls)) {
     const cls = U.cls, hit = rtGroupOf(cls), items = rtItems(cls);
     pages = `<section>${head(`সাপ্তাহিক ক্লাস রুটিন — ${CLASS_NAME[cls]} (${esc(hit.shift.name)})`)}
-      <table><tr><th class="d">বার</th>${items.map(it => it.kind === 'period' ? `<th>${rtPNo(it.no)} পিরিয়ড<small>${rtTime(it.start)}–${rtTime(it.end)}</small></th>` : `<th class="br"><span>${esc(it.label)}</span></th>`).join('')}</tr>
+      <table><tr><th class="d">বার</th>${items.map(it => it.kind === 'period' ? `<th>${rtPNo(it.no)} পিরিয়ড<small>(${rtTime(it.start)}–${rtTime(it.end)})</small><small>${bn(rtMin(it.end) - rtMin(it.start))} মিনিট</small></th>` : `<th class="br"><span>${esc(it.label)}</span></th>`).join('')}</tr>
       ${P.days.map(day => `<tr><th class="d">${rtDayName(day)}</th>${items.map(it => it.kind === 'period' ? `<td>${cellTxt(cls, day, it.id, true)}</td>` : '<td class="br"></td>').join('')}</tr>`).join('')}</table><div class="nt">${items.filter(x => x.kind !== 'period').map(x => `${esc(x.label)}: ${rtTime(x.start)}–${rtTime(x.end)}`).join(' · ')}</div>${sign}</section>`;
   } else if (U.tab === 'teacher' && U.tid) {
     const busy = rtBusy(), cols = [];
@@ -3809,7 +3849,7 @@ function rtPrintDoc(){
       ${P.days.map(day => `<tr><th class="d">${rtDayName(day)}</th>${cols.map(c => { const hit = (busy[day + '|' + U.tid] || []).filter(y => y.p.start === c.start && y.p.end === c.end);
         return `<td>${hit.map(h => `<b>${CLASS_NAME[h.cls]}</b><small>${esc(rtSubName((rtCell(h.cls, day, h.p.id) || {}).sub, h.cls))}</small>`).join('')}</td>`; }).join('')}</tr>`).join('')}</table>${sign}</section>`;
   } else {
-    pages = L.shifts.map(sh => `<section>${head(`সাপ্তাহিক শ্রেণি রুটিন${L.shifts.length > 1 ? ' — ' + esc(sh.name) : ''}`)}${fullTable(sh, true, false)}${sign}</section>`).join('');
+    pages = `<section>${head(`${L.shifts.length > 1 ? 'দুই' : 'এক'} শিফটে পরিচালিত বিদ্যালয়ের ক্লাস রুটিন`)}${rtSheet({serial:true, remarks:true, withT:true, cls:'rsheet'})}<div class="fn">${RT_NOTE}</div>${sign}</section>`;
   }
   return `<!DOCTYPE html><html lang="bn"><head><meta charset="utf-8"><title>ক্লাস রুটিন</title><link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;600;700&display=swap" rel="stylesheet"><style>${css}</style></head><body>${pages}</body></html>`;
 }
