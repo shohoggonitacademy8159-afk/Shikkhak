@@ -366,7 +366,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '6.4';
+const WEB_VERSION = '6.5';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -3401,7 +3401,7 @@ function rtDefaultLayout(mode){
   return {shifts:[
     {id:uid(), name:'১ম শিফট', asm:null, start:'09:00', breaks:[],
       groups:[{id:uid(), name:'১ম শিফট', classes:['pre','1','2'], len:55, fit:true, end:'11:45', periods:rtMkP(3)}]},
-    {id:uid(), name:'২য় শিফট', asm:{start:'11:45', end:'11:55'}, start:'12:00',
+    {id:uid(), name:'২য় শিফট', asm:{start:'11:45', end:'12:00'}, start:'12:00',
       breaks:[{id:uid(), label:'মধ্যাহ্ন বিরতি', start:'13:20', end:'14:00'}],
       groups:[{id:uid(), name:'২য় শিফট', classes:['3','4','5'], len:35, fit:true, end:'16:15', periods:rtMkP(6)}]}]};
 }
@@ -3479,10 +3479,12 @@ function rtRoot(){
     P.layouts = P.layouts || {}; P.grids = P.grids || {};
     [1, 2].forEach(m => { if (!P.layouts[m]) { P.layouts[m] = rtDefaultLayout(m); P.layouts[m].shifts.forEach(rtRetime); } P.grids[m] = P.grids[m] || {}; });
     P.mode = P.mode === 1 ? 1 : 2; P.days = P.days && P.days.length ? P.days : ['sun','mon','tue','wed','thu']; P.year = P.year || String(new Date().getFullYear());
-    if (!P.v64) { rtApply2Shift(P); P.v64 = true; } });
+    if (!P.v64) { rtApply2Shift(P); P.v64 = true; }
+    if (!P.v65) { const sh = (P.layouts[2] || {shifts:[]}).shifts[1];   // assembly 11:45–12:00
+      if (sh && sh.asm && sh.asm.start === '11:45' && sh.asm.end === '11:55') sh.asm.end = '12:00'; P.v65 = true; } });
   return R;
 }
-/* one-time: 2-shift timetable — 1st shift 9:00–11:45 (3 periods, no assembly), one assembly 11:45–11:55,
+/* one-time: 2-shift timetable — 1st shift 9:00–11:45 (3 periods, no assembly), one assembly 11:45–12:00,
    2nd shift 12:00–4:15 (6 periods) with the lunch break 1:20–2:00. Subjects/teachers stay on their periods. */
 function rtApply2Shift(P){
   const L = P.layouts[2]; if (!L || L.shifts.length < 2) return;
@@ -3491,7 +3493,7 @@ function rtApply2Shift(P){
   a.asm = null; a.start = '09:00'; ga.fit = true; ga.end = '11:45'; ga.len = 55;
   while (ga.periods.length > 3 && !used(ga, ga.periods[ga.periods.length - 1])) ga.periods.pop();
   while (ga.periods.length < 3) ga.periods.push({id:uid(), start:'', end:'', manual:false});
-  b.asm = {start:'11:45', end:'11:55'}; b.start = '12:00'; gb.fit = true; gb.end = '16:15'; gb.len = 35;
+  b.asm = {start:'11:45', end:'12:00'}; b.start = '12:00'; gb.fit = true; gb.end = '16:15'; gb.len = 35;
   const lunch = b.breaks.find(x => /মধ্যাহ্ন/.test(x.label)) || b.breaks[0];
   if (lunch) { lunch.start = '13:20'; lunch.end = '14:00'; } else b.breaks.push({id:uid(), label:'মধ্যাহ্ন বিরতি', start:'13:20', end:'14:00'});
   while (gb.periods.length < 6) gb.periods.push({id:uid(), start:'', end:'', manual:false});
