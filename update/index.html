@@ -80,6 +80,11 @@ h1,h2,h3,p{margin:0}
 .sech i{width:8px;height:8px;border-radius:50%}
 .tile{text-align:left;background:#fff;border:1px solid var(--line);border-radius:18px;padding:16px 14px;display:flex;flex-direction:column;gap:12px;min-height:150px}
 .tile:active,.lrow:active{transform:scale(.98)}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.tile.tile3{align-items:center;text-align:center;padding:14px 6px 12px;gap:8px;min-height:0;border-radius:16px}
+.tile3 .ib{width:52px;height:52px;border-radius:16px}.tile3 .ib svg{width:28px;height:28px}
+.tile3 .t1{font-size:13.5px;line-height:1.3;text-align:center}
+.tile3 .t2{font-size:11px;line-height:1.35;margin-top:3px;text-align:center;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .tile.wide{grid-column:span 2;flex-direction:row;align-items:center;min-height:0;padding:14px;gap:14px}
 .ib{width:64px;height:64px;flex-shrink:0;border-radius:18px;display:flex;align-items:center;justify-content:center;color:#fff}
 .ib svg{width:34px;height:34px}
@@ -368,7 +373,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '6.7';
+const WEB_VERSION = '6.8';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -989,7 +994,7 @@ const formData = f => Object.fromEntries(new FormData(f).entries());
 
 /* ---------- home ---------- */
 function tileA(f){
-  return `<button class="tile" data-go="${f[0]}"><span class="ib" style="background:${f[2]};box-shadow:0 6px 14px ${f[2]}40">${S(P[f[1]])}</span><span><span class="t1">${f[3]}</span><span class="t2">${f[4]}</span></span></button>`;
+  return `<button class="tile tile3" data-go="${f[0]}"><span class="ib" style="background:${f[2]};box-shadow:0 6px 14px ${f[2]}40">${S(P[f[1]])}</span><span><span class="t1">${f[3]}</span><span class="t2">${f[4]}</span></span></button>`;
 }
 function rowB(f){
   return `<button class="lrow" data-go="${f[0]}"><span class="ib" style="background:${f[2]};box-shadow:0 6px 14px ${f[2]}40">${S(P[f[1]])}</span><span class="grow"><span class="t1">${f[3]}</span><span class="t2">${f[4]}</span></span><span style="color:var(--mute)">${ic('chev',20)}</span></button>`;
@@ -1030,7 +1035,7 @@ function home(){
   </section>
   <section class="sec" aria-label="দাপ্তরিক ও পাঠদান">
     <div class="sech"><i style="background:#1E7F4F"></i>দাপ্তরিক ও পাঠদান</div>
-    <div class="row2">
+    <div class="grid3">
       ${FEATURES_A.map(tileA).join('')}
     </div>
   </section>
