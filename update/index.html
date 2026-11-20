@@ -300,6 +300,15 @@ img.ma{object-fit:cover;background:#E8EEF5}
 .rtt.rsheet th.rtst{background:#D7EDE6;font-size:12.5px}.rtt.rsheet th.ac,.rtt.rsheet th.bc{min-width:44px;background:#F4F6F8}
 .rtt.rsheet td.mg{background:#F4F6F8;min-width:30px}.rtt.rsheet td.mg span{writing-mode:vertical-rl;transform:rotate(180deg);font-weight:800;font-size:13px;color:#0F766E;letter-spacing:1px}
 .rtt.rsheet td.mg.break span{color:#7A4A00}.rtt.rsheet tbody.day tr:first-child th,.rtt.rsheet tbody.day tr:first-child td{border-top:2px solid #7C8FA6}
+.holbar{background:#E6EFFA;border:1.5px solid #1F4E8C;border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:4px;color:#17345E}
+.holbar>div:first-child{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}.holbar b{font-size:15px}.holbar span{font-size:14px;font-weight:600}.holbar small{font-size:12px;color:#3E5070}
+.holbar.soft{background:#F3F7FC;border-width:1px}
+.holrow{display:flex;align-items:center;gap:10px;width:100%;background:#fff;border:0;border-top:1px solid #EDF2EF;padding:10px 12px;font:inherit;color:inherit;text-align:left;cursor:pointer}
+.holrow:first-child{border-top:0}.holrow .grow{display:flex;flex-direction:column}.holrow.past{opacity:.55}.holrow.now{background:#EEF4FC}
+.holchip{border:1px solid #9FB0C4;background:#fff;border-radius:99px;padding:4px 10px;font:inherit;font-size:12.5px;font-weight:600;color:var(--ink)}
+.holline{display:flex;align-items:center;gap:10px;width:100%;background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 12px;font:inherit;color:var(--ink);text-align:left;cursor:pointer}
+.holline .grow{display:flex;flex-direction:column;gap:2px;font-size:14px}.holline small{font-size:12px;color:var(--mute)}.holline svg{flex:none;color:#1F4E8C}
+.holline.on{background:#E6EFFA;border-color:#1F4E8C}
 .pschk{flex:none;width:30px;height:30px;border-radius:8px;border:2px solid #9FB0C4;background:#fff;font-size:18px;font-weight:800;color:#fff;line-height:1;cursor:pointer}
 .pschk.on{background:#0F766E;border-color:#0F766E}
 .pschk:disabled{opacity:.35;cursor:not-allowed}
@@ -373,7 +382,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '6.9';
+const WEB_VERSION = '7.0';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -1033,6 +1042,8 @@ function home(){
       <span aria-hidden="true">বার্ষিক পরীক্ষার সময়সূচি প্রকাশিত হয়েছে</span><span aria-hidden="true">১৬ ডিসেম্বর বিজয় দিবস — বিদ্যালয় বন্ধ থাকবে</span><span aria-hidden="true">উপবৃত্তির তথ্য হালনাগাদের শেষ তারিখ শীঘ্রই</span>
     </div></div></div>
   </section>
+  ${(() => { const t = todayISO(), x = holidayOf(t), nx = nextHoliday(addDays(t, 1));
+    return `<section class="sec" style="padding-top:14px;padding-bottom:0"><button class="holline${x ? ' on' : ''}" data-go="holidays">${ic('leave', 18)}<span class="grow">${x ? `<b>আজ ছুটি:</b> ${esc(x.name)}` : '<b>আজ বিদ্যালয় খোলা</b>'}${nx ? `<small>পরবর্তী ছুটি: ${esc(nx.name)} — ${holSpan(nx)}</small>` : ''}</span>${ic('chev', 18)}</button></section>`; })()}
   <section class="sec" aria-label="দাপ্তরিক ও পাঠদান">
     <div class="sech"><i style="background:#1E7F4F"></i>দাপ্তরিক ও পাঠদান</div>
     <div class="grid3">
@@ -1830,7 +1841,7 @@ function dateBar(){
     <button class="sq blue" data-att-shift="-1" aria-label="আগের দিন">${ic('back',20)}</button>
     <label class="datebox"><span class="t1" style="font-size:14px;text-align:center">${d === t ? 'আজ, ' : ''}${longDate(d)}</span><input type="date" id="attDate" value="${d}" max="${t}" aria-label="তারিখ বাছাই"></label>
     <button class="sq blue" data-att-shift="1" ${d >= t ? 'disabled' : ''} aria-label="পরের দিন">${ic('chev',20)}</button>
-  </div>${isFriday(d) ? '<p class="hint" style="text-align:center">শুক্রবার — সাপ্তাহিক ছুটির দিন</p>' : ''}`;
+  </div>${holBanner(d)}`;
 }
 function attTabs(){
   return `<div class="tabs2" role="tablist"><button role="tab" class="${UI.attView==='day'?'on':''}" data-att-view="day">দৈনিক হাজিরা</button><button role="tab" class="${UI.attView==='month'?'on':''}" data-att-view="month">মাসিক প্রতিবেদন</button></div>`;
@@ -1850,6 +1861,7 @@ function teacherDay(){
   const list = bySerial(DB.teachers);
   const cnt = k => list.filter(t => (day[t.id]||{}).s === k).length;
   const marked = list.filter(t => day[t.id] && day[t.id].s).length;
+  if (holidayOf(d) && !hasAttData(d)) return dateBar();
   return dateBar() + `
     <div class="sumrow">${Object.entries(ATT_T).map(([k,v]) => pill(`${v[0]} ${bn(cnt(k))}`, v[1], v[2])).join('')}${pill(`বাকি ${bn(list.length - marked)}`, '#3E5070', '#EEF1F6')}</div>
     ${marked < list.length ? `<button class="btn big full" data-tatt-all>${ic('teacher',20)} বাকি সবাইকে উপস্থিত করুন</button>` : ''}
@@ -1867,7 +1879,7 @@ function teacherMonth(){
   const days = Object.keys(DB.attendance.teachers).filter(d => d.startsWith(ym) && Object.keys(DB.attendance.teachers[d]).length).sort();
   const rows = bySerial(DB.teachers).map(t => { const c = {p:0,late:0,l:0,a:0}; days.forEach(d => { const r = DB.attendance.teachers[d][t.id]; if (r && c[r.s] !== undefined) c[r.s]++; }); return {t, c}; });
   return monthBar() + `
-    <div class="card" style="gap:10px"><h2 style="font-size:16px">${monthName(ym)}</h2><span class="t2" style="font-size:13px">হাজিরা নেওয়া হয়েছে ${bn(days.length)} দিন</span></div>
+    <div class="card" style="gap:10px"><h2 style="font-size:16px">${monthName(ym)}</h2><span class="t2" style="font-size:13px">হাজিরা নেওয়া হয়েছে ${bn(days.length)} দিন · ${(w => `কর্মদিবস ${bn(w.work)} দিন, ছুটি ${bn(w.hol)} দিন${ym === todayISO().slice(0,7) ? ' (আজ পর্যন্ত)' : ''}`)(workDays(ym))}</span></div>
     ${days.length ? `<div class="list">${rows.map(({t,c}) => `<div class="mem"><span class="rollb">${esc(bn(t.serial||'–'))}</span><span class="grow"><span class="t1" style="font-weight:600">${esc(t.name)}</span><span class="sumrow" style="margin-top:4px">${pill('উপ '+bn(c.p),'#17663F','#E3F4EA')}${pill('দেরি '+bn(c.late),'#7A4A00','#FFF1D6')}${pill('ছুটি '+bn(c.l),'#1F4E8C','#E6EFFA')}${pill('অনু '+bn(c.a),'#B42318','#FDE8E6')}</span></span></div>`).join('')}</div>
       <button class="btn big full" data-copy-tmonth>${ic('copy',20)} প্রতিবেদন কপি করুন</button>`
     : '<div class="card empty"><p class="t2" style="font-size:14px">এই মাসে কোনো হাজিরা নেওয়া হয়নি।</p></div>'}`;
@@ -1895,6 +1907,7 @@ function studentDay(){
   const left = list.length - c.p - c.a - c.l;
   const rate = (c.p + c.a) ? Math.round(c.p * 100 / (c.p + c.a)) : 0;
   const hasSec = list.some(s => s.section);
+  if (holidayOf(d) && !hasAttData(d)) return dateBar();
   return dateBar() + `
     <div class="card" style="gap:10px">
       <div class="top"><b style="font-size:15px">${CLASS_NAME[UI.attClass]} · মোট ${bn(list.length)} জন</b>${(c.p+c.a) ? `<b style="font-size:15px;color:${rate < 75 ? '#B42318' : '#17663F'}">উপস্থিতি ${bn(rate)}%</b>` : ''}</div>
@@ -1919,7 +1932,7 @@ function studentMonthData(){
 function studentMonth(){
   const {ym, days, rows} = studentMonthData();
   return monthBar() + `
-    <div class="card" style="gap:6px"><h2 style="font-size:16px">${CLASS_NAME[UI.attClass]} · ${monthName(ym)}</h2><span class="t2" style="font-size:13px">হাজিরা নেওয়া হয়েছে ${bn(days.length)} দিন। উপস্থিতির হার ছুটির দিন বাদে হিসাব করা; ৭৫%-এর কম লাল রঙে।</span></div>
+    <div class="card" style="gap:6px"><h2 style="font-size:16px">${CLASS_NAME[UI.attClass]} · ${monthName(ym)}</h2><span class="t2" style="font-size:13px">হাজিরা নেওয়া হয়েছে ${bn(days.length)} দিন · ${(w => `কর্মদিবস ${bn(w.work)} দিন, ছুটি ${bn(w.hol)} দিন`)(workDays(ym))}। উপস্থিতির হার ছুটির দিন বাদে হিসাব করা; ৭৫%-এর কম লাল রঙে।</span></div>
     ${days.length ? `<div class="list">${rows.map(({s,c,pct}) => `<div class="srow"><span class="rollb">${s.roll ? esc(bn(s.roll)) : '–'}</span><span class="grow"><span class="t1" style="font-weight:600;font-size:14px">${esc(s.name)}</span><span class="t2">উপ ${bn(c.p)} · অনু ${bn(c.a)} · ছুটি ${bn(c.l)}</span></span><span class="pct" style="color:${pct === null ? '#4A5B73' : pct < 75 ? '#B42318' : '#17663F'}">${pct === null ? '–' : bn(pct) + '%'}</span></div>`).join('')}</div>
       <button class="btn big full" data-copy-smonth>${ic('copy',20)} প্রতিবেদন কপি করুন</button>`
     : '<div class="card empty"><p class="t2" style="font-size:14px">এই মাসে এই শ্রেণির কোনো হাজিরা নেওয়া হয়নি।</p></div>'}`;
@@ -2954,6 +2967,7 @@ function settings(){
   return topHeader('সেটিংস','gear') + `
   <div class="sec" style="padding-top:16px">
     ${cloudCard()}
+    <button class="lrow" data-go="holidays"><span class="ib sm" style="background:#1F4E8C">${S(P.leave)}</span><span class="grow"><span class="t1">ছুটির তালিকা ও শিক্ষাপঞ্জি</span><span class="t2">সাপ্তাহিক ও সরকারি ছুটি, খোলা দিন</span></span><span style="color:var(--mute)">${ic('chev',20)}</span></button>
     <div class="card">
       <h2 style="font-size:16px">ফোনে তথ্য সংরক্ষণ</h2>
       ${bkOk() ? `${bkStatusHtml()}
@@ -3139,14 +3153,14 @@ function lvSave(L){
   const n = lvDays(L.from, L.to); if (!n) { toast('তারিখ ঠিক করুন'); return false; }
   if (L.type === 'student') {
     if (!L.sid) { toast('শিক্ষার্থী বেছে নিন'); return false; }
-    for (let i = 0; i < n; i++) { const d = addDays(L.from, i); if (!isFriday(d)) attDay('students', d, true)[L.sid] = 'l'; }
+    for (let i = 0; i < n; i++) { const d = addDays(L.from, i); if (!isHoliday(d)) attDay('students', d, true)[L.sid] = 'l'; }
     save(); toast(`হাজিরায় ${bn(n)} দিন "ছুটি" বসানো হয়েছে`); return true;
   }
   if (!LV_TYPES[L.type][1]) return true;
   if (!Array.isArray(DB.leaves)) DB.leaves = [];
   const dup = DB.leaves.find(l => l.tid === L.tid && l.type === L.type && l.from === L.from && l.to === L.to);
   if (!dup) DB.leaves.push({id:uid(), tid:L.tid, type:L.type, from:L.from, to:L.to, days:n, reason:(L.reason || '').trim(), at:Date.now()});
-  for (let i = 0; i < n; i++) { const d = addDays(L.from, i); if (!isFriday(d)) { const day = attDay('teachers', d, true); if (!day[L.tid]) day[L.tid] = {s:'l'}; } }
+  for (let i = 0; i < n; i++) { const d = addDays(L.from, i); if (!isHoliday(d)) { const day = attDay('teachers', d, true); if (!day[L.tid]) day[L.tid] = {s:'l'}; } }
   save(); toast(dup ? 'আগেই হিসাবে আছে' : 'ছুটির হিসাবে যোগ হয়েছে, হাজিরাতেও "ছুটি" বসেছে'); return true;
 }
 function leave(){
@@ -3956,6 +3970,130 @@ function bindRoutine(){
   const me = document.getElementById('rtMe'); if (me) me.addEventListener('change', () => { rtRoot().me = me.checked ? rtState().tid : null; save(); });
 }
 
+/* ---------- ছুটির তালিকা ও শিক্ষাপঞ্জি (স্বয়ংক্রিয় ছুটি) ----------
+   DB.holidays = {v:1, weekly:[5,6], list:[{id,from,to,name,src}], open:[iso…], presets:{2026:true}}
+   A day is a holiday if it falls in the list or on a weekly holiday, unless the school marked it as open. */
+const HOL_PRESET = {
+  2026: [ // সরকারি প্রাথমিক বিদ্যালয়ের সংশোধিত ছুটির তালিকা ২০২৬ (প্রজ্ঞাপন ১৮ ফেব্রুয়ারি ২০২৬; ফাতেহা-ই-ইয়াজদাহম সংশোধিত ২৩ সেপ্টেম্বর)
+    ['2026-01-17','2026-01-17','শব-ই-মেরাজ'],
+    ['2026-01-23','2026-01-23','শ্রীশ্রী সরস্বতী পূজা'],
+    ['2026-02-01','2026-02-01','মাঘী পূর্ণিমা'],
+    ['2026-02-04','2026-02-04','শব-ই-বরাত'],
+    ['2026-02-19','2026-03-26','পবিত্র রমজান, শব-ই-কদর, ঈদুল ফিতর ও স্বাধীনতা দিবস'],
+    ['2026-04-14','2026-04-14','বাংলা নববর্ষ'],
+    ['2026-05-01','2026-05-01','মে দিবস ও বুদ্ধ পূর্ণিমা'],
+    ['2026-05-24','2026-06-04','পবিত্র ঈদুল আজহা ও গ্রীষ্মকালীন অবকাশ'],
+    ['2026-06-26','2026-06-26','পবিত্র আশুরা'],
+    ['2026-07-29','2026-07-29','আষাঢ়ী পূর্ণিমা'],
+    ['2026-08-05','2026-08-05','জুলাই গণঅভ্যুত্থান দিবস'],
+    ['2026-08-12','2026-08-12','আখেরি চাহার সোম্বা'],
+    ['2026-08-26','2026-08-26','ঈদে মিলাদুন্নবী (সা.)'],
+    ['2026-09-04','2026-09-04','শুভ জন্মাষ্টমী'],
+    ['2026-09-23','2026-09-23','ফাতেহা-ই-ইয়াজদাহম'],
+    ['2026-10-18','2026-10-22','শারদীয় দুর্গাপূজা'],
+    ['2026-12-16','2026-12-16','মহান বিজয় দিবস'],
+    ['2026-12-20','2026-12-29','শীতকালীন অবকাশ ও যিশুখ্রিষ্টের জন্মদিন (বড়দিন)']
+  ]
+};
+const WD_BN = ['রবিবার','সোমবার','মঙ্গলবার','বুধবার','বৃহস্পতিবার','শুক্রবার','শনিবার'];
+function holData(){
+  let H = DB.holidays;
+  if (!H || !H.v) H = DB.holidays = {v:1, weekly:[5, 6], list:[], open:[], presets:{}};
+  H.weekly = Array.isArray(H.weekly) ? H.weekly : [5, 6]; H.list = H.list || []; H.open = H.open || []; H.presets = H.presets || {};
+  Object.keys(HOL_PRESET).forEach(y => { if (!H.presets[y]) { holApplyPreset(H, y); H.presets[y] = true; } });
+  return H;
+}
+function holApplyPreset(H, y){
+  HOL_PRESET[y].forEach(([from, to, name]) => { if (!H.list.some(h => h.from === from && h.to === to)) H.list.push({id:uid(), from, to, name, src:'dpe'}); });
+  H.list.sort((a, b) => a.from.localeCompare(b.from));
+}
+const wdOf = iso => new Date(iso + 'T00:00:00').getDay();
+/* {name, kind:'weekly'|'govt'} or null */
+function holidayOf(iso){
+  if (!iso) return null;
+  const H = holData();
+  if (H.open.includes(iso)) return null;
+  const x = H.list.find(h => h.from <= iso && iso <= h.to);
+  if (x) return {name:x.name, kind:'govt', id:x.id};
+  if (H.weekly.includes(wdOf(iso))) return {name:`সাপ্তাহিক ছুটি (${WD_BN[wdOf(iso)]})`, kind:'weekly'};
+  return null;
+}
+const isHoliday = iso => !!holidayOf(iso);
+const hasAttData = iso => Object.keys(DB.attendance.teachers[iso] || {}).length || Object.keys(DB.attendance.students[iso] || {}).length;
+/* working days of a month up to today (a holiday on which attendance was taken counts as a working day) */
+function workDays(ym){
+  const [y, m] = ym.split('-').map(Number), last = new Date(y, m, 0).getDate(), t = todayISO(); let n = 0, h = 0;
+  for (let d = 1; d <= last; d++) { const iso = `${ym}-${String(d).padStart(2, '0')}`; if (iso > t) break; if (isHoliday(iso) && !hasAttData(iso)) h++; else n++; }
+  return {work:n, hol:h};
+}
+function nextHoliday(from){
+  const H = holData(), t = from || todayISO();
+  return H.list.filter(h => h.to >= t).sort((a, b) => a.from.localeCompare(b.from))[0] || null;
+}
+const holSpan = h => h.from === h.to ? `${dFmt(h.from)} (${WD_BN[wdOf(h.from)]})` : `${dFmt(h.from)} – ${dFmt(h.to)}`;
+/* school days lost inside a holiday (weekly holidays not counted) */
+function holCount(h){ let n = 0; for (let d = h.from; d <= h.to; d = addDays(d, 1)) if (!holData().weekly.includes(wdOf(d))) n++; return n; }
+/* banner for attendance / daily update screens; returns '' on school days */
+function holBanner(iso, what){
+  const x = holidayOf(iso); if (!x) return '';
+  const taken = hasAttData(iso);
+  return `<div class="holbar"><div><b>${iso === todayISO() ? 'আজ' : 'এদিন'} ছুটি</b><span>${esc(x.name)}</span></div>
+    ${taken ? `<small>এদিনের ${what || 'হাজিরা'} নেওয়া আছে, তাই নিচে দেখানো হলো।</small>` : `<small>ছুটির দিনে ${what || 'হাজিরা'} লাগে না — হিসাবেও ধরা হয় না।</small>`}
+    <div class="row2" style="margin-top:6px"><button class="btn" data-hol-open="${iso}">এদিন বিদ্যালয় খোলা</button><button class="btn" data-go="holidays">ছুটির তালিকা</button></div></div>`;
+}
+
+/* ---- holidays screen ---- */
+function holidaysView(){
+  const H = holData(), U = UI.hol || (UI.hol = {year:todayISO().slice(0, 4)}), y = U.year;
+  const list = H.list.filter(h => h.from.startsWith(y) || h.to.startsWith(y));
+  const total = list.reduce((a, h) => a + holCount(h), 0);
+  let work = 0; for (let d = `${y}-01-01`; d <= `${y}-12-31`; d = addDays(d, 1)) if (!isHoliday(d)) work++;
+  const t = todayISO(), nx = nextHoliday();
+  const years = [...new Set([String(+t.slice(0, 4) - 1), t.slice(0, 4), String(+t.slice(0, 4) + 1), ...H.list.map(h => h.from.slice(0, 4))])].sort();
+  const opens = H.open.filter(d => d.startsWith(y)).sort();
+  return innerHeader('ছুটির তালিকা ও শিক্ষাপঞ্জি', 'leave', '#1F4E8C') + `<div class="sec" style="padding-top:16px">
+    <div class="chips" role="tablist" aria-label="বছর">${years.map(v => `<button class="${v === y ? 'on' : ''}" data-hol-year="${v}">${bn(v)}</button>`).join('')}</div>
+    ${nx && y === t.slice(0, 4) ? `<div class="holbar soft"><div><b>${nx.from <= t ? 'চলমান ছুটি' : 'পরবর্তী ছুটি'}</b><span>${esc(nx.name)}</span></div><small>${holSpan(nx)}</small></div>` : ''}
+    <div class="card" style="gap:8px"><div class="sumrow">${pill('সরকারি ছুটি ' + bn(total) + ' দিন', '#1F4E8C', '#E6EFFA')}${pill('কর্মদিবস ' + bn(work) + ' দিন', '#17663F', '#E3F4EA')}</div>
+      <span class="t2" style="font-size:12.5px;line-height:1.6">সরকারি ছুটির হিসাবে সাপ্তাহিক ছুটির দিন ধরা হয়নি। এই দিনগুলোতে হাজিরা, দৈনিক আপডেট ও দৈনিক SMS নিজে থেকে বন্ধ থাকে।</span></div>
+    <div class="card" style="gap:8px"><b style="font-size:14px">সাপ্তাহিক ছুটি</b>
+      <div class="rtpick" style="grid-template-columns:repeat(4,1fr)">${[6,0,1,2,3,4,5].map(d => `<button class="${H.weekly.includes(d) ? 'on' : ''}" data-hol-wd="${d}">${WD_BN[d]}</button>`).join('')}</div></div>
+    <div class="top" style="margin:4px 2px 0"><b style="font-size:15px">${bn(y)} সালের ছুটি (${bn(list.length)}টি)</b><button class="btn" data-hol-add style="min-height:38px">+ ছুটি যোগ</button></div>
+    ${list.length ? `<div class="list">${list.map(h => { const past = h.to < t, now = h.from <= t && t <= h.to;
+      return `<button class="holrow${past ? ' past' : ''}${now ? ' now' : ''}" data-hol-edit="${h.id}"><span class="grow"><span class="t1" style="font-weight:600;font-size:14px">${esc(h.name)}</span><span class="t2">${holSpan(h)}${h.from !== h.to ? ` · ${bn(holCount(h))} কর্মদিবস` : (holData().weekly.includes(wdOf(h.from)) ? ' · সাপ্তাহিক ছুটির দিনে' : '')}</span></span>${now ? `<span class="sumrow">${pill('চলছে', '#fff', '#1F4E8C')}</span>` : h.src === 'dpe' ? '' : `<span class="sumrow">${pill('নিজে যোগ', '#7A4A00', '#FFF1D6')}</span>`}</button>`; }).join('')}</div>`
+      : `<div class="card empty"><p class="t2" style="font-size:14px;line-height:1.6">${bn(y)} সালের ছুটির তালিকা এখনো যোগ হয়নি। অধিদপ্তরের তালিকা প্রকাশ হলে "+ ছুটি যোগ" দিয়ে দিন — অথবা অ্যাপের হালনাগাদে নিজে আসবে।</p></div>`}
+    <div class="card" style="gap:8px"><b style="font-size:14px">ছুটির দিনেও বিদ্যালয় খোলা</b><span class="t2" style="font-size:12.5px">যেমন শিখন ঘাটতি পূরণে খোলা শনিবার, বা প্রধান শিক্ষকের নির্দেশে খোলা দিন।</span>
+      ${opens.length ? `<div class="sumrow">${opens.map(d => `<button class="holchip" data-hol-unopen="${d}" aria-label="${dFmt(d)} খোলা দিন বাদ দিন">${dFmt(d)} (${WD_BN[wdOf(d)]}) ✕</button>`).join('')}</div>` : ''}
+      <div class="row2"><input type="date" id="holOpenD" class="psin" aria-label="খোলা দিনের তারিখ"><button class="btn" data-hol-openadd>খোলা দিন যোগ</button></div></div>
+    <p class="hint">${HOL_PRESET[y] ? `${bn(y)} সালের তালিকা প্রাথমিক ও গণশিক্ষা মন্ত্রণালয়ের সংশোধিত ছুটির তালিকা থেকে নেওয়া। উপজেলা বা চাঁদ দেখার কারণে কোনো তারিখ বদলালে ছুটিতে চাপ দিয়ে ঠিক করুন।` : ''} প্রধান শিক্ষকের সংরক্ষিত ছুটি (বছরে ২ দিন) ব্যবহার করলে "+ ছুটি যোগ" দিয়ে দিন।</p>
+  </div>`;
+}
+function holEditSheet(id){
+  const H = holData(), h = id ? H.list.find(x => x.id === id) : {from:todayISO(), to:todayISO(), name:''};
+  if (!h) return;
+  openSheet(`<h2 style="font-size:18px;margin-bottom:10px">${id ? 'ছুটি সম্পাদনা' : 'নতুন ছুটি'}</h2>
+    <div class="field"><label for="holName">ছুটির নাম</label><input id="holName" value="${esc(h.name)}" maxlength="80" placeholder="যেমন: প্রধান শিক্ষকের সংরক্ষিত ছুটি"></div>
+    <div class="row2"><div class="field"><label for="holFrom">শুরু</label><input type="date" id="holFrom" value="${h.from}"></div><div class="field"><label for="holTo">শেষ</label><input type="date" id="holTo" value="${h.to}"></div></div>
+    <div class="row2" style="margin-top:12px">${id ? `<button class="btn big danger" data-hol-del="${id}">মুছুন</button>` : '<button class="btn big" data-close>বাতিল</button>'}<button class="btn big solid" data-hol-save="${id || ''}">সংরক্ষণ</button></div>`);
+}
+function holClick(ds){
+  const H = holData(), U = UI.hol || (UI.hol = {year:todayISO().slice(0, 4)});
+  if (ds.holYear) { U.year = ds.holYear; return render(); }
+  if (ds.holWd != null) { const d = +ds.holWd, i = H.weekly.indexOf(d); if (i >= 0) H.weekly.splice(i, 1); else H.weekly.push(d); save(); return render(); }
+  if ('holAdd' in ds) return holEditSheet(null);
+  if (ds.holEdit) return holEditSheet(ds.holEdit);
+  if (ds.holSave != null) {
+    const name = document.getElementById('holName').value.trim(), from = document.getElementById('holFrom').value, to = document.getElementById('holTo').value || from;
+    if (!name) return toast('ছুটির নাম লিখুন'); if (!from || to < from) return toast('তারিখ ঠিক করুন');
+    if (ds.holSave) Object.assign(H.list.find(x => x.id === ds.holSave) || {}, {name, from, to});
+    else H.list.push({id:uid(), from, to, name, src:'user'});
+    H.list.sort((a, b) => a.from.localeCompare(b.from)); save(); closeSheet(); toast('ছুটির তালিকা হালনাগাদ হয়েছে'); return render(); }
+  if (ds.holDel) { H.list = H.list.filter(x => x.id !== ds.holDel); save(); closeSheet(); toast('ছুটি বাদ দেওয়া হয়েছে'); return render(); }
+  if (ds.holOpen) { if (!H.open.includes(ds.holOpen)) H.open.push(ds.holOpen); save(); toast('এদিন বিদ্যালয় খোলা ধরা হলো'); return render(); }
+  if (ds.holUnopen) { H.open = H.open.filter(d => d !== ds.holUnopen); save(); return render(); }
+  if ('holOpenadd' in ds) { const d = (document.getElementById('holOpenD') || {}).value; if (!d) return toast('তারিখ বাছুন'); if (!H.open.includes(d)) H.open.push(d); save(); toast('খোলা দিন যোগ হয়েছে'); return render(); }
+}
+
 /* ---------- placeholders ---------- */
 function placeholder(id){
   const f = ALL[id];
@@ -4135,7 +4273,7 @@ function psBuild(P){
   return list.map(s => {
     const txt = P.type === 'daily' ? psDaily(s, P.sdate) : P.type === 'weekly' ? psWeekly(s, P.sdate) : psMonthly(s, P.sym);
     const ph = psPhone(s.phone), it = {sid:s.id, name:s.name, cls:s.cls, roll:s.roll, ph, txt:txt || '', seg:txt ? psSeg(txt) : 0, ok:false, why:''};
-    if (!txt) it.why = 'এই সময়ের কোনো তথ্য দেওয়া হয়নি';
+    if (!txt) it.why = P.type === 'daily' && isHoliday(P.sdate) ? 'ছুটির দিন — দৈনিক রিপোর্ট নেই' : 'এই সময়ের কোনো তথ্য দেওয়া হয়নি';
     else if (!ph) it.why = s.phone ? 'মোবাইল নম্বর সঠিক নয়' : 'প্রোফাইলে মোবাইল নম্বর নেই';
     else if (sent[s.id] && !P.resend) { it.why = 'এই রিপোর্ট আগেই পাঠানো হয়েছে'; it.dup = true; }
     else it.ok = true;
@@ -4244,6 +4382,7 @@ function psDailyView(cl){
   return `${psChips(cl)}
     <div class="row2"><div class="field"><label for="psDate">তারিখ</label><input type="date" id="psDate" value="${d}" max="${todayISO()}"></div>
       <div class="field"><label>&nbsp;</label><button class="btn" data-ps-print style="min-height:48px">${ic('doc', 18)} ছক প্রিন্ট / PDF</button></div></div>
+    ${holBanner(d, 'দৈনিক আপডেট')}
     <div class="field"><label for="psHw">আজকের বাড়ির কাজ (পুরো শ্রেণির জন্য, ঐচ্ছিক)</label><textarea id="psHw" rows="2" maxlength="200" placeholder="যেমন: বাংলা বই পৃ. ২৫ পড়া, গণিত অনুশীলনী ৩.২">${esc(rec.hw || '')}</textarea></div>
     ${subs.length > 1 ? `<div style="font-weight:700;font-size:14px;margin:2px 2px -4px">বিষয় <span class="t2" style="font-weight:400;font-size:12px">(নিচে কতজনের পূরণ হয়েছে)</span></div>` : ''}${subBtns}
     <div class="top" style="margin:2px 2px 0"><b style="font-size:15px">${CLASS_NAME[P.cls]}${subs.length > 1 ? ' · ' + esc(sub[1]) : ''} · ${psDM(d)} ${wd}</b><span class="t2" style="font-size:13px">পূরণ ${bn(filled)}/${bn(total)}${total < list.length ? ` (অনুপস্থিত ${bn(list.length - total)})` : ''}</span></div>
@@ -4442,12 +4581,12 @@ const ROUTE_ALIAS = {'student-profile':'students'};
 function render(){
   let r = (location.hash || '#home').slice(1) || 'home';
   r = ROUTE_ALIAS[r] || r;
-  if (!(TOP.includes(r) || r==='committee' || r==='students' || r==='teachers' || r==='lesson-plan' || r==='teacher-att' || r==='student-att' || r==='certificates' || r==='gpf' || r==='assessment' || r==='pension' || r==='salary' || r==='leave' || r==='img2pdf' || r==='textbooks' || r==='parent-sms' || ALL[r])) r = 'home';
+  if (!(TOP.includes(r) || r==='committee' || r==='students' || r==='teachers' || r==='lesson-plan' || r==='teacher-att' || r==='student-att' || r==='certificates' || r==='gpf' || r==='assessment' || r==='pension' || r==='salary' || r==='leave' || r==='img2pdf' || r==='textbooks' || r==='parent-sms' || r==='holidays' || ALL[r])) r = 'home';
   if (r !== UI.lastRoute) { if (r === 'teacher-att' || r === 'student-att') UI.attView = 'day'; UI.lastRoute = r; }
   const inner = !TOP.includes(r);
   $app.classList.toggle('inner', inner);
   $nav.style.display = inner ? 'none' : 'grid';
-  const views = {home, profile, settings, committee, students, teachers, 'lesson-plan':lessonPlan, 'teacher-att':teacherAtt, 'student-att':studentAtt, certificates, gpf, assessment, pension, salary, leave, img2pdf, textbooks, 'parent-sms':parentSms, routine};
+  const views = {home, profile, settings, committee, students, teachers, 'lesson-plan':lessonPlan, 'teacher-att':teacherAtt, 'student-att':studentAtt, certificates, gpf, assessment, pension, salary, leave, img2pdf, textbooks, 'parent-sms':parentSms, routine, holidays:holidaysView};
   $app.innerHTML = (views[r] || (() => placeholder(r)))();
   $nav.innerHTML = NAV.map(n => `<button class="${n[0]===r?'on':''}" data-go="${n[0]}" aria-label="${n[1]}" ${n[0]===r?'aria-current="page"':''}><span class="p">${ic(n[2])}</span>${n[1]}</button>`).join('');
   bindView(r);
@@ -4583,6 +4722,7 @@ document.addEventListener('click', e => {
   if (ds.go) { window.scrollTo(0,0); return go(ds.go); }
   if (Object.keys(ds).some(k => /^ps[A-Z]/.test(k))) return psClick(ds);
   if (Object.keys(ds).some(k => /^rt[A-Z]/.test(k))) return rtClick(ds);
+  if (Object.keys(ds).some(k => /^hol[A-Z]/.test(k))) return holClick(ds);
   if (Object.keys(ds).some(k => /^rs[A-Z]/.test(k))) return rtSetupClick(ds);
   if ('back' in ds) { if (history.length > 1) history.back(); else go('home'); return; }
   // committee
