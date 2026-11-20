@@ -311,6 +311,8 @@ img.ma{object-fit:cover;background:#E8EEF5}
 .holline.on{background:#E6EFFA;border-color:#1F4E8C}
 .pschk{flex:none;width:30px;height:30px;border-radius:8px;border:2px solid #9FB0C4;background:#fff;font-size:18px;font-weight:800;color:#fff;line-height:1;cursor:pointer}
 .pschk.on{background:#0F766E;border-color:#0F766E}
+.mtrow{display:flex;align-items:center;gap:10px;width:100%;background:#fff;border:0;border-top:1px solid #EDF2EF;padding:9px 12px;font:inherit;color:var(--ink);text-align:left;cursor:pointer}
+.mtrow:first-child{border-top:0}.mtrow .grow{display:flex;flex-direction:column;min-width:0}.mtrow.on{background:#F0FAF5}
 .pschk:disabled{opacity:.35;cursor:not-allowed}
 .psrow.picked{background:#F2FAF8}
 .pstab{border:1px solid #9FB0C4;border-radius:12px;overflow:hidden;background:#fff}
@@ -359,7 +361,7 @@ const P = {
   salary:'<rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20"/><path d="M16 14.5h2"/><path d="M6 3h12"/>',
   gpf:'<path d="M3 21h18"/><path d="M5 21V10"/><path d="M19 21V10"/><path d="M9 21v-7"/><path d="M15 21v-7"/><path d="m2 10 10-6 10 6"/>',
   pension:'<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8"/><path d="M8 10h.01"/><path d="M12 10h.01"/><path d="M16 10h.01"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14v4"/><path d="M8 18h.01"/><path d="M12 18h.01"/>',
-  chev:'<path d="m9 18 6-6-6-6"/>', back:'<path d="m15 18-6-6 6-6"/>',
+  chev:'<path d="m9 18 6-6-6-6"/>', mother:'<circle cx="9" cy="6" r="3"/><path d="M3 21v-2a6 6 0 0 1 9.5-4.9"/><path d="M18 21s-4-2.4-4-5.2a2 2 0 0 1 4-.6 2 2 0 0 1 4 .6c0 2.8-4 5.2-4 5.2z"/>', family:'<circle cx="7" cy="5" r="2.5"/><circle cx="17" cy="5" r="2.5"/><circle cx="12" cy="12" r="2"/><path d="M3 21v-6a4 4 0 0 1 8 0"/><path d="M13 15a4 4 0 0 1 8 0v6"/><path d="M9.5 21v-2.5a2.5 2.5 0 0 1 5 0V21"/>', back:'<path d="m15 18-6-6 6-6"/>',
   home:'<path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2h-4v-6H9v6H5a2 2 0 0 1-2-2z"/>',
   clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   report:'<path d="M3 3v18h18"/><path d="M8 16v-4"/><path d="M13 16V8"/><path d="M18 16v-6"/>',
@@ -382,7 +384,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '7.0';
+const WEB_VERSION = '7.1';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -953,6 +955,8 @@ const FEATURES_A = [
   ['teacher-att','teacher','#1E8A55','শিক্ষক উপস্থিতি','দৈনিক হাজিরা ও আগমন-প্রস্থান'],
   ['student-att','students','#2563C9','শিক্ষার্থী উপস্থিতি','শ্রেণিভিত্তিক দৈনিক হাজিরা'],
   ['parent-sms','mega','#0F766E','দৈনিক আপডেট ও অভিভাবক SMS','বাড়ির কাজ, শিখন অবস্থা ও SMS'],
+  ['mother-meet','mother','#B4235A','মা সমাবেশ','হাজিরা, আলোচ্যসূচি ও কার্যবিবরণী'],
+  ['guardian-meet','family','#0369A1','অভিভাবক সমাবেশ','হাজিরা, আলোচ্যসূচি ও কার্যবিবরণী'],
   ['leave','leave','#E0701A','ছুটি ও আবেদন','আবেদন ও ছুটির হিসাব'],
   ['lesson-plan','plan','#7C4DCC','পাঠ পরিকল্পনা','সকল শ্রেণি ও বিষয়'],
   ['textbooks','book','#0E8C82','পাঠ্যবই','বই ও শিক্ষক সহায়িকা'],
@@ -4076,6 +4080,176 @@ function holEditSheet(id){
     <div class="row2"><div class="field"><label for="holFrom">শুরু</label><input type="date" id="holFrom" value="${h.from}"></div><div class="field"><label for="holTo">শেষ</label><input type="date" id="holTo" value="${h.to}"></div></div>
     <div class="row2" style="margin-top:12px">${id ? `<button class="btn big danger" data-hol-del="${id}">মুছুন</button>` : '<button class="btn big" data-close>বাতিল</button>'}<button class="btn big solid" data-hol-save="${id || ''}">সংরক্ষণ</button></div>`);
 }
+/* ---------- মা সমাবেশ ও অভিভাবক সমাবেশ ----------
+   DB.meetings = [{id, kind:'mother'|'guardian', date, time, venue, classes:[], chair, guest, agenda:[], decisions, present:{sid:true}, invite}] */
+const MT_KIND = {
+  mother:   {title:'মা সমাবেশ', who:'মা', whoLong:'মায়ের নাম', color:'#B4235A', route:'mother-meet',
+    agenda:['শিশুর নিয়মিত বিদ্যালয়ে উপস্থিতি ও সময়মতো আসা','বাড়িতে পড়াশোনায় মায়ের সহায়তা ও বাড়ির কাজ দেখা','শিশুর পুষ্টি, স্বাস্থ্য ও পরিষ্কার-পরিচ্ছন্নতা','ঝরে পড়া রোধ ও বাল্যবিবাহ প্রতিরোধ','মূল্যায়নের ফলাফল ও শিখন অগ্রগতি','উপবৃত্তি ও মিড-ডে মিল','মোবাইল ফোন ও স্ক্রিন ব্যবহারে সতর্কতা','নিরাপদ চলাচল ও সড়ক নিরাপত্তা']},
+  guardian: {title:'অভিভাবক সমাবেশ', who:'অভিভাবক', whoLong:'অভিভাবকের নাম', color:'#0369A1', route:'guardian-meet',
+    agenda:['শিক্ষার্থীদের নিয়মিত উপস্থিতি নিশ্চিতকরণ','মূল্যায়নের ফলাফল ও শিখন অগ্রগতি পর্যালোচনা','বাড়িতে পড়াশোনার পরিবেশ ও বাড়ির কাজ','বিদ্যালয়ের উন্নয়ন ও শিখন পরিবেশ','উপবৃত্তি ও মিড-ডে মিল','ঝরে পড়া রোধ ও ভর্তি','শিক্ষার্থীদের নিরাপত্তা ও শৃঙ্খলা','সহপাঠ্যক্রমিক কার্যক্রম ও খেলাধুলা']}
+};
+const mtList = () => (DB.meetings = Array.isArray(DB.meetings) ? DB.meetings : []);
+function mtState(kind){ psData(); if (!UI.mt || UI.mt.kind !== kind) UI.mt = {kind, id:null, tab:'info', cls:'all', q:''}; return UI.mt; }
+const mtGet = id => mtList().find(m => m.id === id);
+const mtWhoName = (s, kind) => kind === 'mother' ? (s.mother || '') : (s.father || s.mother || '');
+function mtStudents(m){
+  return activeStudents().filter(s => !m.classes.length || m.classes.includes(s.cls))
+    .sort((a, b) => CLASSES.findIndex(c => c[0] === a.cls) - CLASSES.findIndex(c => c[0] === b.cls) || (parseInt(toEn(a.roll)) || 999) - (parseInt(toEn(b.roll)) || 999));
+}
+/* one mother / guardian may have several children: count people by name + phone */
+function mtPeople(m, onlyPresent){
+  const set = new Set();
+  mtStudents(m).forEach(s => { if (onlyPresent && !m.present[s.id]) return; set.add((mtWhoName(s, m.kind).trim() || s.id) + '|' + (psPhone(s.phone) || '')); });
+  return set.size;
+}
+function mtNew(kind){
+  const head = DB.teachers.find(t => isHeadT(t));
+  let dt = todayISO(); for (let i = 0; i < 30 && isHoliday(dt); i++) { const x = new Date(dt + 'T00:00:00'); x.setDate(x.getDate() + 1); dt = new Date(x - x.getTimezoneOffset()*60000).toISOString().slice(0,10); }
+  const m = {id:uid(), kind, date:dt, time:'11:00', venue:'বিদ্যালয় প্রাঙ্গণ', classes:[], chair:head ? head.name : '', guest:'', agenda:MT_KIND[kind].agenda.slice(0, 4), decisions:'', present:{}, created:Date.now()};
+  mtList().unshift(m); save(); return m;
+}
+
+function meetingsView(kind){
+  const K = MT_KIND[kind], U = mtState(kind), head = innerHeader(K.title, kind === 'mother' ? 'mother' : 'family', K.color);
+  const m = U.id && mtGet(U.id);
+  if (!m) {
+    const list = mtList().filter(x => x.kind === kind).sort((a, b) => b.date.localeCompare(a.date));
+    return head + `<div class="sec" style="padding-top:16px">
+      <button class="btn big solid full" data-mt-new="${kind}">+ নতুন ${K.title}</button>
+      ${list.length ? `<div class="list">${list.map(x => { const tot = mtStudents(x).length, pr = Object.keys(x.present).filter(id => mtStudents(x).some(s => s.id === id)).length;
+        return `<button class="holrow" data-mt-open="${x.id}"><span class="grow"><span class="t1" style="font-weight:600;font-size:14px">${dFmt(x.date)} (${WD_BN[wdOf(x.date)]})</span>
+          <span class="t2">${x.classes.length ? x.classes.map(c => PS_CLS[c]).join(', ') + ' শ্রেণি' : 'সব শ্রেণি'} · উপস্থিত ${bn(mtPeople(x, true))} জন ${K.who} (শিক্ষার্থী ${bn(pr)}/${bn(tot)})</span></span><span style="color:var(--mute)">${ic('chev', 20)}</span></button>`; }).join('')}</div>`
+        : `<div class="card empty"><p class="t2" style="font-size:14px;line-height:1.6">এখনো কোনো ${K.title} যোগ করা হয়নি। নতুন সমাবেশ খুললে শিক্ষার্থীদের তালিকা থেকে ${K.whoLong}, শ্রেণি, রোল ও মোবাইল নম্বর নিজে থেকে চলে আসবে।</p></div>`}
+      ${activeStudents().some(s => !mtWhoName(s, kind)) ? `<p class="hint">কিছু শিক্ষার্থীর প্রোফাইলে ${kind === 'mother' ? 'মাতার' : 'পিতা/মাতার'} নাম নেই — শিক্ষার্থী তালিকা থেকে যোগ করলে এখানে দেখাবে।</p>` : ''}
+    </div>`;
+  }
+  const tabs = `<div class="tabs2" style="grid-template-columns:repeat(3,minmax(0,1fr))" role="tablist">${[['info','তথ্য ও আলোচ্যসূচি'],['att','উপস্থিতি'],['out','প্রিন্ট ও SMS']].map(([k, l]) => `<button role="tab" class="${U.tab === k ? 'on' : ''}" data-mt-tab="${k}">${l}</button>`).join('')}</div>`;
+  const top = `<div class="top" style="margin:0 2px"><button class="btn" data-mt-back style="min-height:38px">${ic('back', 16)} সব সমাবেশ</button><b style="font-size:14px">${dFmt(m.date)}</b></div>`;
+  const body = U.tab === 'att' ? mtAttView(m) : U.tab === 'out' ? mtOutView(m) : mtInfoView(m);
+  return head + `<div class="sec" style="padding-top:16px">${top}${tabs}${body}</div>`;
+}
+function mtInfoView(m){
+  const K = MT_KIND[m.kind], cl = classesWithStudents(), hol = holidayOf(m.date);
+  const custom = m.agenda.filter(a => !K.agenda.includes(a));
+  return `
+    <div class="row2"><div class="field"><label for="mtDate">তারিখ</label><input type="date" id="mtDate" value="${m.date}"></div><div class="field"><label for="mtTime">সময়</label><input type="time" id="mtTime" value="${m.time || ''}"></div></div>
+    ${hol ? `<p class="rtwarn" style="font-weight:600">এদিন ছুটি: ${esc(hol.name)} — তারিখ দেখে নিন।</p>` : ''}
+    <div class="field"><label for="mtVenue">স্থান</label><input id="mtVenue" value="${esc(m.venue || '')}" maxlength="80"></div>
+    <div class="row2"><div class="field"><label for="mtChair">সভাপতি</label><input id="mtChair" value="${esc(m.chair || '')}" maxlength="80" placeholder="প্রধান শিক্ষক / এসএমসি সভাপতি"></div><div class="field"><label for="mtGuest">প্রধান অতিথি (ঐচ্ছিক)</label><input id="mtGuest" value="${esc(m.guest || '')}" maxlength="80"></div></div>
+    <div class="card" style="gap:8px"><b style="font-size:14px">কোন শ্রেণির ${K.who}দের নিয়ে</b>
+      <div class="rtpick" style="grid-template-columns:repeat(4,1fr)"><button class="${!m.classes.length ? 'on' : ''}" data-mt-cls="all">সব শ্রেণি</button>${cl.map(([k, l]) => `<button class="${m.classes.includes(k) ? 'on' : ''}" data-mt-cls="${k}">${PS_CLS[k]}</button>`).join('')}</div>
+      <span class="t2" style="font-size:12.5px">মোট ${bn(mtStudents(m).length)} জন শিক্ষার্থী · ${bn(mtPeople(m))} জন ${K.who}</span></div>
+    <div class="card" style="gap:8px"><b style="font-size:14px">আলোচ্যসূচি</b>
+      <div class="rtpick t">${[...K.agenda, ...custom].map(a => `<button class="${m.agenda.includes(a) ? 'on' : ''}" data-mt-ag="${esc(a)}">${m.agenda.includes(a) ? '✓ ' : ''}${esc(a)}</button>`).join('')}</div>
+      <div class="row2"><input id="mtAgNew" class="psin" maxlength="100" placeholder="অন্য আলোচ্য বিষয় লিখুন"><button class="btn" data-mt-agadd>যোগ করুন</button></div></div>
+    <div class="field"><label for="mtDec">আলোচনা ও সিদ্ধান্ত</label><textarea id="mtDec" rows="5" maxlength="3000" placeholder="প্রতিটি সিদ্ধান্ত আলাদা লাইনে লিখুন। যেমন: প্রত্যেক মা প্রতিদিন সন্তানের বাড়ির কাজ দেখবেন।">${esc(m.decisions || '')}</textarea></div>
+    <button class="btn danger full" data-mt-del="${m.id}">এই সমাবেশ মুছুন</button>`;
+}
+function mtAttView(m){
+  const K = MT_KIND[m.kind], U = UI.mt, all = mtStudents(m), cls = [...new Set(all.map(s => s.cls))];
+  if (U.cls !== 'all' && !cls.includes(U.cls)) U.cls = 'all';
+  const q = (U.q || '').trim().toLowerCase();
+  const list = all.filter(s => (U.cls === 'all' || s.cls === U.cls) && (!q || [s.name, s.mother, s.father, s.roll, bn(s.roll || '')].join(' ').toLowerCase().includes(q)));
+  const pr = all.filter(s => m.present[s.id]).length;
+  return `
+    <div class="card" style="gap:8px"><div class="sumrow">${pill('উপস্থিত ' + bn(mtPeople(m, true)) + ' জন ' + K.who, '#17663F', '#E3F4EA')}${pill('শিক্ষার্থী ' + bn(pr) + '/' + bn(all.length), '#1F4E8C', '#E6EFFA')}${all.length ? pill(bn(Math.round(pr * 100 / all.length)) + '%', '#3E5070', '#EEF1F6') : ''}</div>
+      <span class="t2" style="font-size:12.5px">একই ${K.who}র একাধিক সন্তান থাকলে ${K.who} একবারই গোনা হয়।</span></div>
+    ${cls.length > 1 ? `<div class="chips" role="tablist"><button class="${U.cls === 'all' ? 'on' : ''}" data-mt-fcls="all">সব</button>${cls.map(c => `<button class="${U.cls === c ? 'on' : ''}" data-mt-fcls="${c}">${CLASS_NAME[c]}</button>`).join('')}</div>` : ''}
+    <div class="row2"><input id="mtQ" class="psin" value="${esc(U.q || '')}" placeholder="নাম বা রোল খুঁজুন"><button class="btn" data-mt-allp>এই তালিকার সবাই উপস্থিত</button></div>
+    ${list.length ? `<div class="list">${list.map(s => { const on = !!m.present[s.id], w = mtWhoName(s, m.kind);
+      return `<button class="mtrow${on ? ' on' : ''}" data-mt-p="${s.id}" aria-pressed="${on}"><span class="pschk${on ? ' on' : ''}" aria-hidden="true">${on ? '✓' : ''}</span>
+        <span class="grow"><span class="t1" style="font-weight:600;font-size:14px">${esc(w || `(${K.whoLong} নেই)`)}</span><span class="t2">${esc(s.name)} · ${PS_CLS[s.cls]} শ্রেণি, রোল ${esc(bn(s.roll || '–'))}${s.phone ? ' · ' + esc(bn(s.phone)) : ''}</span></span></button>`; }).join('')}</div>`
+      : '<div class="card empty"><p class="t2" style="font-size:14px">কোনো শিক্ষার্থী পাওয়া যায়নি।</p></div>'}
+    <p class="hint" style="text-align:center">নামে চাপ দিলে উপস্থিত হয়, আবার চাপলে বাতিল। সব পরিবর্তন সাথে সাথে সংরক্ষিত হয়।</p>`;
+}
+function mtInviteText(m){
+  const K = MT_KIND[m.kind], sg = (DB.smsCfg && DB.smsCfg.sign || '').trim() || 'প্রধান শিক্ষক';
+  return m.invite || `সম্মানিত ${K.who}, ${dFmt(m.date)} (${WD_BN[wdOf(m.date)]})${m.time ? ' ' + rtTime(m.time) + ' টায়' : ''} বিদ্যালয়ে ${K.title}। স্থান: ${m.venue || 'বিদ্যালয়'}। অবশ্যই আসবেন। -${sg}`;
+}
+function mtRecipients(m){
+  const seen = new Set(), out = [], skip = [];
+  mtStudents(m).forEach(s => { const ph = psPhone(s.phone); if (!ph) { skip.push(s); return; } if (seen.has(ph)) return; seen.add(ph); out.push({s, ph}); });
+  return {out, skip};
+}
+function mtOutView(m){
+  const K = MT_KIND[m.kind], txt = mtInviteText(m), R = mtRecipients(m), segs = psSeg(txt);
+  return `
+    <div class="card" style="gap:8px"><b style="font-size:15px">প্রিন্ট</b>
+      <button class="btn big full" data-mt-print="sheet">${ic('doc', 18)} হাজিরা শিট (স্বাক্ষরের ঘরসহ)</button>
+      <button class="btn big full" data-mt-print="present">${ic('doc', 18)} উপস্থিত ${K.who}দের তালিকা</button>
+      <button class="btn big full" data-mt-print="minutes">${ic('doc', 18)} কার্যবিবরণী (রেজুলেশন)</button>
+      <p class="hint">হাজিরা শিটে শিক্ষার্থীর নাম, শ্রেণি, রোল, ${K.whoLong} ও মোবাইল নম্বর নিজে থেকে বসে; স্বাক্ষরের ঘর ফাঁকা থাকে। প্রিন্টের পর্দায় "Save as PDF" বাছলে PDF হয়।</p></div>
+    <div class="card" style="gap:8px"><b style="font-size:15px">আমন্ত্রণ SMS (ফোনের সিম থেকে)</b>
+      <textarea id="mtInv" rows="4" class="psin" maxlength="300">${esc(txt)}</textarea>
+      <div class="sumrow">${pill('পাঠানো যাবে ' + bn(R.out.length) + ' জন', '#17663F', '#E3F4EA')}${pill('মোট ' + bn(R.out.length * segs) + ' SMS', '#0F766E', '#E0F2EF')}${R.skip.length ? pill('নম্বর নেই ' + bn(R.skip.length), '#B42318', '#FDE8E6') : ''}</div>
+      <div id="psProg">${psProgHtml()}</div>
+      <button class="btn big solid full" data-mt-sms="${m.id}" ${R.out.length && smsOk() && !SQ.running ? '' : 'disabled'}>${ic('mega', 18)} ${bn(R.out.length)} জন ${K.who}কে আমন্ত্রণ পাঠান</button>
+      <p class="hint">একই নম্বরে একবারই যাবে (ভাই-বোন থাকলেও)। ${smsOk() ? 'প্রতিটি মেসেজের মাঝে কয়েক সেকেন্ড বিরতি থাকে — অ্যাপ খোলা রাখুন।' : 'SMS পাঠাতে নতুন সংস্করণের অ্যান্ড্রয়েড অ্যাপ লাগবে।'}</p></div>`;
+}
+function mtDoc(m, what){
+  const K = MT_KIND[m.kind], T = DB.teacher, all = mtStudents(m), rows = what === 'present' ? all.filter(s => m.present[s.id]) : all;
+  const css = `@page{size:A4 portrait;margin:12mm}html,body{margin:0}body{font-family:'Hind Siliguri','Noto Sans Bengali',sans-serif;color:#000}
+  .h{text-align:center;margin-bottom:8px}.s{font-size:20px;font-weight:700}.i{font-size:12.5px}.t{font-size:16px;font-weight:700;margin-top:6px;text-decoration:underline}
+  .meta{font-size:13px;margin:6px 0 8px;line-height:1.7}table{width:100%;border-collapse:collapse;border:2px solid #000}th,td{border:1.4px solid #000;padding:4px 5px;font-size:12.5px;vertical-align:middle}
+  th{background:#E6E6E6}td.c{text-align:center}td.sg{width:22%}tbody td{height:26px}ol{list-style-type:bengali}thead{display:table-header-group}tr{break-inside:avoid}
+  .sigs{display:flex;justify-content:space-between;margin-top:46px;font-size:13px}.sigs div{border-top:1.5px solid #000;padding-top:3px;min-width:180px;text-align:center}
+  p{font-size:14px;line-height:1.85;text-align:justify;margin:0 0 8px}ol{margin:0 0 8px;padding-left:22px;font-size:14px;line-height:1.85}`;
+  const info = [T.emis && `বিদ্যালয়ের কোড: ${bn(T.emis)}`, [T.upazila, T.district].filter(Boolean).join(', ')].filter(Boolean).join(' · ');
+  const head = title => `<div class="h"><div class="s">${esc(T.school || '')}</div>${info ? `<div class="i">${esc(info)}</div>` : ''}<div class="t">${title}</div></div>
+    <div class="meta">তারিখ: ${dFmt(m.date)} (${WD_BN[wdOf(m.date)]})${m.time ? ` · সময়: ${rtTime(m.time)}` : ''}${m.venue ? ` · স্থান: ${esc(m.venue)}` : ''}<br>শ্রেণি: ${m.classes.length ? m.classes.map(c => CLASS_NAME[c]).join(', ') : 'সকল শ্রেণি'}${m.chair ? ` · সভাপতি: ${esc(m.chair)}` : ''}${m.guest ? ` · প্রধান অতিথি: ${esc(m.guest)}` : ''}</div>`;
+  let body;
+  if (what === 'minutes') {
+    const dec = (m.decisions || '').split(/\n+/).map(x => x.trim()).filter(Boolean);
+    body = `${head(`${K.title}ের কার্যবিবরণী`)}
+      <p>অদ্য ${dFmt(m.date)} তারিখ ${WD_BN[wdOf(m.date)]}${m.time ? ' ' + rtTime(m.time) + ' টায়' : ''} ${m.chair ? esc(m.chair) + '-এর সভাপতিত্বে ' : ''}বিদ্যালয়ের ${K.title} অনুষ্ঠিত হয়${m.venue ? ` (স্থান: ${esc(m.venue)})` : ''}।${m.guest ? ` সমাবেশে প্রধান অতিথি হিসেবে উপস্থিত ছিলেন ${esc(m.guest)}।` : ''} সমাবেশে ${bn(mtPeople(m, true))} জন ${K.who} (শিক্ষার্থী ${bn(all.filter(s => m.present[s.id]).length)} জনের) উপস্থিত ছিলেন; উপস্থিতির তালিকা সংযুক্ত।</p>
+      ${m.agenda.length ? `<p><b>আলোচ্যসূচি:</b></p><ol>${m.agenda.map(a => `<li>${esc(a)}</li>`).join('')}</ol>` : ''}
+      <p><b>আলোচনা ও সিদ্ধান্ত:</b></p>${dec.length ? `<ol>${dec.map(d => `<li>${esc(d)}</li>`).join('')}</ol>` : '<p>..............................................................................................................................................................................................................................................................................................................................................</p>'}
+      <p>আর কোনো আলোচ্য বিষয় না থাকায় সভাপতি উপস্থিত সকলকে ধন্যবাদ জানিয়ে সমাবেশের সমাপ্তি ঘোষণা করেন।</p>
+      <div class="sigs"><div>প্রধান শিক্ষক / সদস্য সচিব</div><div>সভাপতি</div></div>`;
+  } else {
+    body = `${head(what === 'present' ? `${K.title}ে উপস্থিত ${K.who}দের তালিকা` : `${K.title}ের হাজিরা`)}
+      <table><thead><tr><th style="width:7%">ক্রমিক</th><th>${K.whoLong}</th><th>শিক্ষার্থীর নাম</th><th style="width:9%">শ্রেণি</th><th style="width:7%">রোল</th><th style="width:15%">মোবাইল</th><th>স্বাক্ষর</th></tr></thead><tbody>
+      ${rows.map((s, i) => `<tr><td class="c">${bn(i + 1)}</td><td>${esc(mtWhoName(s, m.kind))}</td><td>${esc(s.name)}</td><td class="c">${PS_CLS[s.cls]}</td><td class="c">${esc(bn(s.roll || ''))}</td><td class="c">${esc(bn(s.phone || ''))}</td><td class="sg">${what === 'present' ? '✓ উপস্থিত' : ''}</td></tr>`).join('')}
+      </tbody></table>
+      <div class="meta" style="margin-top:6px">${what === 'present' ? `মোট উপস্থিত: ${bn(mtPeople(m, true))} জন ${K.who} (শিক্ষার্থী ${bn(rows.length)} জন)` : `মোট শিক্ষার্থী: ${bn(rows.length)} জন`}</div>
+      <div class="sigs"><div>শ্রেণি শিক্ষক</div><div>প্রধান শিক্ষকের স্বাক্ষর</div></div>`;
+  }
+  return `<!DOCTYPE html><html lang="bn"><head><meta charset="utf-8"><title>${K.title}</title><link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;600;700&display=swap" rel="stylesheet"><style>${css}</style></head><body>${body}</body></html>`;
+}
+function mtClick(ds){
+  const kind = (UI.mt && UI.mt.kind) || 'mother', U = mtState(kind), m = U.id && mtGet(U.id);
+  if (ds.mtNew) { const x = mtNew(ds.mtNew); U.id = x.id; U.tab = 'info'; toast('নতুন সমাবেশ খোলা হয়েছে — তারিখ ও শ্রেণি ঠিক করুন'); return render(); }
+  if (ds.mtOpen) { U.id = ds.mtOpen; U.tab = 'att'; U.cls = 'all'; U.q = ''; window.scrollTo(0, 0); return render(); }
+  if ('mtBack' in ds) { U.id = null; return render(); }
+  if (ds.mtTab) { U.tab = ds.mtTab; return render(); }
+  if (!m) return;
+  if (ds.mtCls) { if (ds.mtCls === 'all') m.classes = []; else { const i = m.classes.indexOf(ds.mtCls); if (i >= 0) m.classes.splice(i, 1); else m.classes.push(ds.mtCls); m.classes.sort((a, b) => CLASSES.findIndex(c => c[0] === a) - CLASSES.findIndex(c => c[0] === b)); } save(); return render(); }
+  if (ds.mtAg) { const i = m.agenda.indexOf(ds.mtAg); if (i >= 0) m.agenda.splice(i, 1); else m.agenda.push(ds.mtAg); save(); return render(); }
+  if ('mtAgadd' in ds) { const v = (document.getElementById('mtAgNew').value || '').trim(); if (!v) return toast('আলোচ্য বিষয় লিখুন'); if (!m.agenda.includes(v)) m.agenda.push(v); save(); return render(); }
+  if (ds.mtDel) return confirmSheet('এই সমাবেশ মুছবেন?', `${dFmt(m.date)} তারিখের ${MT_KIND[m.kind].title}ের সব তথ্য ও উপস্থিতি মুছে যাবে।`, 'মুছুন', () => { DB.meetings = mtList().filter(x => x.id !== m.id); U.id = null; save(); });
+  if (ds.mtFcls) { U.cls = ds.mtFcls; return render(); }
+  if (ds.mtP) { if (m.present[ds.mtP]) delete m.present[ds.mtP]; else m.present[ds.mtP] = true; save(); return render(); }
+  if ('mtAllp' in ds) { const q = (U.q || '').trim().toLowerCase(); mtStudents(m).filter(s => (U.cls === 'all' || s.cls === U.cls) && (!q || [s.name, s.mother, s.father, s.roll, bn(s.roll || '')].join(' ').toLowerCase().includes(q))).forEach(s => { m.present[s.id] = true; }); save(); return render(); }
+  if (ds.mtPrint) return printDoc(MT_KIND[m.kind].title, mtDoc(m, ds.mtPrint));
+  if (ds.mtSms) {
+    const txt = mtInviteText(m), R = mtRecipients(m); if (!R.out.length) return toast('মোবাইল নম্বর পাওয়া যায়নি');
+    return psWithPerm(() => {
+      const job = {id:uid(), at:Date.now(), type:'invite', period:m.date, key:'invite|' + m.id, scope:m.classes.length === 1 ? m.classes[0] : 'all',
+        items:R.out.map(({s, ph}) => ({sid:s.id, name:mtWhoName(s, m.kind) || s.name, ph, txt, seg:psSeg(txt), st:'pending', err:''}))};
+      DB.smsLog.unshift(job); if (DB.smsLog.length > 40) DB.smsLog.length = 40; save(); render(); psStart(job); });
+  }
+}
+function bindMeetings(){
+  const U = UI.mt, m = U && U.id && mtGet(U.id); if (!m) return;
+  const on = (id, ev, fn) => { const el = document.getElementById(id); if (el) el.addEventListener(ev, () => fn(el)); };
+  let t;
+  on('mtDate', 'change', el => { if (el.value) { m.date = el.value; save(); render(); } });
+  on('mtTime', 'change', el => { m.time = el.value; save(); });
+  ['mtVenue:venue', 'mtChair:chair', 'mtGuest:guest', 'mtDec:decisions'].forEach(x => { const [id, k] = x.split(':'); on(id, 'input', el => { m[k] = el.value; clearTimeout(t); t = setTimeout(save, 400); }); });
+  on('mtInv', 'input', el => { m.invite = el.value; clearTimeout(t); t = setTimeout(save, 400); });
+  on('mtQ', 'input', el => { U.q = el.value; clearTimeout(t); t = setTimeout(() => { render(); const q = document.getElementById('mtQ'); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }, 350); });
+}
+
 function holClick(ds){
   const H = holData(), U = UI.hol || (UI.hol = {year:todayISO().slice(0, 4)});
   if (ds.holYear) { U.year = ds.holYear; return render(); }
@@ -4488,7 +4662,7 @@ function psSendView(cl){
 }
 function psLogHtml(){
   if (!DB.smsLog.length) return '';
-  const T = {daily:'দৈনিক', weekly:'সাপ্তাহিক', monthly:'মাসিক'};
+  const T = {daily:'দৈনিক', weekly:'সাপ্তাহিক', monthly:'মাসিক', invite:'সমাবেশের আমন্ত্রণ'};
   return `<h2 style="font-size:16px;margin-top:6px">আগের পাঠানো</h2><div class="list">${DB.smsLog.slice(0, 15).map(j => {
     const s = j.items.filter(x => x.st === 'sent').length, f = j.items.filter(x => x.st === 'failed').length;
     return `<button class="psrow pslog" data-ps-log="${j.id}"><span class="grow" style="text-align:left"><span class="t1" style="font-weight:600;font-size:14px">${T[j.type]} রিপোর্ট · ${j.type === 'monthly' ? monthName(j.period) : psDM(j.period)}</span>
@@ -4581,12 +4755,12 @@ const ROUTE_ALIAS = {'student-profile':'students'};
 function render(){
   let r = (location.hash || '#home').slice(1) || 'home';
   r = ROUTE_ALIAS[r] || r;
-  if (!(TOP.includes(r) || r==='committee' || r==='students' || r==='teachers' || r==='lesson-plan' || r==='teacher-att' || r==='student-att' || r==='certificates' || r==='gpf' || r==='assessment' || r==='pension' || r==='salary' || r==='leave' || r==='img2pdf' || r==='textbooks' || r==='parent-sms' || r==='holidays' || ALL[r])) r = 'home';
+  if (!(TOP.includes(r) || r==='committee' || r==='students' || r==='teachers' || r==='lesson-plan' || r==='teacher-att' || r==='student-att' || r==='certificates' || r==='gpf' || r==='assessment' || r==='pension' || r==='salary' || r==='leave' || r==='img2pdf' || r==='textbooks' || r==='parent-sms' || r==='holidays' || r==='mother-meet' || r==='guardian-meet' || ALL[r])) r = 'home';
   if (r !== UI.lastRoute) { if (r === 'teacher-att' || r === 'student-att') UI.attView = 'day'; UI.lastRoute = r; }
   const inner = !TOP.includes(r);
   $app.classList.toggle('inner', inner);
   $nav.style.display = inner ? 'none' : 'grid';
-  const views = {home, profile, settings, committee, students, teachers, 'lesson-plan':lessonPlan, 'teacher-att':teacherAtt, 'student-att':studentAtt, certificates, gpf, assessment, pension, salary, leave, img2pdf, textbooks, 'parent-sms':parentSms, routine, holidays:holidaysView};
+  const views = {home, profile, settings, committee, students, teachers, 'lesson-plan':lessonPlan, 'teacher-att':teacherAtt, 'student-att':studentAtt, certificates, gpf, assessment, pension, salary, leave, img2pdf, textbooks, 'parent-sms':parentSms, routine, holidays:holidaysView, 'mother-meet':() => meetingsView('mother'), 'guardian-meet':() => meetingsView('guardian')};
   $app.innerHTML = (views[r] || (() => placeholder(r)))();
   $nav.innerHTML = NAV.map(n => `<button class="${n[0]===r?'on':''}" data-go="${n[0]}" aria-label="${n[1]}" ${n[0]===r?'aria-current="page"':''}><span class="p">${ic(n[2])}</span>${n[1]}</button>`).join('');
   bindView(r);
@@ -4652,6 +4826,7 @@ function bindView(r){
   }
   if (r === 'img2pdf') bindImg2pdf();
   if (r === 'parent-sms') bindParentSms();
+  if (r === 'mother-meet' || r === 'guardian-meet') bindMeetings();
   if (r === 'routine') bindRoutine();
   if (r === 'leave') {
     bindLogo();
@@ -4723,6 +4898,7 @@ document.addEventListener('click', e => {
   if (Object.keys(ds).some(k => /^ps[A-Z]/.test(k))) return psClick(ds);
   if (Object.keys(ds).some(k => /^rt[A-Z]/.test(k))) return rtClick(ds);
   if (Object.keys(ds).some(k => /^hol[A-Z]/.test(k))) return holClick(ds);
+  if (Object.keys(ds).some(k => /^mt[A-Z]/.test(k))) return mtClick(ds);
   if (Object.keys(ds).some(k => /^rs[A-Z]/.test(k))) return rtSetupClick(ds);
   if ('back' in ds) { if (history.length > 1) history.back(); else go('home'); return; }
   // committee
