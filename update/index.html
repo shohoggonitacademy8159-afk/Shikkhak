@@ -288,6 +288,7 @@ img.ma{object-fit:cover;background:#E8EEF5}
 .extab{border-collapse:collapse;width:100%;min-width:100%;background:#fff;font-size:13px}.extab th,.extab td{border:1px solid #CBD6E2;padding:3px;text-align:center}.extab th{background:#EEF3F0;font-size:13px;padding:6px 3px}
 .extab td.exd{min-width:118px;text-align:left}.extab td.exd input{width:100%;font:inherit;font-size:12.5px;border:1px solid #CBD6E2;border-radius:8px;padding:5px 4px;background:#fff}.extab td.exd small{display:block;font-size:11.5px;color:var(--mute);padding:1px 2px}
 .exc{width:100%;min-width:62px;min-height:44px;border:0;border-radius:8px;background:#F6F8FA;font:inherit;font-size:12px;font-weight:600;color:var(--ink);padding:3px;line-height:1.25}.exc.on{background:#E3F4EA;color:#17663F}.exc .plus{color:#9AA8B8;font-size:18px}
+.extm{display:grid;grid-template-columns:auto 1fr auto 1fr;align-items:center;gap:6px;margin-top:6px;font-size:13.5px}.extm span:first-child{min-width:92px;font-weight:600}.extm input{min-width:0;font:inherit;font-size:14px;border:1px solid #CBD6E2;border-radius:10px;padding:8px 6px;background:#fff}
 .exx{border:0;background:none;color:#B42318;font-size:15px;min-width:34px;min-height:40px}.exph summary{cursor:pointer;font-size:13.5px;font-weight:600;color:#B42318;padding:4px 0}
 .rt3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.rt3 .btn{min-height:44px;font-size:13.5px;padding:0 6px}
 .rsh{font-weight:700;font-size:14px;margin:12px 0 6px}
@@ -390,7 +391,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '7.3';
+const WEB_VERSION = '7.4';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -4005,7 +4006,7 @@ const exSubName = (cls, sid) => sid === 'rel' ? 'ধর্ম ও নৈতি�
 const exNextDay = iso => { let d = addDays(iso, 1); for (let i = 0; i < 40 && isHoliday(d); i++) d = addDays(d, 1); return d; };
 function exNew(){
   const R = exRoot(), cl = classesWithStudents().map(c => c[0]).filter(c => c !== 'pre');
-  const e = {id:uid(), name:EX_NAMES[2], year:String(new Date().getFullYear()), start:'10:00', end:'12:00', classes:cl.length ? cl : ['1','2','3','4','5'], rows:[], rules:EX_RULES.slice(), perPage:2};
+  const e = {id:uid(), name:EX_NAMES[2], year:String(new Date().getFullYear()), start:'10:00', end:'12:30', lo:{start:'10:00', end:'11:30'}, classes:cl.length ? cl : ['1','2','3','4','5'], rows:[], rules:EX_RULES.slice(), perPage:2};
   let d = todayISO(); if (isHoliday(d)) d = exNextDay(d);
   e.rows.push({id:uid(), date:d, s:{}});
   R.list.unshift(e); R.cur = e.id; save(); return e;
@@ -4037,7 +4038,8 @@ function exView(){
     ${R.list.length > 1 ? `<div class="chips" role="tablist">${R.list.map(x => `<button class="${x.id === e.id ? 'on' : ''}" data-ex-pick="${x.id}">${esc(x.name)} ${esc(bn(x.year))}</button>`).join('')}</div>` : ''}
     <div class="card" style="gap:10px">
       <div class="field"><label for="exName">পরীক্ষার নাম</label><input id="exName" list="exNames" value="${esc(e.name)}" maxlength="60"><datalist id="exNames">${EX_NAMES.map(n => `<option value="${n}">`).join('')}</datalist></div>
-      <div class="row2" style="grid-template-columns:.7fr 1.15fr 1.15fr"><div class="field"><label for="exYear">সাল</label><input id="exYear" inputmode="numeric" maxlength="4" value="${esc(e.year)}"></div><div class="field"><label for="exStart">শুরু</label><input type="time" id="exStart" value="${e.start || ''}"></div><div class="field"><label for="exEnd">শেষ</label><input type="time" id="exEnd" value="${e.end || ''}"></div></div>
+      <div class="field" style="max-width:140px"><label for="exYear">সাল</label><input id="exYear" inputmode="numeric" maxlength="4" value="${esc(e.year)}"></div>
+      <div><b style="font-size:13.5px">পরীক্ষার সময়</b>${[['lo','১ম-২য় শ্রেণি'],['hi','৩য়-৫ম শ্রেণি']].map(([g, l]) => { const t = exT(e, g); return `<div class="extm"><span>${l}</span><input type="time" data-ex-t="${g}|start" value="${t.start || ''}" aria-label="${l} শুরু"><span>–</span><input type="time" data-ex-t="${g}|end" value="${t.end || ''}" aria-label="${l} শেষ"></div>`; }).join('')}</div>
       <div><b style="font-size:13.5px">শ্রেণি</b><div class="rtpick" style="grid-template-columns:repeat(6,1fr);margin-top:6px">${CLASSES.map(([k]) => `<button class="${cls.includes(k) ? 'on' : ''}" data-ex-cls="${k}">${PS_CLS[k]}</button>`).join('')}</div></div>
     </div>
     ${cls.length ? `<div class="rtwrap"><table class="extab">${head}${rows}</table></div>
@@ -4066,9 +4068,17 @@ function exCellSheet(rid, cls){
 function exHeadInfo(){
   const T = DB.teacher; return [T.emis && `ইএমআইএস কোড: ${bn(T.emis)}`, [T.upazila && 'উপজেলা: ' + T.upazila, T.district && 'জেলা: ' + T.district].filter(Boolean).join(', ')].filter(Boolean).join(' · ');
 }
-const exTime = e => e.start ? `${rtTime(e.start)}${e.end ? ' – ' + rtTime(e.end) : ''}` : '';
+/* two exam timings: ১ম-২য় (and প্রাক) = group 'lo', ৩য়-৫ম = group 'hi' (e.start/e.end, as before) */
+const EX_LO = new Set(['pre','1','2']);
+const exGrp = cls => EX_LO.has(cls) ? 'lo' : 'hi';
+const exT = (e, g) => { if (!e.lo) e.lo = {start:e.start || '10:00', end:'11:30'}; return g === 'lo' ? e.lo : e; };
+const exFmt = t => t && t.start ? `${rtTime(t.start)}${t.end ? ' – ' + rtTime(t.end) : ''}` : '';
+const exTime = (e, cls) => exFmt(exT(e, exGrp(cls)));
+const exTimeLine = e => { const g = [...new Set(e.classes.map(exGrp))].sort().reverse();
+  if (g.length === 1) return exFmt(exT(e, g[0]));
+  return [['lo','১ম-২য় শ্রেণি'],['hi','৩য়-৫ম শ্রেণি']].map(([k, l]) => exFmt(exT(e, k)) ? `${l}: ${exFmt(exT(e, k))}` : '').filter(Boolean).join(' · '); };
 function exRoutineDoc(e){
-  const cls = e.classes, land = cls.length > 4;
+  const cls = e.classes, land = cls.length > 4, two = new Set(cls.map(exGrp)).size > 1;
   const css = `@page{size:A4 ${land ? 'landscape' : 'portrait'};margin:12mm}html,body{margin:0}body{font-family:'Hind Siliguri','Noto Sans Bengali',sans-serif;color:#000}
   .h{text-align:center;margin-bottom:10px}.s{font-size:22px;font-weight:700}.i{font-size:13px}.t{display:inline-block;font-size:17px;font-weight:700;margin-top:6px;border:2px solid #000;border-radius:6px;padding:2px 14px}
   .m{font-size:13.5px;margin-top:5px}table{width:100%;border-collapse:collapse;border:2.4px solid #000}th,td{border:1.6px solid #000;padding:7px 5px;text-align:center;font-size:14px}
@@ -4076,8 +4086,8 @@ function exRoutineDoc(e){
   .sig{display:flex;justify-content:flex-end;margin-top:50px;font-size:13.5px}.sig div{border-top:1.6px solid #000;padding-top:3px;min-width:200px;text-align:center}
   .lg{position:absolute;left:0;top:0;height:60px}.hw{position:relative}`;
   const body = `<div class="hw">${logoOn() ? `<img class="lg" src="${logoSrc()}" alt="">` : ''}<div class="h"><div class="s">${esc(DB.teacher.school || '')}</div>${exHeadInfo() ? `<div class="i">${esc(exHeadInfo())}</div>` : ''}
-    <div class="t">${esc(e.name)} ${esc(bn(e.year))} — পরীক্ষার রুটিন</div>${exTime(e) ? `<div class="m">পরীক্ষার সময়: ${exTime(e)}</div>` : ''}</div></div>
-    <table><thead><tr><th style="width:${land ? 15 : 20}%">তারিখ</th><th style="width:${land ? 9 : 11}%">বার</th>${cls.map(c => `<th>${CLASS_NAME[c]}</th>`).join('')}</tr></thead><tbody>
+    <div class="t">${esc(e.name)} ${esc(bn(e.year))} — পরীক্ষার রুটিন</div>${exTimeLine(e) ? `<div class="m">পরীক্ষার সময়: ${exTimeLine(e)}</div>` : ''}</div></div>
+    <table><thead><tr><th style="width:${land ? 15 : 20}%">তারিখ</th><th style="width:${land ? 9 : 11}%">বার</th>${cls.map(c => `<th>${CLASS_NAME[c]}${two ? `<br><small style="font-weight:600">${exTime(e, c)}</small>` : ''}</th>`).join('')}</tr></thead><tbody>
     ${e.rows.filter(r => r.date).map(r => `<tr><td class="d">${dFmt(r.date)}</td><td>${WD_BN[wdOf(r.date)]}</td>${cls.map(c => `<td>${r.s[c] ? esc(exSubName(c, r.s[c])) : '—'}</td>`).join('')}</tr>`).join('')}</tbody></table>
     <div class="n"><b>বিশেষ দ্রষ্টব্য:</b> ${e.rules.slice(0, 3).map(x => esc(x)).join(' ')}</div>
     <div class="sig"><div>প্রধান শিক্ষক<br>${esc(DB.teacher.school || '')}</div></div>`;
@@ -4105,7 +4115,7 @@ function exAdmitDoc(e, list){
         <tr><td class="k">মাতার নাম</td><td class="v">${esc(s.mother || '')}</td></tr>
         <tr><td class="k">শ্রেণি</td><td class="v">${CLASS_NAME[s.cls]}${s.section ? ' (' + esc(s.section) + ')' : ''}</td></tr>
         <tr><td class="k">রোল নম্বর</td><td class="v">${esc(bn(s.roll || ''))}</td></tr>
-        ${exTime(e) ? `<tr><td class="k">পরীক্ষার সময়</td><td class="v">${exTime(e)}</td></tr>` : ''}
+        ${exTime(e, s.cls) ? `<tr><td class="k">পরীক্ষার সময়</td><td class="v">${exTime(e, s.cls)}</td></tr>` : ''}
       </table><div class="ph">${PHOTOS[s.id] ? `<img src="${PHOTOS[s.id]}" alt="">` : 'শিক্ষার্থীর<br>ছবি'}</div></div>
       ${rows.length ? `<table class="rt"><tr><th>তারিখ</th><th>বার</th><th>বিষয়</th></tr>${rows.map(r => `<tr><td>${dFmt(r.date)}</td><td>${WD_BN[wdOf(r.date)]}</td><td>${esc(exSubName(s.cls, r.s[s.cls]))}</td></tr>`).join('')}</table>` : ''}
       ${e.rules.length ? `<ol class="ru">${e.rules.slice(0, 3).map(x => `<li>${esc(x)}</li>`).join('')}</ol>` : ''}
@@ -4147,8 +4157,7 @@ function bindExam(){
   on('exName', 'input', el => { e.name = el.value; clearTimeout(t); t = setTimeout(save, 400); });
   on('exName', 'change', () => { save(); render(); });
   on('exYear', 'input', el => { e.year = toEn(el.value).replace(/\D/g, '').slice(0, 4); clearTimeout(t); t = setTimeout(save, 400); });
-  on('exStart', 'change', el => { e.start = el.value; save(); });
-  on('exEnd', 'change', el => { e.end = el.value; save(); });
+  document.querySelectorAll('[data-ex-t]').forEach(el => el.addEventListener('change', () => { const [g, k] = el.dataset.exT.split('|'); exT(e, g)[k] = el.value; save(); }));
   document.querySelectorAll('[data-ex-date]').forEach(el => el.addEventListener('change', () => { const r = e.rows.find(x => x.id === el.dataset.exDate); if (r && el.value) { r.date = el.value; save(); render(); } }));
 }
 
