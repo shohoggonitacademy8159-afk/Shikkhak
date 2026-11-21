@@ -171,7 +171,8 @@ form.f{display:flex;flex-direction:column;gap:14px}
 .sumrow{display:flex;gap:6px;flex-wrap:wrap}
 .sumrow span{font-size:13px;font-weight:600;padding:4px 10px;border-radius:999px}
 .attrow{background:#fff;border:1px solid var(--line);border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:10px}
-.attbtns{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.attbtns{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px}
+.attbtns button{font-size:12.5px!important;padding:0 2px!important}
 .attbtns button,.sbtns button{min-height:40px;border-radius:10px;border:1px solid #CBD6E2;background:#fff;font-size:13px;font-weight:700;color:var(--mute);padding:0 4px}
 .srow{display:flex;align-items:center;gap:10px;padding:10px 12px;border-top:1px solid #EDF2EF}
 .srow:first-child{border-top:0}
@@ -384,7 +385,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '7.1';
+const WEB_VERSION = '7.2';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -1825,7 +1826,9 @@ function addSubjectSheet(){
 }
 
 /* ---------- attendance ---------- */
-const ATT_T = {p:['উপস্থিত','#17663F','#E3F4EA'], late:['দেরি','#7A4A00','#FFF1D6'], l:['ছুটি','#1F4E8C','#E6EFFA'], a:['অনুপস্থিত','#B42318','#FDE8E6']};
+const ATT_T = {p:['উপস্থিত','#17663F','#E3F4EA'], late:['দেরি','#7A4A00','#FFF1D6'], mt:['মিটিং','#6D28D9','#F1EAFE'], tr:['প্রশিক্ষণ','#0E7490','#E0F4F7'], l:['ছুটি','#1F4E8C','#E6EFFA']};
+/* 'a' (অনুপস্থিত) is no longer offered, but old records may still carry it */
+const ATT_TX = {...ATT_T, a:['অনুপস্থিত','#B42318','#FDE8E6']};
 const ATT_S = {p:['উ','উপস্থিত','#17663F','#E3F4EA'], a:['অ','অনুপস্থিত','#B42318','#FDE8E6'], l:['ছু','ছুটি','#1F4E8C','#E6EFFA']};
 const attDay = (kind, date, create) => { const k = DB.attendance[kind]; if (!k[date] && create) k[date] = {}; return k[date] || {}; };
 const curDate = () => UI.attDate || (UI.attDate = todayISO());
@@ -1871,8 +1874,8 @@ function teacherDay(){
     ${marked < list.length ? `<button class="btn big full" data-tatt-all>${ic('teacher',20)} বাকি সবাইকে উপস্থিত করুন</button>` : ''}
     ${list.map(t => { const r = day[t.id] || {}; const present = r.s === 'p' || r.s === 'late';
       return `<div class="attrow">
-        <div style="display:flex;align-items:center;gap:10px"><span class="rollb" style="${r.s ? `background:${ATT_T[r.s][2]};color:${ATT_T[r.s][1]}` : ''}" aria-label="ক্রমিক ${esc(bn(t.serial||''))}">${esc(bn(t.serial||'–'))}</span>${avatar(t.id, t.name, '#9AA8B8', 40)}
-          <span class="grow"><span class="t1" style="font-weight:600">${esc(t.name)}</span><span class="t2">${esc(t.designation)}${r.s ? ' · ' + ATT_T[r.s][0] : ''}</span></span></div>
+        <div style="display:flex;align-items:center;gap:10px"><span class="rollb" style="${ATT_TX[r.s] ? `background:${ATT_TX[r.s][2]};color:${ATT_TX[r.s][1]}` : ''}" aria-label="ক্রমিক ${esc(bn(t.serial||''))}">${esc(bn(t.serial||'–'))}</span>${avatar(t.id, t.name, '#9AA8B8', 40)}
+          <span class="grow"><span class="t1" style="font-weight:600">${esc(t.name)}</span><span class="t2">${esc(t.designation)}${ATT_TX[r.s] ? ' · ' + ATT_TX[r.s][0] : ''}</span></span></div>
         <div class="attbtns" role="group" aria-label="${esc(t.name)}-এর হাজিরা">${Object.entries(ATT_T).map(([k,v]) => `<button data-tatt="${t.id}" data-st="${k}" aria-pressed="${r.s===k}" style="${r.s===k?`background:${v[2]};color:${v[1]};border-color:${v[1]}`:''}">${v[0]}</button>`).join('')}</div>
         ${present ? `<div class="times"><label>আগমন<input type="time" data-tin="${t.id}" value="${esc(r.in||'')}"></label><label>প্রস্থান<input type="time" data-tout="${t.id}" value="${esc(r.out||'')}"></label></div>` : ''}
       </div>`; }).join('')}
@@ -1881,10 +1884,10 @@ function teacherDay(){
 function teacherMonth(){
   const ym = curMonth();
   const days = Object.keys(DB.attendance.teachers).filter(d => d.startsWith(ym) && Object.keys(DB.attendance.teachers[d]).length).sort();
-  const rows = bySerial(DB.teachers).map(t => { const c = {p:0,late:0,l:0,a:0}; days.forEach(d => { const r = DB.attendance.teachers[d][t.id]; if (r && c[r.s] !== undefined) c[r.s]++; }); return {t, c}; });
+  const rows = bySerial(DB.teachers).map(t => { const c = {p:0,late:0,mt:0,tr:0,l:0,a:0}; days.forEach(d => { const r = DB.attendance.teachers[d][t.id]; if (r && c[r.s] !== undefined) c[r.s]++; }); return {t, c}; });
   return monthBar() + `
     <div class="card" style="gap:10px"><h2 style="font-size:16px">${monthName(ym)}</h2><span class="t2" style="font-size:13px">হাজিরা নেওয়া হয়েছে ${bn(days.length)} দিন · ${(w => `কর্মদিবস ${bn(w.work)} দিন, ছুটি ${bn(w.hol)} দিন${ym === todayISO().slice(0,7) ? ' (আজ পর্যন্ত)' : ''}`)(workDays(ym))}</span></div>
-    ${days.length ? `<div class="list">${rows.map(({t,c}) => `<div class="mem"><span class="rollb">${esc(bn(t.serial||'–'))}</span><span class="grow"><span class="t1" style="font-weight:600">${esc(t.name)}</span><span class="sumrow" style="margin-top:4px">${pill('উপ '+bn(c.p),'#17663F','#E3F4EA')}${pill('দেরি '+bn(c.late),'#7A4A00','#FFF1D6')}${pill('ছুটি '+bn(c.l),'#1F4E8C','#E6EFFA')}${pill('অনু '+bn(c.a),'#B42318','#FDE8E6')}</span></span></div>`).join('')}</div>
+    ${days.length ? `<div class="list">${rows.map(({t,c}) => `<div class="mem"><span class="rollb">${esc(bn(t.serial||'–'))}</span><span class="grow"><span class="t1" style="font-weight:600">${esc(t.name)}</span><span class="sumrow" style="margin-top:4px">${pill('উপ '+bn(c.p),'#17663F','#E3F4EA')}${pill('দেরি '+bn(c.late),'#7A4A00','#FFF1D6')}${c.mt ? pill('মিটিং '+bn(c.mt),'#6D28D9','#F1EAFE') : ''}${c.tr ? pill('প্রশিক্ষণ '+bn(c.tr),'#0E7490','#E0F4F7') : ''}${pill('ছুটি '+bn(c.l),'#1F4E8C','#E6EFFA')}${c.a ? pill('অনু '+bn(c.a),'#B42318','#FDE8E6') : ''}</span></span></div>`).join('')}</div>
       <button class="btn big full" data-copy-tmonth>${ic('copy',20)} প্রতিবেদন কপি করুন</button>`
     : '<div class="card empty"><p class="t2" style="font-size:14px">এই মাসে কোনো হাজিরা নেওয়া হয়নি।</p></div>'}`;
 }
@@ -1892,7 +1895,7 @@ function setTeacherStatus(id, st){
   const d = curDate(), day = attDay('teachers', d, true);
   const r = day[id] || {};
   if (r.s === st) { delete day[id]; }
-  else { r.s = st; if ((st === 'p' || st === 'late') && !r.in && d === todayISO()) r.in = nowHM(); if (st === 'l' || st === 'a') { delete r.in; delete r.out; } day[id] = r; }
+  else { r.s = st; if ((st === 'p' || st === 'late') && !r.in && d === todayISO()) r.in = nowHM(); if (st !== 'p' && st !== 'late') { delete r.in; delete r.out; } day[id] = r; }
   save(); render();
 }
 
@@ -1976,8 +1979,8 @@ function teacherMonthText(){
   const ym = curMonth();
   const days = Object.keys(DB.attendance.teachers).filter(d => d.startsWith(ym) && Object.keys(DB.attendance.teachers[d]).length);
   return `${DB.teacher.school}\nশিক্ষক উপস্থিতি — ${monthName(ym)}\nহাজিরার দিন: ${bn(days.length)}\n\n` +
-    bySerial(DB.teachers).map(t => { const c = {p:0,late:0,l:0,a:0}; days.forEach(d => { const r = DB.attendance.teachers[d][t.id]; if (r && c[r.s] !== undefined) c[r.s]++; });
-      return `${bn(t.serial||'')}. ${t.name} (${t.designation}): উপস্থিত ${bn(c.p)}, দেরি ${bn(c.late)}, ছুটি ${bn(c.l)}, অনুপস্থিত ${bn(c.a)}`; }).join('\n');
+    bySerial(DB.teachers).map(t => { const c = {p:0,late:0,mt:0,tr:0,l:0,a:0}; days.forEach(d => { const r = DB.attendance.teachers[d][t.id]; if (r && c[r.s] !== undefined) c[r.s]++; });
+      return `${bn(t.serial||'')}. ${t.name} (${t.designation}): উপস্থিত ${bn(c.p)}, দেরি ${bn(c.late)}, মিটিং ${bn(c.mt)}, প্রশিক্ষণ ${bn(c.tr)}, ছুটি ${bn(c.l)}${c.a ? ', অনুপস্থিত ' + bn(c.a) : ''}`; }).join('\n');
 }
 
 /* ---------- certificates ---------- */
