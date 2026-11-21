@@ -288,6 +288,11 @@ img.ma{object-fit:cover;background:#E8EEF5}
 .extab{border-collapse:collapse;width:100%;min-width:100%;background:#fff;font-size:13px}.extab th,.extab td{border:1px solid #CBD6E2;padding:3px;text-align:center}.extab th{background:#EEF3F0;font-size:13px;padding:6px 3px}
 .extab td.exd{min-width:118px;text-align:left}.extab td.exd input{width:100%;font:inherit;font-size:12.5px;border:1px solid #CBD6E2;border-radius:8px;padding:5px 4px;background:#fff}.extab td.exd small{display:block;font-size:11.5px;color:var(--mute);padding:1px 2px}
 .exc{width:100%;min-width:62px;min-height:44px;border:0;border-radius:8px;background:#F6F8FA;font:inherit;font-size:12px;font-weight:600;color:var(--ink);padding:3px;line-height:1.25}.exc.on{background:#E3F4EA;color:#17663F}.exc .plus{color:#9AA8B8;font-size:18px}
+.rpm{display:grid;grid-template-columns:48px 1fr 48px;gap:8px;align-items:center}.rpm .btn{font-size:24px;min-height:44px;padding:0}
+.rpml{position:relative;display:flex;align-items:center;justify-content:center;min-height:44px;background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(18,40,74,.06);font-size:16px}.rpml input{position:absolute;inset:0;opacity:0;width:100%;cursor:pointer}
+.rpt{border-collapse:collapse;width:100%;font-size:13px}.rpt th{background:#EEF3F0;padding:7px 4px;font-size:12.5px;font-weight:700}.rpt td{border-top:1px solid #E6ECF2;padding:7px 4px;text-align:center}.rpt td.l{text-align:left}.rpt td small{display:block;font-size:11px;color:var(--mute)}.rpt tr.tot td{font-weight:700;background:#F7FAF8}
+.rpb{display:inline-block;width:52px;height:6px;border-radius:3px;background:#EDF1F5;margin-right:6px;vertical-align:middle;overflow:hidden}.rpb i{display:block;height:100%;border-radius:3px}
+.rpo{display:flex;justify-content:space-between;gap:10px;font-size:14px;padding:6px 0;border-top:1px solid #EEF2F5}.rpo:first-of-type{border-top:0}
 .extm{display:grid;grid-template-columns:auto 1fr auto 1fr;align-items:center;gap:6px;margin-top:6px;font-size:13.5px}.extm span:first-child{min-width:92px;font-weight:600}.extm input{min-width:0;font:inherit;font-size:14px;border:1px solid #CBD6E2;border-radius:10px;padding:8px 6px;background:#fff}
 .exx{border:0;background:none;color:#B42318;font-size:15px;min-width:34px;min-height:40px}.exph summary{cursor:pointer;font-size:13.5px;font-weight:600;color:#B42318;padding:4px 0}
 .rt3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.rt3 .btn{min-height:44px;font-size:13.5px;padding:0 6px}
@@ -391,7 +396,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '7.4';
+const WEB_VERSION = '7.5';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -4461,6 +4466,139 @@ function holClick(ds){
   if ('holOpenadd' in ds) { const d = (document.getElementById('holOpenD') || {}).value; if (!d) return toast('তারিখ বাছুন'); if (!H.open.includes(d)) H.open.push(d); save(); toast('খোলা দিন যোগ হয়েছে'); return render(); }
 }
 
+/* ---------- রিপোর্ট: মাসিক সমন্বিত প্রতিবেদন ---------- */
+const rpYm = () => { UI.rp = UI.rp || {ym:todayISO().slice(0, 7)}; return UI.rp.ym; };
+const rpShift = (ym, n) => { const [y, m] = ym.split('-').map(Number), d = new Date(y, m - 1 + n, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
+const rpPct = (a, b) => b ? Math.round(a * 100 / b) : null;
+function rpData(ym){
+  const AS = activeStudents(), W = workDays(ym);
+  const sDays = Object.keys(DB.attendance.students).filter(d => d.startsWith(ym)).sort();
+  const tDays = Object.keys(DB.attendance.teachers).filter(d => d.startsWith(ym)).sort();
+  /* students, per class */
+  const per = {}, low = [];
+  AS.forEach(s => {
+    const c = per[s.cls] = per[s.cls] || {cls:s.cls, n:0, boys:0, girls:0, stip:0, p:0, a:0, l:0, days:new Set()};
+    c.n++; if (s.gender === 'ছেলে') c.boys++; if (s.gender === 'মেয়ে') c.girls++; if (s.stipend === 'হ্যাঁ') c.stip++;
+    let p = 0, a = 0, l = 0;
+    sDays.forEach(d => { const v = DB.attendance.students[d][s.id]; if (!v) return; c.days.add(d); if (v === 'p') p++; else if (v === 'a') a++; else if (v === 'l') l++; });
+    c.p += p; c.a += a; c.l += l;
+    if (p + a >= 3 && rpPct(p, p + a) < 70) low.push({s, p, a, pct:rpPct(p, p + a)});
+  });
+  const classes = CLASSES.map(([k]) => per[k]).filter(Boolean);
+  const sTot = classes.reduce((t, c) => ({p:t.p + c.p, a:t.a + c.a, l:t.l + c.l}), {p:0, a:0, l:0});
+  low.sort((x, y) => x.pct - y.pct);
+  /* teachers */
+  const teachers = DB.teachers.slice().sort((a, b) => (a.serial || 99) - (b.serial || 99)).map(t => {
+    const c = {p:0, late:0, mt:0, tr:0, l:0, a:0};
+    tDays.forEach(d => { const r = DB.attendance.teachers[d][t.id]; if (r && c[r.s] !== undefined) c[r.s]++; });
+    return {t, c, n:Object.values(c).reduce((x, y) => x + y, 0)};
+  });
+  const tT = teachers.reduce((s, x) => { Object.keys(x.c).forEach(k => s[k] = (s[k] || 0) + x.c[k]); return s; }, {});
+  const tMarked = Object.values(tT).reduce((x, y) => x + y, 0), tOn = (tT.p || 0) + (tT.late || 0) + (tT.mt || 0) + (tT.tr || 0);
+  /* lessons & homework from the daily tracker */
+  const learn = {};
+  Object.keys(DB.daily || {}).filter(d => d.startsWith(ym)).forEach(d => Object.entries(DB.daily[d] || {}).forEach(([cls, rec]) => {
+    const L = learn[cls] = learn[cls] || {cls, days:new Set(), ok:0, no:0, done:0, part:0, hno:0};
+    Object.values((rec && rec.m) || {}).forEach(sub => Object.values(sub || {}).forEach(v => {
+      if (!v) return; L.days.add(d);
+      if (v.l === 1) L.ok++; else if (v.l === 0) L.no++;
+      if (v.h === 'done') L.done++; else if (v.h === 'part') L.part++; else if (v.h === 'no') L.hno++;
+    }));
+  }));
+  const learns = CLASSES.map(([k]) => learn[k]).filter(x => x && x.days.size);
+  /* other activity */
+  const sms = (DB.smsLog || []).filter(j => j.at && new Date(j.at - new Date(j.at).getTimezoneOffset() * 60000).toISOString().slice(0, 7) === ym)
+    .reduce((t, j) => { j.items.forEach(i => { if (i.st === 'sent') { t.sent++; t.seg += i.seg || 1; } else if (i.st === 'fail') t.fail++; }); return t; }, {sent:0, seg:0, fail:0});
+  const meets = (DB.meetings || []).filter(m => m.date && m.date.startsWith(ym));
+  const hols = holData().list.filter(h => h.from.slice(0, 7) <= ym && h.to.slice(0, 7) >= ym);
+  return {ym, W, AS, classes, sTot, low, teachers, tT, tMarked, tOn, learns, sms, meets, hols, sDays, tDays};
+}
+const rpBar = (pct, col) => pct === null ? '<span class="t2">—</span>' : `<span class="rpb"><i style="width:${pct}%;background:${pct >= 80 ? '#1E8A55' : pct >= 60 ? '#C77700' : '#B42318'}"></i></span><b style="color:${col || 'inherit'}">${bn(pct)}%</b>`;
+function reportsView(){
+  const ym = rpYm(), D = rpData(ym), cur = todayISO().slice(0, 7);
+  const sPct = rpPct(D.sTot.p, D.sTot.p + D.sTot.a), tPct = rpPct(D.tOn, D.tMarked);
+  const stat = (lbl, val, sub, bg, go) => `<button class="stat" ${go ? `data-go="${go}"` : ''} style="background:${bg};border:0;text-align:left"><span style="font-size:12.5px;color:#3E5070">${lbl}</span><span class="n">${val}</span>${sub ? `<span style="font-size:11.5px;color:#3E5070">${sub}</span>` : ''}</button>`;
+  const empty = !D.sDays.length && !D.tDays.length && !D.learns.length;
+  return topHeader('রিপোর্ট', 'report') + `<div class="sec" style="padding-top:16px">
+    <div class="rpm"><button class="btn" data-rp-ym="${rpShift(ym, -1)}" aria-label="আগের মাস">‹</button><label class="rpml"><b>${monthName(ym)}</b><input type="month" id="rpMonth" value="${ym}" max="${cur}" aria-label="মাস বাছুন"></label><button class="btn" data-rp-ym="${rpShift(ym, 1)}" ${ym >= cur ? 'disabled' : ''} aria-label="পরের মাস">›</button></div>
+    <div class="row2">
+      ${stat('কর্মদিবস', `${bn(D.W.work)}<span> দিন</span>`, `ছুটি ${bn(D.W.hol)} দিন${ym === cur ? ' · আজ পর্যন্ত' : ''}`, '#FFF6E5', 'holidays')}
+      ${stat('শিক্ষার্থী', `${bn(D.AS.length)}<span> জন</span>`, `ছেলে ${bn(D.AS.filter(s => s.gender === 'ছেলে').length)} · মেয়ে ${bn(D.AS.filter(s => s.gender === 'মেয়ে').length)}`, '#E9EFF8', 'student-profile')}
+      ${stat('শিক্ষার্থীর গড় উপস্থিতি', sPct === null ? '—' : `${bn(sPct)}<span>%</span>`, `হাজিরা নেওয়া ${bn(D.sDays.length)} দিন`, '#E8F5EE', 'student-att')}
+      ${stat('শিক্ষক উপস্থিতি', tPct === null ? '—' : `${bn(tPct)}<span>%</span>`, `মিটিং/প্রশিক্ষণসহ · ${bn(D.tDays.length)} দিন`, '#F1EAFE', 'teacher-att')}
+    </div>
+    ${empty ? `<div class="card empty"><p class="t2" style="font-size:14px;line-height:1.6">${monthName(ym)} মাসে এখনো হাজিরা বা দৈনিক আপডেট নেওয়া হয়নি। হাজিরা নিলে এখানে নিজে থেকে হিসাব আসবে।</p></div>` : ''}
+    ${D.classes.length ? `<div class="card" style="gap:8px"><b style="font-size:15px">শ্রেণিভিত্তিক শিক্ষার্থী উপস্থিতি</b>
+      <div class="rtwrap"><table class="rpt"><tr><th>শ্রেণি</th><th>শিক্ষার্থী</th><th>ছেলে/মেয়ে</th><th>হাজিরা দিন</th><th style="min-width:110px">গড় উপস্থিতি</th></tr>
+      ${D.classes.map(c => `<tr><td><b>${PS_CLS[c.cls]}</b></td><td>${bn(c.n)}</td><td>${bn(c.boys)}/${bn(c.girls)}</td><td>${bn(c.days.size)}</td><td class="l">${rpBar(rpPct(c.p, c.p + c.a))}</td></tr>`).join('')}
+      <tr class="tot"><td>মোট</td><td>${bn(D.AS.length)}</td><td>${bn(D.classes.reduce((t, c) => t + c.boys, 0))}/${bn(D.classes.reduce((t, c) => t + c.girls, 0))}</td><td>${bn(D.sDays.length)}</td><td class="l">${rpBar(sPct)}</td></tr></table></div>
+      <span class="t2" style="font-size:12px">ছুটিতে থাকা দিন গড়ে ধরা হয়নি। উপবৃত্তি পায় ${bn(D.classes.reduce((t, c) => t + c.stip, 0))} জন।</span></div>` : ''}
+    ${D.low.length ? `<div class="card" style="gap:6px"><b style="font-size:15px;color:#B42318">নিয়মিত অনুপস্থিত (উপস্থিতি ৭০%-এর কম)</b>
+      <div class="list">${D.low.slice(0, 15).map(x => `<button class="mem tap" data-stu="${x.s.id}"><span class="grow"><span class="t1" style="font-weight:600;font-size:14px">${esc(x.s.name)}</span><span class="t2">${PS_CLS[x.s.cls]} শ্রেণি · রোল ${esc(bn(x.s.roll || '–'))} · অনুপস্থিত ${bn(x.a)} দিন${x.s.phone ? ' · ' + esc(bn(x.s.phone)) : ''}</span></span><b style="color:#B42318">${bn(x.pct)}%</b></button>`).join('')}</div>
+      ${D.low.length > 15 ? `<span class="t2" style="font-size:12px">আরও ${bn(D.low.length - 15)} জন — প্রিন্টে সবার নাম আছে।</span>` : ''}</div>` : ''}
+    ${D.teachers.length ? `<div class="card" style="gap:8px"><b style="font-size:15px">শিক্ষক হাজিরা</b>
+      <div class="rtwrap"><table class="rpt"><tr><th style="text-align:left">নাম</th><th>উপ.</th><th>দেরি</th><th>মিটিং</th><th>প্রশি.</th><th>ছুটি</th></tr>
+      ${D.teachers.map(({t, c}) => `<tr><td class="l">${esc(t.name)}<small>${esc(t.designation || '')}</small></td><td>${bn(c.p)}</td><td>${c.late ? `<b style="color:#7A4A00">${bn(c.late)}</b>` : '০'}</td><td>${bn(c.mt)}</td><td>${bn(c.tr)}</td><td>${bn(c.l)}${c.a ? `<small style="color:#B42318">অনু ${bn(c.a)}</small>` : ''}</td></tr>`).join('')}</table></div></div>` : ''}
+    ${D.learns.length ? `<div class="card" style="gap:8px"><b style="font-size:15px">পড়া ও বাড়ির কাজ (দৈনিক আপডেট থেকে)</b>
+      <div class="rtwrap"><table class="rpt"><tr><th>শ্রেণি</th><th>দিন</th><th style="min-width:100px">পড়া পেরেছে</th><th style="min-width:100px">বাড়ির কাজ জমা</th></tr>
+      ${D.learns.map(L => `<tr><td><b>${PS_CLS[L.cls]}</b></td><td>${bn(L.days.size)}</td><td class="l">${rpBar(rpPct(L.ok, L.ok + L.no))}</td><td class="l">${rpBar(rpPct(L.done, L.done + L.part + L.hno))}</td></tr>`).join('')}</table></div></div>` : ''}
+    <div class="card" style="gap:6px"><b style="font-size:15px">অন্যান্য কার্যক্রম</b>
+      <div class="rpo"><span>অভিভাবককে SMS পাঠানো</span><b>${bn(D.sms.sent)} টি${D.sms.fail ? ` <small style="color:#B42318">(ব্যর্থ ${bn(D.sms.fail)})</small>` : ''}</b></div>
+      <div class="rpo"><span>মা সমাবেশ</span><b>${bn(D.meets.filter(m => m.kind === 'mother').length)} টি</b></div>
+      <div class="rpo"><span>অভিভাবক সমাবেশ</span><b>${bn(D.meets.filter(m => m.kind === 'guardian').length)} টি</b></div>
+      ${D.hols.length ? `<div class="rpo" style="align-items:flex-start"><span>এ মাসের ছুটি</span><b style="text-align:right;font-weight:600;font-size:13px">${D.hols.map(h => esc(h.name)).join(', ')}</b></div>` : ''}</div>
+    <div class="row2"><button class="btn big solid" data-rp-print>${ic('doc', 18)} প্রিন্ট / PDF</button><button class="btn big" data-rp-copy>${ic('copy', 18)} টেক্সট কপি</button></div>
+    <p class="hint" style="text-align:center">সব হিসাব অ্যাপে নেওয়া হাজিরা ও দৈনিক আপডেট থেকে নিজে থেকে তৈরি হয়। কোনো ঘরে চাপ দিলে বিস্তারিত অংশে যাবে।</p>
+    <b style="font-size:15px;margin:6px 2px 0">বিস্তারিত রিপোর্ট</b>
+    <div class="grid3">${[['student-att','students','#2563C9','শিক্ষার্থী উপস্থিতি'],['teacher-att','teacher','#1E8A55','শিক্ষক উপস্থিতি'],['parent-sms','mega','#0F766E','দৈনিক আপডেট'],['assessment','tools','#4F46E5','মূল্যায়ন ও প্রগতিপত্র'],['mother-meet','mother','#B4235A','মা সমাবেশ'],['guardian-meet','family','#0369A1','অভিভাবক সমাবেশ']]
+      .map(([go, k, col, l]) => `<button class="tile tile3" data-go="${go}"><span class="ib" style="background:${col};box-shadow:0 6px 14px ${col}40">${S(P[k])}</span><span><span class="t1">${l}</span></span></button>`).join('')}</div>
+  </div>`;
+}
+function rpText(D){
+  const L = [`${DB.teacher.school || ''}`, `মাসিক প্রতিবেদন — ${monthName(D.ym)}`, '',
+    `কর্মদিবস: ${bn(D.W.work)} দিন, ছুটি: ${bn(D.W.hol)} দিন`, `মোট শিক্ষার্থী: ${bn(D.AS.length)} জন`];
+  const sp = rpPct(D.sTot.p, D.sTot.p + D.sTot.a); if (sp !== null) L.push(`শিক্ষার্থীর গড় উপস্থিতি: ${bn(sp)}%`);
+  D.classes.forEach(c => { const p = rpPct(c.p, c.p + c.a); L.push(`• ${CLASS_NAME[c.cls]}: ${bn(c.n)} জন${p !== null ? `, উপস্থিতি ${bn(p)}%` : ''}`); });
+  if (D.teachers.length && D.tMarked) { L.push('', 'শিক্ষক হাজিরা:'); D.teachers.forEach(({t, c}) => L.push(`• ${t.name}: উপস্থিত ${bn(c.p)}, দেরি ${bn(c.late)}, মিটিং ${bn(c.mt)}, প্রশিক্ষণ ${bn(c.tr)}, ছুটি ${bn(c.l)}`)); }
+  if (D.learns.length) { L.push('', 'পড়া ও বাড়ির কাজ:'); D.learns.forEach(x => { const a = rpPct(x.ok, x.ok + x.no), b = rpPct(x.done, x.done + x.part + x.hno); L.push(`• ${CLASS_NAME[x.cls]}: পড়া পেরেছে ${a === null ? '—' : bn(a) + '%'}, বাড়ির কাজ জমা ${b === null ? '—' : bn(b) + '%'}`); }); }
+  if (D.low.length) L.push('', `নিয়মিত অনুপস্থিত (৭০%-এর কম): ${bn(D.low.length)} জন`);
+  L.push('', `অভিভাবককে SMS: ${bn(D.sms.sent)} টি · মা সমাবেশ: ${bn(D.meets.filter(m => m.kind === 'mother').length)} টি · অভিভাবক সমাবেশ: ${bn(D.meets.filter(m => m.kind === 'guardian').length)} টি`);
+  return L.join('\n');
+}
+function rpDoc(D){
+  const T = DB.teacher, sp = rpPct(D.sTot.p, D.sTot.p + D.sTot.a), tp = rpPct(D.tOn, D.tMarked), pc = v => v === null ? '—' : bn(v) + '%';
+  const info = [T.emis && `ইএমআইএস কোড: ${bn(T.emis)}`, [T.upazila && 'উপজেলা: ' + T.upazila, T.district && 'জেলা: ' + T.district].filter(Boolean).join(', ')].filter(Boolean).join(' · ');
+  const css = `@page{size:A4 portrait;margin:12mm}html,body{margin:0}body{font-family:'Hind Siliguri','Noto Sans Bengali',sans-serif;color:#000;font-size:13px}
+  .h{text-align:center;position:relative;margin-bottom:8px}.h img{position:absolute;left:0;top:0;height:56px}.s{font-size:21px;font-weight:700}.i{font-size:12.5px}.t{display:inline-block;margin-top:6px;font-size:16px;font-weight:700;border:2px solid #000;border-radius:6px;padding:1px 14px}
+  h3{font-size:14px;margin:12px 0 4px;border-left:4px solid #000;padding-left:6px}table{width:100%;border-collapse:collapse;border:2px solid #000}th,td{border:1.3px solid #000;padding:4px 5px;text-align:center}th{background:#E6E6E6;-webkit-print-color-adjust:exact;print-color-adjust:exact}td.l{text-align:left}tr.tot td{font-weight:700}
+  .k{display:grid;grid-template-columns:repeat(4,1fr);border:2px solid #000}.k div{border-right:1.3px solid #000;padding:5px;text-align:center}.k div:last-child{border-right:0}.k b{display:block;font-size:18px}
+  tr{break-inside:avoid}.sig{display:flex;justify-content:space-between;margin-top:44px}.sig div{border-top:1.5px solid #000;min-width:180px;text-align:center;padding-top:3px}`;
+  const body = `<div class="h">${logoOn() ? `<img src="${logoSrc()}" alt="">` : ''}<div class="s">${esc(T.school || '')}</div>${info ? `<div class="i">${esc(info)}</div>` : ''}<div class="t">মাসিক প্রতিবেদন — ${monthName(D.ym)}</div></div>
+    <div class="k"><div>কর্মদিবস<b>${bn(D.W.work)}</b></div><div>মোট শিক্ষার্থী<b>${bn(D.AS.length)}</b></div><div>শিক্ষার্থীর গড় উপস্থিতি<b>${pc(sp)}</b></div><div>শিক্ষক উপস্থিতি<b>${pc(tp)}</b></div></div>
+    ${D.classes.length ? `<h3>শ্রেণিভিত্তিক শিক্ষার্থী ও উপস্থিতি</h3><table><tr><th>শ্রেণি</th><th>মোট</th><th>ছেলে</th><th>মেয়ে</th><th>উপবৃত্তি</th><th>হাজিরা দিন</th><th>মোট উপস্থিতি</th><th>মোট অনুপস্থিতি</th><th>গড় উপস্থিতি</th></tr>
+      ${D.classes.map(c => `<tr><td>${CLASS_NAME[c.cls]}</td><td>${bn(c.n)}</td><td>${bn(c.boys)}</td><td>${bn(c.girls)}</td><td>${bn(c.stip)}</td><td>${bn(c.days.size)}</td><td>${bn(c.p)}</td><td>${bn(c.a)}</td><td>${pc(rpPct(c.p, c.p + c.a))}</td></tr>`).join('')}
+      <tr class="tot"><td>মোট</td><td>${bn(D.AS.length)}</td><td>${bn(D.classes.reduce((t, c) => t + c.boys, 0))}</td><td>${bn(D.classes.reduce((t, c) => t + c.girls, 0))}</td><td>${bn(D.classes.reduce((t, c) => t + c.stip, 0))}</td><td>${bn(D.sDays.length)}</td><td>${bn(D.sTot.p)}</td><td>${bn(D.sTot.a)}</td><td>${pc(sp)}</td></tr></table>` : ''}
+    ${D.teachers.length ? `<h3>শিক্ষক হাজিরা</h3><table><tr><th>ক্রম</th><th>নাম ও পদবি</th><th>উপস্থিত</th><th>দেরি</th><th>মিটিং</th><th>প্রশিক্ষণ</th><th>ছুটি</th>${D.tT.a ? '<th>অনুপস্থিত</th>' : ''}</tr>
+      ${D.teachers.map(({t, c}, i) => `<tr><td>${bn(i + 1)}</td><td class="l">${esc(t.name)}${t.designation ? ', ' + esc(t.designation) : ''}</td><td>${bn(c.p)}</td><td>${bn(c.late)}</td><td>${bn(c.mt)}</td><td>${bn(c.tr)}</td><td>${bn(c.l)}</td>${D.tT.a ? `<td>${bn(c.a)}</td>` : ''}</tr>`).join('')}</table>` : ''}
+    ${D.learns.length ? `<h3>পড়া ও বাড়ির কাজ</h3><table><tr><th>শ্রেণি</th><th>আপডেট নেওয়া দিন</th><th>পড়া পেরেছে</th><th>বাড়ির কাজ জমা</th><th>অসম্পূর্ণ</th><th>জমা দেয়নি</th></tr>
+      ${D.learns.map(L => `<tr><td>${CLASS_NAME[L.cls]}</td><td>${bn(L.days.size)}</td><td>${pc(rpPct(L.ok, L.ok + L.no))}</td><td>${pc(rpPct(L.done, L.done + L.part + L.hno))}</td><td>${bn(L.part)}</td><td>${bn(L.hno)}</td></tr>`).join('')}</table>` : ''}
+    ${D.low.length ? `<h3>নিয়মিত অনুপস্থিত শিক্ষার্থী (উপস্থিতি ৭০%-এর কম)</h3><table><tr><th>ক্রম</th><th>নাম</th><th>শ্রেণি</th><th>রোল</th><th>উপস্থিত</th><th>অনুপস্থিত</th><th>উপস্থিতি</th><th>অভিভাবকের মোবাইল</th></tr>
+      ${D.low.map((x, i) => `<tr><td>${bn(i + 1)}</td><td class="l">${esc(x.s.name)}</td><td>${PS_CLS[x.s.cls]}</td><td>${esc(bn(x.s.roll || ''))}</td><td>${bn(x.p)}</td><td>${bn(x.a)}</td><td>${pc(x.pct)}</td><td>${esc(bn(x.s.phone || ''))}</td></tr>`).join('')}</table>` : ''}
+    <h3>অন্যান্য কার্যক্রম</h3><table><tr><td class="l">অভিভাবককে SMS পাঠানো</td><td>${bn(D.sms.sent)} টি</td><td class="l">মা সমাবেশ</td><td>${bn(D.meets.filter(m => m.kind === 'mother').length)} টি</td><td class="l">অভিভাবক সমাবেশ</td><td>${bn(D.meets.filter(m => m.kind === 'guardian').length)} টি</td></tr>
+      ${D.hols.length ? `<tr><td class="l">ছুটি</td><td class="l" colspan="5">${D.hols.map(h => `${esc(h.name)} (${holSpan(h)})`).join('; ')}</td></tr>` : ''}</table>
+    <div class="sig"><div>প্রস্তুতকারী</div><div>প্রধান শিক্ষক</div></div>`;
+  return `<!DOCTYPE html><html lang="bn"><head><meta charset="utf-8"><title>মাসিক প্রতিবেদন</title><link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;600;700&display=swap" rel="stylesheet"><style>${css}</style></head><body>${body}</body></html>`;
+}
+function rpClick(ds){
+  if (ds.rpYm) { if (ds.rpYm <= todayISO().slice(0, 7)) UI.rp.ym = ds.rpYm; return render(); }
+  if ('rpPrint' in ds) { toast('প্রিন্টের পর্দায় "Save as PDF" বাছলে PDF হবে', 4000); return printDoc('মাসিক প্রতিবেদন', rpDoc(rpData(rpYm()))); }
+  if ('rpCopy' in ds) return copyText(rpText(rpData(rpYm())), 'প্রতিবেদন কপি হয়েছে — WhatsApp বা মেসেজে পেস্ট করুন');
+}
+function bindReports(){
+  const el = document.getElementById('rpMonth');
+  if (el) el.addEventListener('change', () => { if (el.value && el.value <= todayISO().slice(0, 7)) { UI.rp.ym = el.value; render(); } });
+}
+
 /* ---------- placeholders ---------- */
 function placeholder(id){
   const f = ALL[id];
@@ -4953,7 +5091,7 @@ function render(){
   const inner = !TOP.includes(r);
   $app.classList.toggle('inner', inner);
   $nav.style.display = inner ? 'none' : 'grid';
-  const views = {home, profile, settings, committee, students, teachers, 'lesson-plan':lessonPlan, 'teacher-att':teacherAtt, 'student-att':studentAtt, certificates, gpf, assessment, pension, salary, leave, img2pdf, textbooks, 'parent-sms':parentSms, routine, holidays:holidaysView, 'mother-meet':() => meetingsView('mother'), 'guardian-meet':() => meetingsView('guardian')};
+  const views = {home, profile, settings, committee, students, teachers, 'lesson-plan':lessonPlan, 'teacher-att':teacherAtt, 'student-att':studentAtt, certificates, gpf, assessment, pension, salary, leave, img2pdf, textbooks, 'parent-sms':parentSms, routine, holidays:holidaysView, reports:reportsView, 'mother-meet':() => meetingsView('mother'), 'guardian-meet':() => meetingsView('guardian')};
   $app.innerHTML = (views[r] || (() => placeholder(r)))();
   $nav.innerHTML = NAV.map(n => `<button class="${n[0]===r?'on':''}" data-go="${n[0]}" aria-label="${n[1]}" ${n[0]===r?'aria-current="page"':''}><span class="p">${ic(n[2])}</span>${n[1]}</button>`).join('');
   bindView(r);
@@ -5020,6 +5158,7 @@ function bindView(r){
   if (r === 'img2pdf') bindImg2pdf();
   if (r === 'parent-sms') bindParentSms();
   if (r === 'mother-meet' || r === 'guardian-meet') bindMeetings();
+  if (r === 'reports') bindReports();
   if (r === 'routine') bindRoutine();
   if (r === 'leave') {
     bindLogo();
@@ -5092,6 +5231,7 @@ document.addEventListener('click', e => {
   if (Object.keys(ds).some(k => /^rt[A-Z]/.test(k))) return rtClick(ds);
   if (Object.keys(ds).some(k => /^hol[A-Z]/.test(k))) return holClick(ds);
   if (Object.keys(ds).some(k => /^mt[A-Z]/.test(k))) return mtClick(ds);
+  if (Object.keys(ds).some(k => /^rp[A-Z]/.test(k))) return rpClick(ds);
   if (ds.rtpart) { UI.rtPart = ds.rtpart; window.scrollTo(0, 0); return render(); }
   if (Object.keys(ds).some(k => /^ex[A-Z]/.test(k))) return exClick(ds);
   if (Object.keys(ds).some(k => /^rs[A-Z]/.test(k))) return rtSetupClick(ds);
