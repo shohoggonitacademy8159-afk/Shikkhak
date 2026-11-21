@@ -284,6 +284,11 @@ img.ma{object-fit:cover;background:#E8EEF5}
 .rtg.br{background:#FFF1D6;color:#7A4A00;font-weight:600}
 .rtwarn{background:#FDE8E6;color:#8A1C12;border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.55;display:flex;flex-direction:column;gap:2px}
 .rtok{background:#E3F4EA;color:#17663F;border-radius:12px;padding:8px 12px;font-size:13px;font-weight:700}
+.rtpart{background:#1E7F4F14;padding:4px}.rtpart button{font-size:15px;font-weight:700;min-height:44px}.rtpart button.on{background:#1E7F4F;color:#fff}
+.extab{border-collapse:collapse;width:100%;min-width:100%;background:#fff;font-size:13px}.extab th,.extab td{border:1px solid #CBD6E2;padding:3px;text-align:center}.extab th{background:#EEF3F0;font-size:13px;padding:6px 3px}
+.extab td.exd{min-width:118px;text-align:left}.extab td.exd input{width:100%;font:inherit;font-size:12.5px;border:1px solid #CBD6E2;border-radius:8px;padding:5px 4px;background:#fff}.extab td.exd small{display:block;font-size:11.5px;color:var(--mute);padding:1px 2px}
+.exc{width:100%;min-width:62px;min-height:44px;border:0;border-radius:8px;background:#F6F8FA;font:inherit;font-size:12px;font-weight:600;color:var(--ink);padding:3px;line-height:1.25}.exc.on{background:#E3F4EA;color:#17663F}.exc .plus{color:#9AA8B8;font-size:18px}
+.exx{border:0;background:none;color:#B42318;font-size:15px;min-width:34px;min-height:40px}.exph summary{cursor:pointer;font-size:13.5px;font-weight:600;color:#B42318;padding:4px 0}
 .rt3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.rt3 .btn{min-height:44px;font-size:13.5px;padding:0 6px}
 .rsh{font-weight:700;font-size:14px;margin:12px 0 6px}
 .rsbox{border:1px solid #C5D2DE;border-radius:14px;padding:10px;margin-top:12px;display:flex;flex-direction:column;gap:8px;background:#FBFDFC}
@@ -385,7 +390,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '7.2';
+const WEB_VERSION = '7.3';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -3663,6 +3668,12 @@ function rtHeadInfo(P){
   return [T.emis && `বিদ্যালয়ের কোড: ${bn(T.emis)}`, T.upazila && `উপজেলা: ${T.upazila}`, T.district && `জেলা: ${T.district}`, `শিক্ষাবর্ষ: ${bn(P.year)}`].filter(Boolean).join(' · ');
 }
 function routine(){
+  const part = UI.rtPart === 'exam' ? 'exam' : 'class';
+  const partSeg = `<div class="tabs2 rtpart" style="grid-template-columns:1fr 1fr" role="tablist">${[['class','ক্লাস রুটিন'],['exam','পরীক্ষার রুটিন']].map(([k, l]) => `<button role="tab" class="${part === k ? 'on' : ''}" data-rtpart="${k}" aria-selected="${part === k}">${l}</button>`).join('')}</div>`;
+  if (part === 'exam') return topHeader('রুটিন', 'clock') + `<div class="sec" style="padding-top:16px">${partSeg}${exView()}</div>`;
+  return routineClass(partSeg);
+}
+function routineClass(partSeg){
   const U = rtState(), P = rtPlan(), L = rtLayout(P), issues = rtTimeIssues(L);
   const seg = (attr, cur, opts) => `<div class="tabs2" style="grid-template-columns:repeat(${opts.length},minmax(0,1fr))" role="tablist">${opts.map(([k, l]) => `<button role="tab" class="${String(cur) === String(k) ? 'on' : ''}" data-${attr}="${k}" aria-selected="${String(cur) === String(k)}">${l}</button>`).join('')}</div>`;
   const shiftCard = L.shifts.map(sh => `<div class="rtsh"><div class="top"><b>${esc(sh.name)}</b><span class="t2">${sh.asm ? `সমাবেশ ${rtTime(sh.asm.start)}–${rtTime(sh.asm.end)} · ` : ''}ক্লাস ${rtTime(sh.start)}${sh.groups.length === 1 && sh.groups[0].periods.length ? '–' + rtTime(sh.groups[0].periods[sh.groups[0].periods.length - 1].end) : ''}</span></div>
@@ -3671,6 +3682,7 @@ function routine(){
   const emptyDir = U.kind === 'dir' && !Object.values(rtGrid(P)).some(c => Object.values(c).some(d => Object.keys(d).length));
   const body = U.tab === 'teacher' ? rtTeacherView() : U.tab === 'all' ? rtAllView() : rtClassView();
   return topHeader('রুটিন', 'clock') + `<div class="sec" style="padding-top:16px">
+    ${partSeg}
     ${seg('rt-kind', U.kind, [['school','স্কুলের রুটিন'],['dir','অধিদপ্তরের রুটিন']])}
     ${seg('rt-mode', P.mode, [[1,'১ শিফট'],[2,'২ শিফট']])}
     <div class="card" style="gap:8px"><div style="text-align:center"><b style="font-size:15.5px">${esc(DB.teacher.school || 'বিদ্যালয়ের নাম')}</b><div class="t2" style="font-size:12.5px">${esc(rtHeadInfo(P))}</div>
@@ -3972,7 +3984,176 @@ function rtClick(ds){
     return printDoc(name, rtPrintDoc());
   }
 }
+/* ---------- পরীক্ষার রুটিন ও প্রবেশপত্র ----------
+   DB.exams = {cur:id, list:[{id, name, year, start, end, classes:[], rows:[{id, date, s:{cls:subjId}}], rules:[], perPage}]}
+   Religion subjects are sat on the same day, so they are offered as one subject "rel". */
+const EX_NAMES = ['প্রথম প্রান্তিক মূল্যায়ন','দ্বিতীয় প্রান্তিক মূল্যায়ন','বার্ষিক মূল্যায়ন','বার্ষিক পরীক্ষা','মডেল টেস্ট','অর্ধবার্ষিক পরীক্ষা'];
+const EX_RULES = ['পরীক্ষা শুরুর অন্তত ১৫ মিনিট আগে পরীক্ষার কক্ষে উপস্থিত হতে হবে।','প্রতিদিন প্রবেশপত্র সঙ্গে আনতে হবে এবং পরিদর্শককে দেখাতে হবে।','কলম, পেন্সিল, রাবার, স্কেল ইত্যাদি নিজে সঙ্গে আনতে হবে।','পরীক্ষার কক্ষে মোবাইল ফোন, বই বা কোনো কাগজ আনা যাবে না।','প্রবেশপত্র হারালে সাথে সাথে প্রধান শিক্ষককে জানাতে হবে।'];
+const EX_REL = new Set(['islam','hindu','buddha','christ']);
+const exRoot = () => { if (!DB.exams || !Array.isArray(DB.exams.list)) DB.exams = {cur:null, list:[]}; return DB.exams; };
+const exCur = () => { const R = exRoot(); return R.list.find(e => e.id === R.cur) || R.list[0] || null; };
+function exSubjects(cls){
+  const out = [];
+  subjectsFor(cls).forEach(([sid, name]) => {
+    if (CO_SUBJ.has(sid)) return;
+    if (EX_REL.has(sid)) { if (!out.some(x => x[0] === 'rel')) out.push(['rel', 'ধর্ম ও নৈতিক শিক্ষা']); return; }
+    out.push([sid, name]);
+  });
+  return out;
+}
+const exSubName = (cls, sid) => sid === 'rel' ? 'ধর্ম ও নৈতিক শিক্ষা' : ((subjectsFor(cls).find(x => x[0] === sid) || [])[1] || '');
+const exNextDay = iso => { let d = addDays(iso, 1); for (let i = 0; i < 40 && isHoliday(d); i++) d = addDays(d, 1); return d; };
+function exNew(){
+  const R = exRoot(), cl = classesWithStudents().map(c => c[0]).filter(c => c !== 'pre');
+  const e = {id:uid(), name:EX_NAMES[2], year:String(new Date().getFullYear()), start:'10:00', end:'12:00', classes:cl.length ? cl : ['1','2','3','4','5'], rows:[], rules:EX_RULES.slice(), perPage:2};
+  let d = todayISO(); if (isHoliday(d)) d = exNextDay(d);
+  e.rows.push({id:uid(), date:d, s:{}});
+  R.list.unshift(e); R.cur = e.id; save(); return e;
+}
+const exSort = e => e.rows.sort((a, b) => (a.date || '9').localeCompare(b.date || '9'));
+const exState = () => (UI.ex = UI.ex || {cls:null, pp:null});
+function exIssues(e){
+  const out = [];
+  e.rows.forEach(r => { const h = r.date && holidayOf(r.date); if (h) out.push(`${dFmt(r.date)} ছুটির দিন (${h.name})`); });
+  const seen = {}; e.rows.forEach(r => { if (!r.date) return; if (seen[r.date]) out.push(`${dFmt(r.date)} তারিখ দুবার দেওয়া হয়েছে`); seen[r.date] = 1; });
+  e.classes.forEach(c => { const got = {}; e.rows.forEach(r => { const s = r.s[c]; if (!s) return; if (got[s]) out.push(`${CLASS_NAME[c]}: ${exSubName(c, s)} দুই দিনে দেওয়া হয়েছে`); got[s] = 1; });
+    const miss = exSubjects(c).filter(([sid]) => !got[sid] && (sid !== 'rel' || true)).map(x => x[1]);
+    if (e.rows.some(r => r.s[c]) && miss.length) out.push(`${CLASS_NAME[c]}: এখনো রুটিনে নেই — ${miss.join(', ')}`); });
+  return [...new Set(out)];
+}
+function exView(){
+  const R = exRoot(), e = exCur(), U = exState();
+  if (!e) return `<div class="card empty" style="gap:10px"><span class="ib" style="background:#B45309">${S(P.clock)}</span><p class="t2" style="font-size:14px;line-height:1.6">এখানে পরীক্ষার রুটিন তৈরি করুন। রুটিন থেকে প্রতিটি শিক্ষার্থীর জন্য ছবিসহ প্রবেশপত্র প্রিন্ট করা যাবে।</p><button class="btn big solid" data-ex-new>+ নতুন পরীক্ষার রুটিন</button></div>`;
+  exSort(e);
+  const iss = exIssues(e), cls = e.classes;
+  const head = `<tr><th>তারিখ ও বার</th>${cls.map(c => `<th>${PS_CLS[c]}</th>`).join('')}<th aria-label="মুছুন"></th></tr>`;
+  const rows = e.rows.map(r => `<tr><td class="exd"><input type="date" data-ex-date="${r.id}" value="${r.date || ''}"><small>${r.date ? WD_BN[wdOf(r.date)] : ''}${r.date && isHoliday(r.date) ? ' · ছুটি' : ''}</small></td>
+      ${cls.map(c => { const s = r.s[c]; return `<td><button class="exc${s ? ' on' : ''}" data-ex-cell="${r.id}|${c}">${s ? esc(exSubName(c, s)) : '<span class="plus">+</span>'}</button></td>`; }).join('')}
+      <td><button class="exx" data-ex-delrow="${r.id}" aria-label="এই দিন মুছুন">✕</button></td></tr>`).join('');
+  const stuAll = activeStudents().filter(s => cls.includes(s.cls)), noPh = stuAll.filter(s => !PHOTOS[s.id]);
+  const acls = U.cls && (U.cls === 'all' || cls.includes(U.cls)) ? U.cls : 'all';
+  const pick = acls === 'all' ? stuAll : stuAll.filter(s => s.cls === acls);
+  return `
+    ${R.list.length > 1 ? `<div class="chips" role="tablist">${R.list.map(x => `<button class="${x.id === e.id ? 'on' : ''}" data-ex-pick="${x.id}">${esc(x.name)} ${esc(bn(x.year))}</button>`).join('')}</div>` : ''}
+    <div class="card" style="gap:10px">
+      <div class="field"><label for="exName">পরীক্ষার নাম</label><input id="exName" list="exNames" value="${esc(e.name)}" maxlength="60"><datalist id="exNames">${EX_NAMES.map(n => `<option value="${n}">`).join('')}</datalist></div>
+      <div class="row2" style="grid-template-columns:.7fr 1.15fr 1.15fr"><div class="field"><label for="exYear">সাল</label><input id="exYear" inputmode="numeric" maxlength="4" value="${esc(e.year)}"></div><div class="field"><label for="exStart">শুরু</label><input type="time" id="exStart" value="${e.start || ''}"></div><div class="field"><label for="exEnd">শেষ</label><input type="time" id="exEnd" value="${e.end || ''}"></div></div>
+      <div><b style="font-size:13.5px">শ্রেণি</b><div class="rtpick" style="grid-template-columns:repeat(6,1fr);margin-top:6px">${CLASSES.map(([k]) => `<button class="${cls.includes(k) ? 'on' : ''}" data-ex-cls="${k}">${PS_CLS[k]}</button>`).join('')}</div></div>
+    </div>
+    ${cls.length ? `<div class="rtwrap"><table class="extab">${head}${rows}</table></div>
+    <button class="btn full" data-ex-addrow>+ পরীক্ষার দিন যোগ করুন</button>
+    <p class="hint" style="text-align:center">ঘরে চাপ দিয়ে বিষয় দিন। নতুন দিন যোগ করলে ছুটির দিন বাদ দিয়ে পরের কর্মদিবস বসে।</p>` : '<p class="hint">অন্তত একটি শ্রেণি বাছুন।</p>'}
+    ${iss.length ? `<div class="rtwarn">${iss.map(x => `<div>⚠️ ${esc(x)}</div>`).join('')}</div>` : ''}
+    <div class="card" style="gap:8px"><b style="font-size:15px">প্রিন্ট</b>
+      <div class="row2"><button class="btn" data-ex-print="routine">${ic('doc', 18)} পরীক্ষার রুটিন</button><button class="btn" data-ex-print="pdf">${ic('doc', 18)} PDF</button></div></div>
+    <div class="card" style="gap:10px"><b style="font-size:15px">প্রবেশপত্র (ছবিসহ)</b>
+      ${cls.length > 1 ? `<div class="chips" role="tablist"><button class="${acls === 'all' ? 'on' : ''}" data-ex-acls="all">সব শ্রেণি</button>${cls.map(c => `<button class="${acls === c ? 'on' : ''}" data-ex-acls="${c}">${CLASS_NAME[c]}</button>`).join('')}</div>` : ''}
+      <div class="sumrow">${pill('প্রবেশপত্র ' + bn(pick.length) + 'টি', '#17663F', '#E3F4EA')}${pill('ছবি আছে ' + bn(pick.filter(s => PHOTOS[s.id]).length), '#1F4E8C', '#E6EFFA')}${pick.some(s => !PHOTOS[s.id]) ? pill('ছবি নেই ' + bn(pick.filter(s => !PHOTOS[s.id]).length), '#B42318', '#FDE8E6') : ''}</div>
+      <div class="tabs2" style="grid-template-columns:1fr 1fr" role="tablist">${[[2,'প্রতি পাতায় ২টি (বড়)'],[4,'প্রতি পাতায় ৪টি (ছোট)']].map(([k, l]) => `<button role="tab" class="${(e.perPage || 2) === k ? 'on' : ''}" data-ex-pp="${k}">${l}</button>`).join('')}</div>
+      <button class="btn big solid full" data-ex-admit ${pick.length ? '' : 'disabled'}>${ic('doc', 18)} ${bn(pick.length)}টি প্রবেশপত্র প্রিন্ট</button>
+      ${noPh.length ? `<details class="exph"><summary>ছবি নেই এমন ${bn(noPh.length)} জন — চাপ দিয়ে ছবি যোগ করুন</summary><div class="list" style="margin-top:6px">${noPh.filter(s => acls === 'all' || s.cls === acls).map(s => `<button class="mem tap" data-stu="${s.id}">${avatar(s.id, s.name, '#D23F74', 34)}<span class="grow"><span class="t1" style="font-weight:600;font-size:14px">${esc(s.name)}</span><span class="t2">${PS_CLS[s.cls]} শ্রেণি · রোল ${esc(bn(s.roll || '–'))}</span></span></button>`).join('')}</div></details>` : ''}
+      <p class="hint">ছবি নেওয়া হয় শিক্ষার্থীর প্রোফাইল থেকে। ছবি না থাকলে প্রবেশপত্রে ছবির ফাঁকা ঘর থাকবে, সেখানে ছবি আঠা দিয়ে লাগানো যাবে।</p></div>
+    <div class="row2"><button class="btn" data-ex-new>+ নতুন পরীক্ষা</button><button class="btn danger" data-ex-del="${e.id}">এই পরীক্ষা মুছুন</button></div>`;
+}
+function exCellSheet(rid, cls){
+  const e = exCur(), r = e && e.rows.find(x => x.id === rid); if (!r) return;
+  const used = new Set(e.rows.filter(x => x.id !== rid).map(x => x.s[cls]).filter(Boolean));
+  openSheet(`<h2 style="font-size:18px;margin-bottom:2px">${CLASS_NAME[cls]}</h2><p class="t2" style="font-size:13px">${r.date ? `${dFmt(r.date)} (${WD_BN[wdOf(r.date)]})` : ''}</p>
+    <div class="rtpick t" style="margin-top:10px">${exSubjects(cls).map(([sid, n]) => `<button class="${r.s[cls] === sid ? 'on' : ''}" data-ex-sub="${rid}|${cls}|${sid}">${esc(n)}${used.has(sid) ? ' <small>(অন্য দিনে আছে)</small>' : ''}</button>`).join('')}
+    <button class="${!r.s[cls] ? 'on' : ''}" data-ex-sub="${rid}|${cls}|">— এদিন পরীক্ষা নেই</button></div>
+    <button class="btn big full" data-close style="margin-top:12px">বন্ধ করুন</button>`);
+}
+function exHeadInfo(){
+  const T = DB.teacher; return [T.emis && `ইএমআইএস কোড: ${bn(T.emis)}`, [T.upazila && 'উপজেলা: ' + T.upazila, T.district && 'জেলা: ' + T.district].filter(Boolean).join(', ')].filter(Boolean).join(' · ');
+}
+const exTime = e => e.start ? `${rtTime(e.start)}${e.end ? ' – ' + rtTime(e.end) : ''}` : '';
+function exRoutineDoc(e){
+  const cls = e.classes, land = cls.length > 4;
+  const css = `@page{size:A4 ${land ? 'landscape' : 'portrait'};margin:12mm}html,body{margin:0}body{font-family:'Hind Siliguri','Noto Sans Bengali',sans-serif;color:#000}
+  .h{text-align:center;margin-bottom:10px}.s{font-size:22px;font-weight:700}.i{font-size:13px}.t{display:inline-block;font-size:17px;font-weight:700;margin-top:6px;border:2px solid #000;border-radius:6px;padding:2px 14px}
+  .m{font-size:13.5px;margin-top:5px}table{width:100%;border-collapse:collapse;border:2.4px solid #000}th,td{border:1.6px solid #000;padding:7px 5px;text-align:center;font-size:14px}
+  th{background:#E4E4E4;font-weight:700}td.d{font-weight:600;white-space:nowrap}.n{font-size:12.5px;margin-top:8px;line-height:1.7}
+  .sig{display:flex;justify-content:flex-end;margin-top:50px;font-size:13.5px}.sig div{border-top:1.6px solid #000;padding-top:3px;min-width:200px;text-align:center}
+  .lg{position:absolute;left:0;top:0;height:60px}.hw{position:relative}`;
+  const body = `<div class="hw">${logoOn() ? `<img class="lg" src="${logoSrc()}" alt="">` : ''}<div class="h"><div class="s">${esc(DB.teacher.school || '')}</div>${exHeadInfo() ? `<div class="i">${esc(exHeadInfo())}</div>` : ''}
+    <div class="t">${esc(e.name)} ${esc(bn(e.year))} — পরীক্ষার রুটিন</div>${exTime(e) ? `<div class="m">পরীক্ষার সময়: ${exTime(e)}</div>` : ''}</div></div>
+    <table><thead><tr><th style="width:${land ? 15 : 20}%">তারিখ</th><th style="width:${land ? 9 : 11}%">বার</th>${cls.map(c => `<th>${CLASS_NAME[c]}</th>`).join('')}</tr></thead><tbody>
+    ${e.rows.filter(r => r.date).map(r => `<tr><td class="d">${dFmt(r.date)}</td><td>${WD_BN[wdOf(r.date)]}</td>${cls.map(c => `<td>${r.s[c] ? esc(exSubName(c, r.s[c])) : '—'}</td>`).join('')}</tr>`).join('')}</tbody></table>
+    <div class="n"><b>বিশেষ দ্রষ্টব্য:</b> ${e.rules.slice(0, 3).map(x => esc(x)).join(' ')}</div>
+    <div class="sig"><div>প্রধান শিক্ষক<br>${esc(DB.teacher.school || '')}</div></div>`;
+  return `<!DOCTYPE html><html lang="bn"><head><meta charset="utf-8"><title>${esc(e.name)}</title><link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;600;700&display=swap" rel="stylesheet"><style>${css}</style></head><body>${body}</body></html>`;
+}
+function exAdmitDoc(e, list){
+  const four = (e.perPage || 2) === 4, T = DB.teacher;
+  const css = `@page{size:A4 portrait;margin:8mm}html,body{margin:0}body{font-family:'Hind Siliguri','Noto Sans Bengali',sans-serif;color:#000}
+  .pg{display:grid;grid-template-columns:${four ? '1fr 1fr' : '1fr'};grid-template-rows:136mm 136mm;gap:6mm;height:278mm;overflow:hidden;break-after:page;page-break-after:always}.pg:last-child{break-after:auto;page-break-after:auto}
+  .card{border:2.4px double #000;outline:1px solid #000;outline-offset:-5px;padding:${four ? '4mm' : '5mm 6mm'};display:flex;flex-direction:column;box-sizing:border-box;overflow:hidden;position:relative}
+  .hd{display:flex;align-items:center;gap:8px;border-bottom:1.6px solid #000;padding-bottom:4px}.hd img{height:${four ? 34 : 46}px;width:${four ? 34 : 46}px;object-fit:contain}.hm{flex:1;text-align:center}
+  .sc{font-size:${four ? 14 : 18}px;font-weight:700;line-height:1.25}.in{font-size:${four ? 9.5 : 11.5}px}.ex{font-size:${four ? 11.5 : 13.5}px;font-weight:700;margin-top:1px}
+  .tt{align-self:center;margin:${four ? '4px' : '6px'} 0;font-size:${four ? 14 : 17}px;font-weight:700;background:#000;color:#fff;padding:1px 16px;border-radius:14px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .bd{display:flex;gap:${four ? 6 : 10}px}.inf{flex:1;border-collapse:collapse;font-size:${four ? 11 : 13}px}.inf td{padding:${four ? '1.5px 2px' : '2px 4px'};vertical-align:top}.inf td.k{width:${four ? 33 : 26}%;white-space:nowrap}.inf td.v{font-weight:700;border-bottom:1px dotted #000}
+  .ph{width:${four ? 22 : 30}mm;height:${four ? 26 : 36}mm;border:1.6px solid #000;display:flex;align-items:center;justify-content:center;font-size:10px;text-align:center;flex:none}.ph img{width:100%;height:100%;object-fit:cover}
+  .rt{width:100%;border-collapse:collapse;margin-top:5px;font-size:${four ? 9.5 : 11}px}.rt th,.rt td{border:1.2px solid #000;padding:1px 4px;text-align:center;line-height:1.35}.rt th{background:#E6E6E6;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .ru{font-size:${four ? 9.5 : 10.5}px;margin:4px 0 0;padding-left:16px;line-height:1.4}
+  .sg{display:flex;justify-content:space-between;margin-top:auto;padding-top:${four ? 16 : 18}px;font-size:${four ? 10.5 : 12}px}.sg div{border-top:1.4px solid #000;min-width:${four ? 28 : 45}mm;text-align:center;padding-top:2px}`;
+  const card = s => { const rows = e.rows.filter(r => r.date && r.s[s.cls]);
+    return `<div class="card"><div class="hd">${logoSrc() ? `<img src="${logoSrc()}" alt="">` : ''}<div class="hm"><div class="sc">${esc(T.school || '')}</div>${exHeadInfo() ? `<div class="in">${esc(exHeadInfo())}</div>` : ''}<div class="ex">${esc(e.name)} — ${esc(bn(e.year))}</div></div>${logoSrc() ? '<span style="width:' + (four ? 34 : 46) + 'px"></span>' : ''}</div>
+      <div class="tt">প্রবেশপত্র</div>
+      <div class="bd"><table class="inf">
+        <tr><td class="k">শিক্ষার্থীর নাম</td><td class="v">${esc(s.name)}</td></tr>
+        <tr><td class="k">পিতার নাম</td><td class="v">${esc(s.father || '')}</td></tr>
+        <tr><td class="k">মাতার নাম</td><td class="v">${esc(s.mother || '')}</td></tr>
+        <tr><td class="k">শ্রেণি</td><td class="v">${CLASS_NAME[s.cls]}${s.section ? ' (' + esc(s.section) + ')' : ''}</td></tr>
+        <tr><td class="k">রোল নম্বর</td><td class="v">${esc(bn(s.roll || ''))}</td></tr>
+        ${exTime(e) ? `<tr><td class="k">পরীক্ষার সময়</td><td class="v">${exTime(e)}</td></tr>` : ''}
+      </table><div class="ph">${PHOTOS[s.id] ? `<img src="${PHOTOS[s.id]}" alt="">` : 'শিক্ষার্থীর<br>ছবি'}</div></div>
+      ${rows.length ? `<table class="rt"><tr><th>তারিখ</th><th>বার</th><th>বিষয়</th></tr>${rows.map(r => `<tr><td>${dFmt(r.date)}</td><td>${WD_BN[wdOf(r.date)]}</td><td>${esc(exSubName(s.cls, r.s[s.cls]))}</td></tr>`).join('')}</table>` : ''}
+      ${e.rules.length ? `<ol class="ru">${e.rules.slice(0, 3).map(x => `<li>${esc(x)}</li>`).join('')}</ol>` : ''}
+      <div class="sg"><div>শ্রেণি শিক্ষক</div><div>প্রধান শিক্ষক</div></div></div>`; };
+  const per = four ? 4 : 2, pages = [];
+  for (let i = 0; i < list.length; i += per) pages.push(`<div class="pg">${list.slice(i, i + per).map(card).join('')}</div>`);
+  return `<!DOCTYPE html><html lang="bn"><head><meta charset="utf-8"><title>প্রবেশপত্র</title><link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;600;700&display=swap" rel="stylesheet"><style>${css}ol.ru{list-style-type:bengali}</style></head><body>${pages.join('')}</body></html>`;
+}
+function exClick(ds){
+  const R = exRoot(), U = exState();
+  if ('exNew' in ds) { exNew(); toast('নতুন পরীক্ষার রুটিন খোলা হয়েছে'); return render(); }
+  if (ds.exPick) { R.cur = ds.exPick; save(); return render(); }
+  const e = exCur(); if (!e) return;
+  if (ds.exCls) { const i = e.classes.indexOf(ds.exCls); if (i >= 0) e.classes.splice(i, 1); else e.classes.push(ds.exCls); e.classes.sort((a, b) => CLASSES.findIndex(c => c[0] === a) - CLASSES.findIndex(c => c[0] === b)); save(); return render(); }
+  if ('exAddrow' in ds) { exSort(e); const last = e.rows.filter(r => r.date).pop(); e.rows.push({id:uid(), date:last ? exNextDay(last.date) : todayISO(), s:{}}); save(); return render(); }
+  if (ds.exDelrow) { const r = e.rows.find(x => x.id === ds.exDelrow); if (!r) return; const del = () => { e.rows = e.rows.filter(x => x.id !== r.id); save(); render(); };
+    return Object.keys(r.s).length ? confirmSheet('এই দিন মুছবেন?', `${r.date ? dFmt(r.date) : ''} তারিখের সব শ্রেণির বিষয় মুছে যাবে।`, 'মুছুন', del) : del(); }
+  if (ds.exCell) { const [rid, c] = ds.exCell.split('|'); return exCellSheet(rid, c); }
+  if (ds.exSub !== undefined) { const [rid, c, sid] = ds.exSub.split('|'), r = e.rows.find(x => x.id === rid); if (r) { if (sid) r.s[c] = sid; else delete r.s[c]; save(); } closeSheet(); return render(); }
+  if (ds.exAcls) { U.cls = ds.exAcls; return render(); }
+  if (ds.exPp) { e.perPage = +ds.exPp; save(); return render(); }
+  if (ds.exDel) return confirmSheet('এই পরীক্ষা মুছবেন?', `${e.name} ${bn(e.year)}-এর রুটিন মুছে যাবে।`, 'মুছুন', () => { R.list = R.list.filter(x => x.id !== e.id); R.cur = R.list[0] ? R.list[0].id : null; save(); });
+  if (ds.exPrint) {
+    if (!e.rows.some(r => r.date && Object.keys(r.s).length)) return toast('আগে রুটিনে বিষয় দিন');
+    if (ds.exPrint === 'pdf') toast('প্রিন্টের পর্দায় "Save as PDF / PDF হিসেবে সংরক্ষণ" বাছুন', 5000);
+    return printDoc(`${e.name} রুটিন`, exRoutineDoc(e));
+  }
+  if ('exAdmit' in ds) {
+    const acls = U.cls && U.cls !== 'all' && e.classes.includes(U.cls) ? [U.cls] : e.classes;
+    const list = acls.flatMap(c => sortedStudents(c)); if (!list.length) return toast('এই শ্রেণিতে শিক্ষার্থী নেই');
+    toast('প্রিন্টের পর্দায় "Save as PDF" বাছলে PDF হবে', 4000);
+    return printDoc('প্রবেশপত্র', exAdmitDoc(e, list));
+  }
+}
+function bindExam(){
+  const e = exCur(); if (!e) return;
+  const on = (id, ev, fn) => { const el = document.getElementById(id); if (el) el.addEventListener(ev, () => fn(el)); };
+  let t;
+  on('exName', 'input', el => { e.name = el.value; clearTimeout(t); t = setTimeout(save, 400); });
+  on('exName', 'change', () => { save(); render(); });
+  on('exYear', 'input', el => { e.year = toEn(el.value).replace(/\D/g, '').slice(0, 4); clearTimeout(t); t = setTimeout(save, 400); });
+  on('exStart', 'change', el => { e.start = el.value; save(); });
+  on('exEnd', 'change', el => { e.end = el.value; save(); });
+  document.querySelectorAll('[data-ex-date]').forEach(el => el.addEventListener('change', () => { const r = e.rows.find(x => x.id === el.dataset.exDate); if (r && el.value) { r.date = el.value; save(); render(); } }));
+}
+
 function bindRoutine(){
+  if (UI.rtPart === 'exam') return bindExam();
   const t = document.getElementById('rtT'); if (t) t.addEventListener('change', () => { rtState().tid = t.value; render(); });
   const me = document.getElementById('rtMe'); if (me) me.addEventListener('change', () => { rtRoot().me = me.checked ? rtState().tid : null; save(); });
 }
@@ -4902,6 +5083,8 @@ document.addEventListener('click', e => {
   if (Object.keys(ds).some(k => /^rt[A-Z]/.test(k))) return rtClick(ds);
   if (Object.keys(ds).some(k => /^hol[A-Z]/.test(k))) return holClick(ds);
   if (Object.keys(ds).some(k => /^mt[A-Z]/.test(k))) return mtClick(ds);
+  if (ds.rtpart) { UI.rtPart = ds.rtpart; window.scrollTo(0, 0); return render(); }
+  if (Object.keys(ds).some(k => /^ex[A-Z]/.test(k))) return exClick(ds);
   if (Object.keys(ds).some(k => /^rs[A-Z]/.test(k))) return rtSetupClick(ds);
   if ('back' in ds) { if (history.length > 1) history.back(); else go('home'); return; }
   // committee
