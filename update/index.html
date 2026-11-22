@@ -396,7 +396,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '7.6';
+const WEB_VERSION = '7.7';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -4147,6 +4147,11 @@ const EX_RULES = ['পরীক্ষা শুরুর অন্তত ১৫ 
 const EX_REL = new Set(['islam','hindu','buddha','christ']);
 const exRoot = () => { if (!DB.exams || !Array.isArray(DB.exams.list)) DB.exams = {cur:null, list:[]}; return DB.exams; };
 const exCur = () => { const R = exRoot(); return R.list.find(e => e.id === R.cur) || R.list[0] || null; };
+/* subjects of the DPE 2026 assessment timetable that are not in the textbook list */
+const EX_ARTS = 'শিল্পকলা (চারু ও কারুকলা, সংগীত, নৃত্য, নাট্যকলা)', EX_HEALTH = 'শারীরিক ও মানসিক স্বাস্থ্য শিক্ষা';
+const EX_EXTRA = {
+  lo:[['xsci','সামাজিক ও প্রাথমিক বিজ্ঞান (সমন্বিত)'],['rel','ধর্ম ও নৈতিক শিক্ষা'],['xhealth',EX_HEALTH],['xarts',EX_ARTS]],
+  hi:[['xhealth',EX_HEALTH],['xarts',EX_ARTS],['xartsh',EX_ARTS + ' এবং ' + EX_HEALTH]]};
 function exSubjects(cls){
   const out = [];
   subjectsFor(cls).forEach(([sid, name]) => {
@@ -4154,9 +4159,10 @@ function exSubjects(cls){
     if (EX_REL.has(sid)) { if (!out.some(x => x[0] === 'rel')) out.push(['rel', 'ধর্ম ও নৈতিক শিক্ষা']); return; }
     out.push([sid, name]);
   });
+  if (cls !== 'pre') (EX_EXTRA[EX_LO.has(cls) ? 'lo' : 'hi'] || []).forEach(x => { if (!out.some(y => y[0] === x[0])) out.push(x); });
   return out;
 }
-const exSubName = (cls, sid) => sid === 'rel' ? 'ধর্ম ও নৈতিক শিক্ষা' : ((subjectsFor(cls).find(x => x[0] === sid) || [])[1] || '');
+const exSubName = (cls, sid) => sid === 'rel' ? 'ধর্ম ও নৈতিক শিক্ষা' : ((exSubjects(cls).find(x => x[0] === sid) || subjectsFor(cls).find(x => x[0] === sid) || [])[1] || '');
 const exNextDay = iso => { let d = addDays(iso, 1); for (let i = 0; i < 40 && isHoliday(d); i++) d = addDays(d, 1); return d; };
 function exNew(){
   const R = exRoot(), cl = classesWithStudents().map(c => c[0]).filter(c => c !== 'pre');
@@ -4172,7 +4178,7 @@ function exIssues(e){
   e.rows.forEach(r => { const h = r.date && holidayOf(r.date); if (h) out.push(`${dFmt(r.date)} ছুটির দিন (${h.name})`); });
   const seen = {}; e.rows.forEach(r => { if (!r.date) return; if (seen[r.date]) out.push(`${dFmt(r.date)} তারিখ দুবার দেওয়া হয়েছে`); seen[r.date] = 1; });
   e.classes.forEach(c => { const got = {}; e.rows.forEach(r => { const s = r.s[c]; if (!s) return; if (got[s]) out.push(`${CLASS_NAME[c]}: ${exSubName(c, s)} দুই দিনে দেওয়া হয়েছে`); got[s] = 1; });
-    const miss = exSubjects(c).filter(([sid]) => !got[sid] && (sid !== 'rel' || true)).map(x => x[1]);
+    const miss = exSubjects(c).filter(([sid]) => !got[sid] && !/^x/.test(sid) && !(sid === 'rel' && EX_LO.has(c))).map(x => x[1]);
     if (e.rows.some(r => r.s[c]) && miss.length) out.push(`${CLASS_NAME[c]}: এখনো রুটিনে নেই — ${miss.join(', ')}`); });
   return [...new Set(out)];
 }
@@ -4235,9 +4241,9 @@ function exRoutineDoc(e){
   const cls = e.classes, land = cls.length > 4, two = new Set(cls.map(exGrp)).size > 1;
   const css = `@page{size:A4 ${land ? 'landscape' : 'portrait'};margin:12mm}html,body{margin:0}body{font-family:'Hind Siliguri','Noto Sans Bengali',sans-serif;color:#000}
   .h{text-align:center;margin-bottom:10px}.s{font-size:22px;font-weight:700}.i{font-size:13px}.t{display:inline-block;font-size:17px;font-weight:700;margin-top:6px;border:2px solid #000;border-radius:6px;padding:2px 14px}
-  .m{font-size:13.5px;margin-top:5px}table{width:100%;border-collapse:collapse;border:2.4px solid #000}th,td{border:1.6px solid #000;padding:7px 5px;text-align:center;font-size:14px}
+  .m{font-size:13.5px;margin-top:5px}table{width:100%;border-collapse:collapse;border:2.4px solid #000}th,td{border:1.6px solid #000;padding:${e.rows.length > 6 ? '4px 4px' : '7px 5px'};text-align:center;font-size:${e.rows.length > 6 ? 13 : 14}px;line-height:1.35}
   th{background:#E4E4E4;font-weight:700}td.d{font-weight:600;white-space:nowrap}.n{font-size:12.5px;margin-top:8px;line-height:1.7}
-  .sig{display:flex;justify-content:flex-end;margin-top:50px;font-size:13.5px}.sig div{border-top:1.6px solid #000;padding-top:3px;min-width:200px;text-align:center}
+  .sig{display:flex;justify-content:flex-end;margin-top:34px;font-size:13.5px}.sig div{border-top:1.6px solid #000;padding-top:3px;min-width:200px;text-align:center}
   .lg{position:absolute;left:0;top:0;height:60px}.hw{position:relative}`;
   const body = `<div class="hw">${logoOn() ? `<img class="lg" src="${logoSrc()}" alt="">` : ''}<div class="h"><div class="s">${esc(DB.teacher.school || '')}</div>${exHeadInfo() ? `<div class="i">${esc(exHeadInfo())}</div>` : ''}
     <div class="t">${esc(e.name)} ${esc(bn(e.year))} — পরীক্ষার রুটিন</div>${exTimeLine(e) ? `<div class="m">পরীক্ষার সময়: ${exTimeLine(e)}</div>` : ''}</div></div>
@@ -4255,11 +4261,11 @@ function exAdmitDoc(e, list){
   .hd{display:flex;align-items:center;gap:8px;border-bottom:1.6px solid #000;padding-bottom:4px}.hd img{height:${four ? 34 : 46}px;width:${four ? 34 : 46}px;object-fit:contain}.hm{flex:1;text-align:center}
   .sc{font-size:${four ? 14 : 18}px;font-weight:700;line-height:1.25}.in{font-size:${four ? 9.5 : 11.5}px}.ex{font-size:${four ? 11.5 : 13.5}px;font-weight:700;margin-top:1px}
   .tt{align-self:center;margin:${four ? '4px' : '6px'} 0;font-size:${four ? 14 : 17}px;font-weight:700;background:#000;color:#fff;padding:1px 16px;border-radius:14px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .bd{display:flex;gap:${four ? 6 : 10}px}.inf{flex:1;border-collapse:collapse;font-size:${four ? 11 : 13}px}.inf td{padding:${four ? '1.5px 2px' : '2px 4px'};vertical-align:top}.inf td.k{width:${four ? 33 : 26}%;white-space:nowrap}.inf td.v{font-weight:700;border-bottom:1px dotted #000}
-  .ph{width:${four ? 22 : 30}mm;height:${four ? 26 : 36}mm;border:1.6px solid #000;display:flex;align-items:center;justify-content:center;font-size:10px;text-align:center;flex:none}.ph img{width:100%;height:100%;object-fit:cover}
+  .bd{display:flex;gap:${four ? 6 : 10}px}.inf{flex:1;border-collapse:collapse;font-size:${four ? 11 : 13}px}.inf td{padding:${four ? '1px 2px' : '1px 4px'};vertical-align:top}.inf td.k{width:${four ? 33 : 26}%;white-space:nowrap}.inf td.v{font-weight:700;border-bottom:1px dotted #000}
+  .ph{width:${four ? 22 : 30}mm;height:${four ? 26 : 33}mm;border:1.6px solid #000;display:flex;align-items:center;justify-content:center;font-size:10px;text-align:center;flex:none}.ph img{width:100%;height:100%;object-fit:cover}
   .rt{width:100%;border-collapse:collapse;margin-top:5px;font-size:${four ? 9.5 : 11}px}.rt th,.rt td{border:1.2px solid #000;padding:1px 4px;text-align:center;line-height:1.35}.rt th{background:#E6E6E6;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .ru{font-size:${four ? 9.5 : 10.5}px;margin:4px 0 0;padding-left:16px;line-height:1.4}
-  .sg{display:flex;justify-content:space-between;margin-top:auto;padding-top:${four ? 16 : 18}px;font-size:${four ? 10.5 : 12}px}.sg div{border-top:1.4px solid #000;min-width:${four ? 28 : 45}mm;text-align:center;padding-top:2px}`;
+  .sg{display:flex;justify-content:space-between;margin-top:auto;padding-top:${four ? 14 : 14}px;font-size:${four ? 10.5 : 12}px}.sg div{border-top:1.4px solid #000;min-width:${four ? 28 : 45}mm;text-align:center;padding-top:2px}`;
   const card = s => { const rows = e.rows.filter(r => r.date && r.s[s.cls]);
     return `<div class="card"><div class="hd">${logoSrc() ? `<img src="${logoSrc()}" alt="">` : ''}<div class="hm"><div class="sc">${esc(T.school || '')}</div>${exHeadInfo() ? `<div class="in">${esc(exHeadInfo())}</div>` : ''}<div class="ex">${esc(e.name)} — ${esc(bn(e.year))}</div></div>${logoSrc() ? '<span style="width:' + (four ? 34 : 46) + 'px"></span>' : ''}</div>
       <div class="tt">প্রবেশপত্র</div>
@@ -4272,7 +4278,7 @@ function exAdmitDoc(e, list){
         ${exTime(e, s.cls) ? `<tr><td class="k">পরীক্ষার সময়</td><td class="v">${exTime(e, s.cls)}</td></tr>` : ''}
       </table><div class="ph">${PHOTOS[s.id] ? `<img src="${PHOTOS[s.id]}" alt="">` : 'শিক্ষার্থীর<br>ছবি'}</div></div>
       ${rows.length ? `<table class="rt"><tr><th>তারিখ</th><th>বার</th><th>বিষয়</th></tr>${rows.map(r => `<tr><td>${dFmt(r.date)}</td><td>${WD_BN[wdOf(r.date)]}</td><td>${esc(exSubName(s.cls, r.s[s.cls]))}</td></tr>`).join('')}</table>` : ''}
-      ${e.rules.length ? `<ol class="ru">${e.rules.slice(0, 3).map(x => `<li>${esc(x)}</li>`).join('')}</ol>` : ''}
+      ${e.rules.length ? `<ol class="ru">${e.rules.slice(0, rows.length > 5 ? 2 : 3).map(x => `<li>${esc(x)}</li>`).join('')}</ol>` : ''}
       <div class="sg"><div>শ্রেণি শিক্ষক</div><div>প্রধান শিক্ষক</div></div></div>`; };
   const per = four ? 4 : 2, pages = [];
   for (let i = 0; i < list.length; i += per) pages.push(`<div class="pg">${list.slice(i, i + per).map(card).join('')}</div>`);
