@@ -323,6 +323,9 @@ img.ma{object-fit:cover;background:#E8EEF5}
 .holline.on{background:#E6EFFA;border-color:#1F4E8C}
 .pschk{flex:none;width:30px;height:30px;border-radius:8px;border:2px solid #9FB0C4;background:#fff;font-size:18px;font-weight:800;color:#fff;line-height:1;cursor:pointer}
 .pschk.on{background:#0F766E;border-color:#0F766E}
+.mtwrap{border-top:1px solid #EDF2EF}.mtwrap:first-child{border-top:0}.mtwrap.on{background:#F0FAF5}.mtwrap .mtrow{border-top:0;background:transparent}
+.mtwho{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:0 12px 10px 46px}.mtwho button{min-height:36px;border:1px solid #CFE0D6;border-radius:999px;background:#fff;font:inherit;font-size:13px;font-weight:600;color:#2F4A3B}.mtwho button.on{background:#1E7F4F;border-color:#1E7F4F;color:#fff}
+.mtrel{display:inline-block;font-size:11.5px;font-weight:600;color:#0369A1;background:#E6F1FA;border-radius:999px;padding:0 8px;margin-left:4px;vertical-align:middle}
 .mtrow{display:flex;align-items:center;gap:10px;width:100%;background:#fff;border:0;border-top:1px solid #EDF2EF;padding:9px 12px;font:inherit;color:var(--ink);text-align:left;cursor:pointer}
 .mtrow:first-child{border-top:0}.mtrow .grow{display:flex;flex-direction:column;min-width:0}.mtrow.on{background:#F0FAF5}
 .pschk:disabled{opacity:.35;cursor:not-allowed}
@@ -396,7 +399,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '7.7';
+const WEB_VERSION = '7.8';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -4445,6 +4448,15 @@ const mtList = () => (DB.meetings = Array.isArray(DB.meetings) ? DB.meetings : [
 function mtState(kind){ psData(); if (!UI.mt || UI.mt.kind !== kind) UI.mt = {kind, id:null, tab:'info', cls:'all', q:''}; return UI.mt; }
 const mtGet = id => mtList().find(m => m.id === id);
 const mtWhoName = (s, kind) => kind === 'mother' ? (s.mother || '') : (s.father || s.mother || '');
+/* who actually came for a student: guardian meetings may be attended by the father, the mother or someone else */
+const MT_RELS = ['চাচা','চাচি','মামা','মামি','দাদা','দাদি','নানা','নানি','ভাই','বোন','খালা','ফুপু','অভিভাবক'];
+function mtWho(m, s){
+  if (m.kind !== 'guardian') return {name:s.mother || '', rel:'মা', k:'mother'};
+  const w = (m.who || {})[s.id];
+  if (w && w.k === 'other') return {name:w.name || '', rel:w.rel || 'অন্যান্য', k:'other'};
+  if (w && w.k === 'mother') return {name:s.mother || '', rel:'মা', k:'mother'};
+  return s.father || !s.mother ? {name:s.father || '', rel:'বাবা', k:'father'} : {name:s.mother, rel:'মা', k:'mother'};
+}
 function mtStudents(m){
   return activeStudents().filter(s => !m.classes.length || m.classes.includes(s.cls))
     .sort((a, b) => CLASSES.findIndex(c => c[0] === a.cls) - CLASSES.findIndex(c => c[0] === b.cls) || (parseInt(toEn(a.roll)) || 999) - (parseInt(toEn(b.roll)) || 999));
@@ -4452,7 +4464,7 @@ function mtStudents(m){
 /* one mother / guardian may have several children: count people by name + phone */
 function mtPeople(m, onlyPresent){
   const set = new Set();
-  mtStudents(m).forEach(s => { if (onlyPresent && !m.present[s.id]) return; set.add((mtWhoName(s, m.kind).trim() || s.id) + '|' + (psPhone(s.phone) || '')); });
+  mtStudents(m).forEach(s => { if (onlyPresent && !m.present[s.id]) return; set.add((mtWho(m, s).name.trim() || s.id) + '|' + (psPhone(s.phone) || '')); });
   return set.size;
 }
 function mtNew(kind){
@@ -4509,9 +4521,10 @@ function mtAttView(m){
       <span class="t2" style="font-size:12.5px">একই ${K.who}র একাধিক সন্তান থাকলে ${K.who} একবারই গোনা হয়।</span></div>
     ${cls.length > 1 ? `<div class="chips" role="tablist"><button class="${U.cls === 'all' ? 'on' : ''}" data-mt-fcls="all">সব</button>${cls.map(c => `<button class="${U.cls === c ? 'on' : ''}" data-mt-fcls="${c}">${CLASS_NAME[c]}</button>`).join('')}</div>` : ''}
     <div class="row2"><input id="mtQ" class="psin" value="${esc(U.q || '')}" placeholder="নাম বা রোল খুঁজুন"><button class="btn" data-mt-allp>এই তালিকার সবাই উপস্থিত</button></div>
-    ${list.length ? `<div class="list">${list.map(s => { const on = !!m.present[s.id], w = mtWhoName(s, m.kind);
-      return `<button class="mtrow${on ? ' on' : ''}" data-mt-p="${s.id}" aria-pressed="${on}"><span class="pschk${on ? ' on' : ''}" aria-hidden="true">${on ? '✓' : ''}</span>
-        <span class="grow"><span class="t1" style="font-weight:600;font-size:14px">${esc(w || `(${K.whoLong} নেই)`)}</span><span class="t2">${esc(s.name)} · ${PS_CLS[s.cls]} শ্রেণি, রোল ${esc(bn(s.roll || '–'))}${s.phone ? ' · ' + esc(bn(s.phone)) : ''}</span></span></button>`; }).join('')}</div>`
+    ${list.length ? `<div class="list">${list.map(s => { const on = !!m.present[s.id], W = mtWho(m, s), g = m.kind === 'guardian';
+      return `<div class="mtwrap${on ? ' on' : ''}"><button class="mtrow${on ? ' on' : ''}" data-mt-p="${s.id}" aria-pressed="${on}"><span class="pschk${on ? ' on' : ''}" aria-hidden="true">${on ? '✓' : ''}</span>
+        <span class="grow"><span class="t1" style="font-weight:600;font-size:14px">${esc(W.name || (W.k === 'other' ? '(নাম লেখা হয়নি)' : `(${g ? (W.k === 'mother' ? 'মায়ের' : 'বাবার') + ' নাম' : K.whoLong} নেই)`))}${g ? ` <small class="mtrel">${esc(W.rel)}</small>` : ''}</span><span class="t2">${esc(s.name)} · ${PS_CLS[s.cls]} শ্রেণি, রোল ${esc(bn(s.roll || '–'))}${s.phone ? ' · ' + esc(bn(s.phone)) : ''}</span></span></button>
+        ${g && on ? `<div class="mtwho" role="group" aria-label="কে এসেছেন">${[['father','বাবা'],['mother','মা'],['other','অন্যান্য']].map(([k, l]) => `<button class="${W.k === k ? 'on' : ''}" data-mt-who="${s.id}|${k}">${l}</button>`).join('')}</div>` : ''}</div>`; }).join('')}</div>`
       : '<div class="card empty"><p class="t2" style="font-size:14px">কোনো শিক্ষার্থী পাওয়া যায়নি।</p></div>'}
     <p class="hint" style="text-align:center">নামে চাপ দিলে উপস্থিত হয়, আবার চাপলে বাতিল। সব পরিবর্তন সাথে সাথে সংরক্ষিত হয়।</p>`;
 }
@@ -4561,8 +4574,8 @@ function mtDoc(m, what){
       <div class="sigs"><div>প্রধান শিক্ষক / সদস্য সচিব</div><div>সভাপতি</div></div>`;
   } else {
     body = `${head(what === 'present' ? `${K.title}ে উপস্থিত ${K.who}দের তালিকা` : `${K.title}ের হাজিরা`)}
-      <table><thead><tr><th style="width:7%">ক্রমিক</th><th>${K.whoLong}</th><th>শিক্ষার্থীর নাম</th><th style="width:9%">শ্রেণি</th><th style="width:7%">রোল</th><th style="width:15%">মোবাইল</th><th>স্বাক্ষর</th></tr></thead><tbody>
-      ${rows.map((s, i) => `<tr><td class="c">${bn(i + 1)}</td><td>${esc(mtWhoName(s, m.kind))}</td><td>${esc(s.name)}</td><td class="c">${PS_CLS[s.cls]}</td><td class="c">${esc(bn(s.roll || ''))}</td><td class="c">${esc(bn(s.phone || ''))}</td><td class="sg">${what === 'present' ? '✓ উপস্থিত' : ''}</td></tr>`).join('')}
+      <table><thead><tr><th style="width:7%">ক্রমিক</th><th>${K.whoLong}</th>${m.kind === 'guardian' ? '<th style="width:9%">সম্পর্ক</th>' : ''}<th>শিক্ষার্থীর নাম</th><th style="width:9%">শ্রেণি</th><th style="width:7%">রোল</th><th style="width:15%">মোবাইল</th><th>স্বাক্ষর</th></tr></thead><tbody>
+      ${rows.map((s, i) => { const W = mtWho(m, s), known = what === 'present' || m.present[s.id]; return `<tr><td class="c">${bn(i + 1)}</td><td>${esc(m.kind === 'guardian' && !known ? mtWhoName(s, m.kind) : W.name)}</td>${m.kind === 'guardian' ? `<td class="c">${known ? esc(W.rel) : ''}</td>` : ''}<td>${esc(s.name)}</td><td class="c">${PS_CLS[s.cls]}</td><td class="c">${esc(bn(s.roll || ''))}</td><td class="c">${esc(bn(s.phone || ''))}</td><td class="sg">${what === 'present' ? '✓ উপস্থিত' : ''}</td></tr>`; }).join('')}
       </tbody></table>
       <div class="meta" style="margin-top:6px">${what === 'present' ? `মোট উপস্থিত: ${bn(mtPeople(m, true))} জন ${K.who} (শিক্ষার্থী ${bn(rows.length)} জন)` : `মোট শিক্ষার্থী: ${bn(rows.length)} জন`}</div>
       <div class="sigs"><div>শ্রেণি শিক্ষক</div><div>প্রধান শিক্ষকের স্বাক্ষর</div></div>`;
@@ -4582,6 +4595,12 @@ function mtClick(ds){
   if (ds.mtDel) return confirmSheet('এই সমাবেশ মুছবেন?', `${dFmt(m.date)} তারিখের ${MT_KIND[m.kind].title}ের সব তথ্য ও উপস্থিতি মুছে যাবে।`, 'মুছুন', () => { DB.meetings = mtList().filter(x => x.id !== m.id); U.id = null; save(); });
   if (ds.mtFcls) { U.cls = ds.mtFcls; return render(); }
   if (ds.mtP) { if (m.present[ds.mtP]) delete m.present[ds.mtP]; else m.present[ds.mtP] = true; save(); return render(); }
+  if (ds.mtWho) { const [sid, k] = ds.mtWho.split('|'); m.who = m.who || {};
+    if (k === 'other') return mtOtherSheet(m, sid);
+    if (k === 'father') delete m.who[sid]; else m.who[sid] = {k}; save(); return render(); }
+  if (ds.mtRel) { const el = document.getElementById('mtOrel'); if (el) el.value = ds.mtRel; document.querySelectorAll('[data-mt-rel]').forEach(b => b.classList.toggle('on', b.dataset.mtRel === ds.mtRel)); return; }
+  if (ds.mtWsave) { const n = (document.getElementById('mtOname').value || '').trim(), r = (document.getElementById('mtOrel').value || '').trim();
+    if (!n) return toast('যিনি এসেছেন তাঁর নাম লিখুন'); m.who = m.who || {}; m.who[ds.mtWsave] = {k:'other', name:n, rel:r || 'অভিভাবক'}; m.present[ds.mtWsave] = true; save(); closeSheet(); return render(); }
   if ('mtAllp' in ds) { const q = (U.q || '').trim().toLowerCase(); mtStudents(m).filter(s => (U.cls === 'all' || s.cls === U.cls) && (!q || [s.name, s.mother, s.father, s.roll, bn(s.roll || '')].join(' ').toLowerCase().includes(q))).forEach(s => { m.present[s.id] = true; }); save(); return render(); }
   if (ds.mtPrint) return printDoc(MT_KIND[m.kind].title, mtDoc(m, ds.mtPrint));
   if (ds.mtSms) {
@@ -4591,6 +4610,15 @@ function mtClick(ds){
         items:R.out.map(({s, ph}) => ({sid:s.id, name:mtWhoName(s, m.kind) || s.name, ph, txt, seg:psSeg(txt), st:'pending', err:''}))};
       DB.smsLog.unshift(job); if (DB.smsLog.length > 40) DB.smsLog.length = 40; save(); render(); psStart(job); });
   }
+}
+function mtOtherSheet(m, sid){
+  const s = DB.students.find(x => x.id === sid); if (!s) return;
+  const w = (m.who || {})[sid] || {}, cur = w.k === 'other' ? w : {};
+  openSheet(`<h2 style="font-size:18px;margin-bottom:2px">বাবা-মা ছাড়া অন্য কেউ এসেছেন</h2><p class="t2" style="font-size:13px">${esc(s.name)} · ${PS_CLS[s.cls]} শ্রেণি, রোল ${esc(bn(s.roll || '–'))}</p>
+    <div class="field" style="margin-top:10px"><label for="mtOname">যিনি এসেছেন তাঁর নাম</label><input id="mtOname" maxlength="60" value="${esc(cur.name || '')}" placeholder="যেমন: মো. রফিক মিয়া"></div>
+    <div class="field"><label for="mtOrel">শিক্ষার্থীর সাথে সম্পর্ক</label><input id="mtOrel" maxlength="30" value="${esc(cur.rel || '')}" placeholder="নিচ থেকে বাছুন বা লিখুন"></div>
+    <div class="rtpick" style="grid-template-columns:repeat(4,1fr)">${MT_RELS.map(r => `<button class="${cur.rel === r ? 'on' : ''}" data-mt-rel="${r}">${r}</button>`).join('')}</div>
+    <div class="row2" style="margin-top:12px"><button class="btn big" data-close>বাতিল</button><button class="btn big solid" data-mt-wsave="${sid}">সংরক্ষণ</button></div>`);
 }
 function bindMeetings(){
   const U = UI.mt, m = U && U.id && mtGet(U.id); if (!m) return;
