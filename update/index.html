@@ -396,7 +396,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '7.5';
+const WEB_VERSION = '7.6';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -866,55 +866,204 @@ async function getParts(prefix, n){
   for (let i = 0; i < n; i++) { const f = await fsGet(`${prefix}${i}`); if (!f || !f.d) throw new Error('MISSING_PART'); out += f.d.stringValue; }
   return out;
 }
-let cloudT = null, cloudBusy = false;
+/* ---------- two-way sync between phones on the same account ----------
+   Each phone keeps a "base": the copy it last agreed on with the server. On every sync the phone compares
+   base / this phone / online and merges field by field (records with an id are matched by id), so different
+   changes on different phones are all kept, and a deletion on one phone deletes on the other. When the same
+   field was changed on both phones, the later change wins. The online copy is written under a new name each
+   time and the "meta" pointer is switched only if nobody else wrote in between (Firestore precondition), so
+   two phones syncing together can never overwrite each other. */
+let cloudT = null, cloudBusy = false, cloudPollT = null;
+const SYNC_DB = 'shikkhok_sync', SYNC_STORE = 'kv';
+let SYNC_BASE = null; // {rev, db, ph:{id:hash}}
+function idb(){ return new Promise((ok, no) => { try { const r = indexedDB.open(SYNC_DB, 1); r.onupgradeneeded = () => r.result.createObjectStore(SYNC_STORE); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); } catch(e) { no(e); } }); }
+async function baseGet(){ if (SYNC_BASE) return SYNC_BASE; try { const d = await idb(); SYNC_BASE = await new Promise(ok => { const q = d.transaction(SYNC_STORE).objectStore(SYNC_STORE).get('base'); q.onsuccess = () => ok(q.result || null); q.onerror = () => ok(null); }); } catch(e) {} return SYNC_BASE; }
+async function baseSet(b){ SYNC_BASE = b; try { const d = await idb(); await new Promise(ok => { const t = d.transaction(SYNC_STORE, 'readwrite'); t.objectStore(SYNC_STORE).put(b, 'base'); t.oncomplete = ok; t.onerror = ok; }); } catch(e) {} }
+async function baseClear(){ SYNC_BASE = null; try { const d = await idb(); d.transaction(SYNC_STORE, 'readwrite').objectStore(SYNC_STORE).delete('base'); } catch(e) {} }
+const deepEq = (a, b) => { if (a === b) return true; if (typeof a !== 'object' || typeof b !== 'object' || !a || !b) return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a)) return a.length === b.length && a.every((x, i) => deepEq(x, b[i]));
+  const ka = Object.keys(a), kb = Object.keys(b); return ka.length === kb.length && ka.every(k => Object.prototype.hasOwnProperty.call(b, k) && deepEq(a[k], b[k])); };
+const isObj = x => x && typeof x === 'object' && !Array.isArray(x);
+const isIdArr = x => Array.isArray(x) && x.every(e => isObj(e) && e.id != null);
+const isPrimArr = x => Array.isArray(x) && x.every(e => e === null || typeof e !== 'object');
+/* three-way merge; `local` decides who wins when both changed the same plain value */
+function merge3(b, l, r, local){
+  if (deepEq(l, r)) return l;
+  if (deepEq(b, l)) return r;
+  if (deepEq(b, r)) return l;
+  if (l === undefined) return r;            // deleted here, changed there: keep the data
+  if (r === undefined) return l;
+  if (isObj(l) && isObj(r)) {
+    const bb = isObj(b) ? b : {}, out = {};
+    [...new Set([...Object.keys(l), ...Object.keys(r)])].forEach(k => { const v = merge3(bb[k], l[k], r[k], local); if (v !== undefined) out[k] = v; });
+    return out;
+  }
+  if (isIdArr(l) && isIdArr(r) && (b === undefined || isIdArr(b))) {
+    const key = e => String(e.id), bm = new Map((b || []).map(e => [key(e), e])), lm = new Map(l.map(e => [key(e), e])), rm = new Map(r.map(e => [key(e), e]));
+    const ids = [...l.map(key), ...r.map(key).filter(k => !lm.has(k))], out = [];
+    ids.forEach(k => { const v = merge3(bm.get(k), lm.get(k), rm.get(k), local); if (v !== undefined) out.push(v); });
+    return out;
+  }
+  if (isPrimArr(l) && isPrimArr(r) && (b === undefined || isPrimArr(b))) {
+    const bs = new Set(b || []), ls = new Set(l), rs = new Set(r);
+    const gone = x => (bs.has(x) && !ls.has(x)) || (bs.has(x) && !rs.has(x));
+    return [...new Set([...l, ...r])].filter(x => !gone(x));
+  }
+  return local ? l : r;
+}
+const strHash = s => { let h = 5381; for (let i = 0; i < s.length; i++) h = (h * 33 + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36) + '.' + s.length; };
+const phHashes = ph => Object.fromEntries(Object.entries(ph || {}).map(([k, v]) => [k, strHash(v || '')]));
+function mergePhotos(bh, L, R){
+  const out = {};
+  [...new Set([...Object.keys(L), ...Object.keys(R)])].forEach(k => {
+    const lh = L[k] && strHash(L[k]), rh = R[k] && strHash(R[k]), b = bh[k];
+    const v = lh === rh ? L[k] : lh === b ? R[k] : rh === b ? L[k] : (L[k] || R[k]);
+    if (v) out[k] = v;
+  });
+  return out;
+}
+/* Firestore helpers for the meta pointer (with its update time) and for cleaning up old copies */
+async function fsGetDoc(doc){
+  const r = await fetch(fsUrl(doc), {headers:{Authorization:'Bearer ' + await idToken()}});
+  if (r.status === 404) return null;
+  if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error((j.error && j.error.status) || 'HTTP ' + r.status); }
+  return r.json();
+}
+async function fsSetIf(doc, fields, updateTime){
+  const pre = updateTime ? 'currentDocument.updateTime=' + encodeURIComponent(updateTime) : 'currentDocument.exists=false';
+  const r = await fetch(fsUrl(doc) + '?' + pre, {method:'PATCH', headers:{'Content-Type':'application/json', Authorization:'Bearer ' + await idToken()}, body:JSON.stringify({fields})});
+  if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error((j.error && j.error.status) || 'HTTP ' + r.status); }
+}
+async function fsDel(doc){ try { await fetch(fsUrl(doc), {method:'DELETE', headers:{Authorization:'Bearer ' + await idToken()}}); } catch(e) {} }
+async function fsListAll(){
+  const names = []; let page = '';
+  do { const r = await fetch(`${FS_BASE}/users/${CLOUD.uid}/backup?pageSize=300&mask.fieldPaths=__none${page ? '&pageToken=' + encodeURIComponent(page) : ''}`, {headers:{Authorization:'Bearer ' + await idToken()}});
+    if (!r.ok) break; const j = await r.json(); (j.documents || []).forEach(d => names.push(d.name.split('/').pop())); page = j.nextPageToken || ''; } while (page);
+  return names;
+}
+/* where the parts of the current online copy live (old backups used db0…, ph0…) */
+const metaInfo = doc => { const f = (doc && doc.fields) || {}, s = k => f[k] && f[k].stringValue, n = k => +(f[k] && f[k].integerValue) || 0;
+  const rev = s('rev'), phRev = s('phRev');
+  return {rev: rev || (doc ? 'old:' + n('at') : ''), at:n('at'), edit:n('edit') || n('at'), dbP: rev ? `d_${rev}_` : 'db', dbN:n('dbParts'), phP: phRev ? `p_${phRev}_` : 'ph', phN:n('phParts'), phRev: phRev || (doc ? 'old:' + n('at') : ''), time: doc && doc.updateTime, school:s('school')}; };
+const partNames = (p, n) => Array.from({length:n}, (_, i) => p + i);
+let syncSeq = 0;
+const syncSmall = () => Math.random().toString(36).slice(2, 8) + (++syncSeq).toString(36);
 function cloudSchedule(){
   if (!cloudOn()) return;
+  CLOUD.editAt = Date.now(); cloudSave();
   try { localStorage.setItem('cloudDirty', '1'); } catch(e) {}
-  clearTimeout(cloudT); cloudT = setTimeout(cloudSync, 60000);
+  clearTimeout(cloudT); cloudT = setTimeout(cloudSync, 8000);
 }
-async function cloudSync(force){
+const isDirty = () => { try { return !!localStorage.getItem('cloudDirty'); } catch(e) { return true; } };
+/* write DB without marking it as a local change */
+function putLocal(db, photos){
+  DB = db; try { localStorage.setItem(KEY, JSON.stringify(DB)); } catch(e) {}
+  if (photos) { PHOTOS = photos; try { localStorage.setItem(PHOTO_KEY, JSON.stringify(PHOTOS)); } catch(e) {} }
+  try { if (bkOk()) AppBridge.mirror(bkPayload()); } catch(e) {}
+}
+function softRender(){
+  const a = document.activeElement;
+  if ((a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) || $sheet.classList.contains('open')) { UI.needRender = true; return; }
+  UI.needRender = false; render();
+}
+/* mode: undefined = merge (normal), 'local' = put this phone's copy online as it is */
+async function cloudSync(force, mode){
   if (!cloudOn() || cloudBusy) return;
-  let dirty = '1'; try { dirty = localStorage.getItem('cloudDirty'); } catch(e) {}
-  if (!dirty && !force) return;
-  if (!navigator.onLine) { UI.cloudErr = 'ইন্টারনেট নেই — সংযোগ পেলে নিজে থেকে পাঠানো হবে'; return; }
-  cloudBusy = true; clearTimeout(cloudT);
+  if (!navigator.onLine) { UI.cloudErr = 'ইন্টারনেট নেই — সংযোগ পেলে নিজে থেকে সিঙ্ক হবে'; return; }
+  cloudBusy = true; clearTimeout(cloudT); UI.cloudErr = '';
+  let pulled = false;
   try {
-    const dbText = JSON.stringify(DB), dbParts = await putParts('db', dbText);
-    const sig = photoSig(); let phParts = CLOUD.phParts || 0;
-    if (sig !== CLOUD.phSig || !phParts) { phParts = await putParts('ph', JSON.stringify(PHOTOS)); CLOUD.phSig = sig; CLOUD.phParts = phParts; }
-    const at = Date.now();
-    await fsSet('meta', {at: iv(at), dbParts: iv(dbParts), phParts: iv(phParts), size: iv(dbText.length), school: sv(DB.teacher.school || ''), ver: sv(WEB_VERSION)});
-    CLOUD.last = at; cloudSave(); UI.cloudErr = '';
-    try { localStorage.removeItem('cloudDirty'); } catch(e) {}
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const metaDoc = await fsGetDoc('meta'), M = metaInfo(metaDoc), base = await baseGet();
+      const snapDb = JSON.stringify(DB), snapPh = PHOTOS;
+      let merged = JSON.parse(snapDb), mergedPh = snapPh, remoteDb = null, remotePh = null;
+      const sameRev = base && M.rev && base.rev === M.rev, samePh = base && M.phRev && base.phRev === M.phRev;
+      if (metaDoc && (!sameRev || !samePh) && mode !== 'local') {
+        // the side whose last edit is later wins where both changed the same value
+        const localWins = (CLOUD.editAt || 0) >= (M.edit || 0);
+        if (!sameRev) { remoteDb = JSON.parse(await getParts(M.dbP, M.dbN)); merged = merge3(base ? base.db : undefined, merged, remoteDb, localWins); }
+        const bph = base ? base.ph || {} : {};
+        if (!base || base.phRev !== M.phRev) { remotePh = M.phN ? JSON.parse(await getParts(M.phP, M.phN)) : {}; mergedPh = mergePhotos(bph, snapPh, remotePh); }
+        // the user may have changed something while we were downloading: keep that too
+        if (JSON.stringify(DB) !== snapDb) merged = merge3(JSON.parse(snapDb), JSON.parse(JSON.stringify(DB)), merged, true);
+        if (PHOTOS !== snapPh) mergedPh = mergePhotos(phHashes(snapPh), PHOTOS, mergedPh);
+        const dbChanged = JSON.stringify(merged) !== JSON.stringify(DB), phChanged = mergedPh !== PHOTOS && !deepEq(phHashes(mergedPh), phHashes(PHOTOS));
+        if (dbChanged || phChanged) {
+          const d = DEFAULTS();
+          putLocal(migrateCo50(withTeachers({...d, ...merged, teacher:{...d.teacher, ...(merged.teacher || {})}, committees:{...d.committees, ...(merged.committees || {})}})), phChanged ? mergedPh : null);
+          merged = JSON.parse(JSON.stringify(DB)); pulled = true; FRESH = false;
+        }
+      }
+      const curPh = phHashes(PHOTOS);
+      const oldFmt = metaDoc && (/^old:/.test(M.rev) || /^old:/.test(M.phRev));
+      const needDb = !metaDoc || mode === 'local' || oldFmt || !deepEq(remoteDb || (sameRev && mode !== 'local' ? base.db : null), merged);
+      const needPh = !metaDoc || mode === 'local' || oldFmt || !deepEq(remotePh ? phHashes(remotePh) : (base && base.phRev === M.phRev ? base.ph : null), curPh);
+      if (!needDb && !needPh) {
+        if (metaDoc) await baseSet({rev:M.rev, phRev:M.phRev, db:merged, ph:curPh});
+        if (JSON.stringify(DB) === JSON.stringify(merged)) { try { localStorage.removeItem('cloudDirty'); } catch(e) {} }
+        CLOUD.last = Date.now(); cloudSave(); break;
+      }
+      // write the merged copy under new names, then switch the pointer only if nobody wrote meanwhile
+      const rev = needDb ? syncSmall() : null, phRev = needPh ? syncSmall() : null;
+      const dbText = JSON.stringify(merged), dbN = needDb ? await putParts(`d_${rev}_`, dbText) : M.dbN;
+      const phN = needPh ? await putParts(`p_${phRev}_`, JSON.stringify(PHOTOS)) : M.phN;
+      const newPh = phRev || M.phRev;
+      try {
+        await fsSetIf('meta', {at:iv(Date.now()), edit:iv(Math.max(CLOUD.editAt || 0, M.edit || 0)), rev:sv(rev || M.rev), dbParts:iv(dbN), phRev:sv(newPh), phParts:iv(phN), size:iv(dbText.length), school:sv(DB.teacher.school || ''), ver:sv(WEB_VERSION), by:sv(CLOUD.dev || (CLOUD.dev = syncSmall()))}, M.time);
+      } catch(e) {
+        // someone else synced first: throw our copy away and merge again
+        if (/FAILED_PRECONDITION|ALREADY_EXISTS|ABORTED/.test(e.message)) { if (rev) partNames(`d_${rev}_`, dbN).forEach(fsDel); if (phRev) partNames(`p_${phRev}_`, phN).forEach(fsDel); continue; }
+        throw e;
+      }
+      if (metaDoc) { if (rev) partNames(M.dbP, M.dbN).forEach(fsDel); if (phRev) partNames(M.phP, M.phN).forEach(fsDel); }
+      await baseSet({rev:rev || M.rev, phRev:newPh, db:merged, ph:curPh});
+      if (JSON.stringify(DB) === dbText) { try { localStorage.removeItem('cloudDirty'); } catch(e) {} }
+      CLOUD.last = Date.now(); cloudSave(); break;
+    }
   } catch(e) {
-    UI.cloudErr = /PERMISSION_DENIED/.test(e.message) ? 'অনলাইন ডাটাবেইজ অনুমতি দিচ্ছে না (Firestore-এর Rules দেখুন)' : /NOT_FOUND/.test(e.message) ? 'অনলাইন ডাটাবেইজ পাওয়া যায়নি (Firestore তৈরি করা হয়েছে কি?)' : 'অনলাইনে পাঠানো যায়নি — পরে আবার চেষ্টা হবে';
-  } finally { cloudBusy = false; if (location.hash.slice(1) === 'settings') render(); }
+    UI.cloudErr = /PERMISSION_DENIED/.test(e.message) ? 'অনলাইন ডাটাবেইজ অনুমতি দিচ্ছে না (Firestore-এর Rules দেখুন)' : /NOT_FOUND/.test(e.message) ? 'অনলাইন ডাটাবেইজ পাওয়া যায়নি' : /NOT_SIGNED_IN|TOKEN|REFRESH/.test(e.message) ? 'আবার লগইন করুন' : 'সিঙ্ক হয়নি — ইন্টারনেট ঠিক হলে নিজে থেকে আবার চেষ্টা হবে';
+  } finally {
+    cloudBusy = false;
+    if (pulled) { toast('অন্য ফোনের নতুন তথ্য এসেছে', 2500); softRender(); }
+    else if (location.hash.slice(1) === 'settings') softRender();
+    if (isDirty() && !UI.cloudErr) { clearTimeout(cloudT); cloudT = setTimeout(cloudSync, 8000); }
+  }
 }
+/* check for news from other phones while the app is open, and whenever it comes back to the front */
+function cloudPoll(){ clearInterval(cloudPollT); cloudPollT = setInterval(() => { if (document.visibilityState === 'visible') { if (UI.needRender) softRender(); cloudSync(); } }, 45000); }
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') cloudSync(); });
+setTimeout(() => { if (cloudOn()) { cloudSync(); cloudPoll(); } }, 1500);
 async function cloudFetch(){
-  const m = await fsGet('meta'); if (!m) return null;
-  const at = +(m.at && m.at.integerValue) || 0, dbN = +(m.dbParts && m.dbParts.integerValue) || 0, phN = +(m.phParts && m.phParts.integerValue) || 0;
-  const db = JSON.parse(await getParts('db', dbN)), photos = phN ? JSON.parse(await getParts('ph', phN)) : {};
-  return {at, db, photos, phN, school: m.school && m.school.stringValue};
+  const doc = await fsGetDoc('meta'); if (!doc) return null; const M = metaInfo(doc);
+  const db = JSON.parse(await getParts(M.dbP, M.dbN)), photos = M.phN ? JSON.parse(await getParts(M.phP, M.phN)) : {};
+  return {at:M.at, db, photos, phN:M.phN, school:M.school, M};
 }
+/* replace this phone's data with the online copy */
 async function cloudRestore(ask){
   toast('অনলাইন থেকে তথ্য আনা হচ্ছে…');
   let b; try { b = await cloudFetch(); } catch(e) { return toast('অনলাইন থেকে আনা যায়নি — ইন্টারনেট দেখে আবার চেষ্টা করুন'); }
   if (!b) { toast('এই অ্যাকাউন্টে এখনো কোনো অনলাইন ব্যাকআপ নেই'); return cloudSync(true); }
-  const doIt = () => { try { applyBackup(b); CLOUD.phSig = photoSig(); CLOUD.phParts = b.phN; cloudSave(); try { localStorage.removeItem('cloudDirty'); } catch(e) {} FRESH = false; toast('অনলাইন থেকে সব তথ্য ফিরে এসেছে'); closeSheet(); render(); } catch(e) { toast('অনলাইনের তথ্য পড়া যায়নি'); } };
+  const doIt = async () => { try { applyBackup(b); try { localStorage.removeItem('cloudDirty'); } catch(e) {} await baseSet({rev:b.M.rev, phRev:b.M.phRev, db:JSON.parse(JSON.stringify(DB)), ph:phHashes(PHOTOS)}); FRESH = false; toast('অনলাইন থেকে সব তথ্য ফিরে এসেছে'); closeSheet(); render(); cloudPoll(); } catch(e) { toast('অনলাইনের তথ্য পড়া যায়নি'); } };
   if (!ask) return doIt();
-  confirmSheet('অনলাইন থেকে তথ্য আনবেন?', `${b.school ? esc(b.school) + ' — ' : ''}${bkWhen(b.at)}-এর অনলাইন ব্যাকআপ। এই ফোনের এখনকার তথ্য এর দ্বারা বদলে যাবে।`, 'ফেরত আনুন', doIt);
+  confirmSheet('অনলাইন থেকে তথ্য আনবেন?', `${b.school ? esc(b.school) + ' — ' : ''}${bkWhen(b.at)}-এর অনলাইন কপি। এই ফোনের এখনকার তথ্য এর দ্বারা বদলে যাবে।`, 'ফেরত আনুন', doIt);
 }
-// Right after logging in: decide between the phone's data and the online copy.
+// Right after logging in: merge by default, or pick one side.
 async function afterLogin(){
-  let m = null; try { m = await fsGet('meta'); } catch(e) {}
+  await baseClear(); cloudPoll();
+  let m = null; try { m = await fsGetDoc('meta'); } catch(e) {}
   const localEmpty = FRESH || (!activeStudents().length && DB.teachers.length <= 1 && !DB.plans.length);
   if (!m) { cloudSync(true); return toast('লগইন হয়েছে — এই ফোনের তথ্য অনলাইনে রাখা হচ্ছে'); }
   if (localEmpty) return cloudRestore(false);
-  openSheet(`<h2 style="font-size:18px">কোন তথ্য রাখবেন?</h2>
-    <p class="t2" style="font-size:14px;line-height:1.7;margin:8px 0 12px">এই অ্যাকাউন্টে ${bkWhen(+m.at.integerValue)}-এর অনলাইন ব্যাকআপ আছে${m.school ? ` (${esc(m.school.stringValue)})` : ''}, আবার এই ফোনেও তথ্য আছে।</p>
-    <button class="btn solid big full" data-cl-pull>অনলাইনের তথ্য এই ফোনে আনুন</button>
-    <button class="btn big full" data-cl-push style="margin-top:8px">এই ফোনের তথ্য অনলাইনে রাখুন</button>`);
+  const M = metaInfo(m);
+  openSheet(`<h2 style="font-size:18px">দুই জায়গাতেই তথ্য আছে</h2>
+    <p class="t2" style="font-size:14px;line-height:1.7;margin:8px 0 12px">এই অ্যাকাউন্টে ${bkWhen(M.at)}-এর অনলাইন তথ্য আছে${M.school ? ` (${esc(M.school)})` : ''}, আবার এই ফোনেও তথ্য আছে।</p>
+    <button class="btn solid big full" data-cl-merge>দুটো মিলিয়ে নিন (পরামর্শকৃত)</button>
+    <p class="hint" style="margin:4px 2px 8px">দুই জায়গার সব শিক্ষার্থী, হাজিরা ও অন্যান্য তথ্য একসাথে থাকবে।</p>
+    <button class="btn big full" data-cl-pull>শুধু অনলাইনের তথ্য রাখুন</button>
+    <button class="btn big full" data-cl-push style="margin-top:8px">শুধু এই ফোনের তথ্য রাখুন</button>`);
 }
+
 function cloudAuthSheet(mode){
   const up = mode === 'up';
   openSheet(`<form class="f" id="clForm" novalidate>
@@ -948,12 +1097,12 @@ function cloudCard(){
     <p class="t2" style="font-size:14px;line-height:1.6">ইমেইল দিয়ে একটি অ্যাকাউন্ট খুললে সব তথ্য ছবিসহ নিজে থেকেই অনলাইনে জমা থাকবে। ফোন হারালে বা বদলালেও একই ইমেইলে লগইন করলে সব ফিরে আসবে।</p>
     <div class="row2"><button class="btn solid big" data-cl-auth="up">অ্যাকাউন্ট খুলুন</button><button class="btn big" data-cl-auth="in">লগইন</button></div></div>`;
   return `<div class="card">
-    <h2 style="font-size:16px">অনলাইন ব্যাকআপ</h2>
-    <div class="${UI.cloudErr ? 'warnbox' : 'okbox'}">${UI.cloudErr ? `<span>${esc(UI.cloudErr)}</span>` : `<b>✓ অনলাইন ব্যাকআপ চালু আছে</b>`}<span>অ্যাকাউন্ট: ${esc(CLOUD.email || '')}</span><span>${CLOUD.last ? 'সর্বশেষ পাঠানো: ' + esc(bkWhen(CLOUD.last)) : 'প্রথম ব্যাকআপ পাঠানো হচ্ছে…'}</span></div>
-    <button class="btn big full" data-cl-sync ${cloudBusy ? 'disabled' : ''}>${cloudBusy ? 'পাঠানো হচ্ছে…' : 'এখনই অনলাইনে পাঠান'}</button>
-    <button class="btn big full" data-cl-pull>অনলাইন থেকে তথ্য ফেরত আনুন</button>
+    <h2 style="font-size:16px">অনলাইন ব্যাকআপ ও সিঙ্ক</h2>
+    <div class="${UI.cloudErr ? 'warnbox' : 'okbox'}">${UI.cloudErr ? `<span>${esc(UI.cloudErr)}</span>` : `<b>✓ অনলাইন সিঙ্ক চালু আছে</b>`}<span>অ্যাকাউন্ট: ${esc(CLOUD.email || '')}</span><span>${CLOUD.last ? 'শেষ সিঙ্ক: ' + esc(bkWhen(CLOUD.last)) : 'প্রথম ব্যাকআপ পাঠানো হচ্ছে…'}</span></div>
+    <button class="btn big full" data-cl-sync ${cloudBusy ? 'disabled' : ''}>${cloudBusy ? 'সিঙ্ক হচ্ছে…' : 'এখনই সিঙ্ক করুন'}</button>
     <div class="row2"><button class="btn big" data-cl-out>লগআউট</button><button class="btn danger ghost big" data-cl-del>অ্যাকাউন্ট মুছুন</button></div>
-    <p class="hint">প্রতিটি পরিবর্তনের এক মিনিট পরে ও অ্যাপ বন্ধ করার সময় নিজে থেকে পাঠানো হয়; ইন্টারনেট না থাকলে পরে যায়।</p></div>`;
+    <p class="hint">একই অ্যাকাউন্টে যতগুলো ফোনে লগইন করবেন, সবগুলোতে একই তথ্য থাকবে। কোনো পরিবর্তনের কয়েক সেকেন্ড পরে অনলাইনে যায়; অন্য ফোন অ্যাপ খুললে বা খোলা থাকলে এক মিনিটের মধ্যে নিয়ে আসে। দুই ফোনে আলাদা কাজ করলে দুটোই থাকে; একই জিনিস দুই ফোনে বদলালে পরেরটা থাকে। ইন্টারনেট না থাকলে পরে নিজে থেকে হয়।</p>
+    <details class="exph" style="margin-top:4px"><summary style="color:var(--mute)">অন্যান্য বিকল্প</summary><button class="btn big full" data-cl-pull style="margin-top:8px">এই ফোনের তথ্য মুছে অনলাইনের তথ্য আনুন</button></details></div>`;
 }
 window.addEventListener('online', () => cloudSync());
 
@@ -5395,10 +5544,11 @@ document.addEventListener('click', e => {
     authCall('accounts:sendOobCode', {requestType:'PASSWORD_RESET', email: em.trim()}).then(() => toast('পাসওয়ার্ড বদলানোর লিংক ইমেইলে পাঠানো হয়েছে')).catch(x => toast(authMsg(x.message))); return; }
   if ('clSync' in ds) { cloudSync(true); return render(); }
   if ('clPull' in ds) { closeSheet(); return cloudRestore(!FRESH); }
-  if ('clPush' in ds) { closeSheet(); toast('এই ফোনের তথ্য অনলাইনে রাখা হচ্ছে'); return cloudSync(true); }
-  if ('clOut' in ds) return confirmSheet('লগআউট করবেন?', 'এই ফোনের তথ্য থাকবে, কিন্তু আর অনলাইনে পাঠানো হবে না। পরে আবার লগইন করা যাবে।', 'লগআউট', () => { flushBackup(); CLOUD = {email: CLOUD.email}; cloudSave(); });
+  if ('clPush' in ds) { closeSheet(); toast('এই ফোনের তথ্য অনলাইনে রাখা হচ্ছে'); return cloudSync(true, 'local'); }
+  if ('clMerge' in ds) { closeSheet(); toast('দুই জায়গার তথ্য মেলানো হচ্ছে…'); return cloudSync(true); }
+  if ('clOut' in ds) return confirmSheet('লগআউট করবেন?', 'এই ফোনের তথ্য থাকবে, কিন্তু আর অনলাইনে পাঠানো হবে না। পরে আবার লগইন করা যাবে।', 'লগআউট', () => { flushBackup(); CLOUD = {email: CLOUD.email}; cloudSave(); baseClear(); clearInterval(cloudPollT); });
   if ('clDel' in ds) return confirmSheet('অ্যাকাউন্ট মুছবেন?', 'অনলাইনে রাখা সব তথ্য ও অ্যাকাউন্ট স্থায়ীভাবে মুছে যাবে। এই ফোনের তথ্য থাকবে।', 'স্থায়ীভাবে মুছুন', async () => {
-    try { const t = await idToken(); for (const d of ['meta', ...Array.from({length: 40}, (_, i) => 'db' + i), ...Array.from({length: 40}, (_, i) => 'ph' + i)]) { const r = await fetch(fsUrl(d), {method:'DELETE', headers:{Authorization:'Bearer ' + t}}); if (d !== 'meta' && r.status === 404) {} }
+    try { const t = await idToken(); const names = await fsListAll(); for (const d of new Set(['meta', ...names, ...Array.from({length: 40}, (_, i) => 'db' + i), ...Array.from({length: 40}, (_, i) => 'ph' + i)])) await fetch(fsUrl(d), {method:'DELETE', headers:{Authorization:'Bearer ' + t}}); baseClear(); clearInterval(cloudPollT);
       await authCall('accounts:delete', {idToken: t}); CLOUD = {}; cloudSave(); toast('অ্যাকাউন্ট ও অনলাইন তথ্য মুছে ফেলা হয়েছে'); render(); }
     catch(e) { toast('মুছতে সমস্যা হয়েছে — আবার লগইন করে চেষ্টা করুন'); } });
   if ('bkShare' in ds) { const d = new Date(), n = `shikkhok-backup-${todayISO()}.json`; if (window.AppBridge && AppBridge.shareFile) AppBridge.shareFile(n, 'application/json', btoa(unescape(encodeURIComponent(bkPayload())))); return; }
