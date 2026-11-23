@@ -288,6 +288,9 @@ img.ma{object-fit:cover;background:#E8EEF5}
 .extab{border-collapse:collapse;width:100%;min-width:100%;background:#fff;font-size:13px}.extab th,.extab td{border:1px solid #CBD6E2;padding:3px;text-align:center}.extab th{background:#EEF3F0;font-size:13px;padding:6px 3px}
 .extab td.exd{min-width:118px;text-align:left}.extab td.exd input{width:100%;font:inherit;font-size:12.5px;border:1px solid #CBD6E2;border-radius:8px;padding:5px 4px;background:#fff}.extab td.exd small{display:block;font-size:11.5px;color:var(--mute);padding:1px 2px}
 .exc{width:100%;min-width:62px;min-height:44px;border:0;border-radius:8px;background:#F6F8FA;font:inherit;font-size:12px;font-weight:600;color:var(--ink);padding:3px;line-height:1.25}.exc.on{background:#E3F4EA;color:#17663F}.exc .plus{color:#9AA8B8;font-size:18px}
+.pflist{display:grid;gap:8px}.pfopt{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:#F7F9FB;border:1.5px solid #E3EAF1;border-radius:14px;padding:10px 12px;font:inherit;color:var(--ink);cursor:pointer}
+.pfopt.on{border-color:#1E7F4F;background:#EEF8F2}.pfopt .grow{display:flex;flex-direction:column;gap:2px;min-width:0}.pfopt b{font-size:14px}.pfs{font-size:17px;color:#24364F}
+.pfr{width:20px;height:20px;border-radius:50%;border:2px solid #9AAABB;flex:none;position:relative}.pfopt.on .pfr{border-color:#1E7F4F}.pfopt.on .pfr::after{content:'';position:absolute;inset:3px;border-radius:50%;background:#1E7F4F}
 .wxpill{border:0;font:inherit;cursor:pointer;gap:5px}.wxpill span[aria-hidden]{font-size:15px;line-height:1}
 .wxnow{display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,#E8F3FF,#FFF6E0);border-radius:16px;padding:14px}.wxbig{font-size:54px;line-height:1}.wxnow>div{display:flex;flex-direction:column;gap:2px}
 .wxt{font-size:40px;font-weight:700;line-height:1.05}.wxt small{font-size:15px;font-weight:600;margin-left:2px;color:var(--mute)}
@@ -405,7 +408,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '7.9';
+const WEB_VERSION = '8.0';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -2307,14 +2310,25 @@ function printCert(){
   logCert(c, st);
   printDoc(title, html);
 }
+/* print font: the user can pick Nikosh or Kalpurush (bundled in fonts/ next to index.html) */
+// [key, label, file, size-adjust] — Nikosh is drawn small, so it is scaled up to look like the others
+const PF_LIST = [['', 'হিন্দ শিলিগুড়ি (সাধারণ)', '', ''], ['nikosh', 'নিকস (Nikosh)', 'Nikosh.woff2', '114%'], ['kalpurush', 'কালপুরুষ (Kalpurush)', 'Kalpurush.woff2', '']];
+const pfCur = () => PF_LIST.find(x => x[0] === (DB.printFont || '')) || PF_LIST[0];
+const pfFace = (f, fam) => `@font-face{font-family:'${fam}';src:url('fonts/${f[2]}') format('woff2');font-display:block${f[3] ? ';size-adjust:' + f[3] : ''}}`;
+function pfApply(html){
+  const f = pfCur(); if (!f[0] || typeof html !== 'string') return html;
+  const css = `<style>${pfFace(f, 'PrintFont')}html body,html body *{font-family:'PrintFont','Hind Siliguri','Noto Sans Bengali',sans-serif!important}</style>`;
+  return html.includes('</head>') ? html.replace('</head>', css + '</head>') : css + html;
+}
 function printDoc(title, html){
+  html = pfApply(html);
   if (BR && typeof BR.print === 'function') { try { BR.print(title, html); return; } catch(_) {} }
   if (BR) { toast('প্রিন্ট করতে অ্যাপের নতুন সংস্করণ লাগবে — আপডেট খোঁজা হচ্ছে'); return checkUpdate(true); }
   try {
     const f = document.createElement('iframe'); f.style.cssText = 'position:fixed;width:0;height:0;border:0;right:0;bottom:0';
     document.body.appendChild(f);
     f.contentDocument.open(); f.contentDocument.write(html); f.contentDocument.close();
-    setTimeout(() => { try { f.contentWindow.focus(); f.contentWindow.print(); } catch(_) { toast('এখানে প্রিন্ট হচ্ছে না; Android অ্যাপ থেকে প্রিন্ট করুন'); } setTimeout(() => f.remove(), 60000); }, 600);
+    setTimeout(() => { try { const go = () => { f.contentWindow.focus(); f.contentWindow.print(); }; const fs = f.contentDocument && f.contentDocument.fonts; if (fs && fs.ready) Promise.race([fs.ready, new Promise(r => setTimeout(r, 4000))]).then(() => { try { go(); } catch(_) {} }); else go(); } catch(_) { toast('এখানে প্রিন্ট হচ্ছে না; Android অ্যাপ থেকে প্রিন্ট করুন'); } setTimeout(() => f.remove(), 60000); }, 600);
   } catch(_) { toast('এখানে প্রিন্ট হচ্ছে না; Android অ্যাপ থেকে প্রিন্ট করুন'); }
 }
 
@@ -3139,10 +3153,24 @@ function penInfoSheet(){
 }
 
 /* ---------- settings ---------- */
+function pfCard(){
+  const cur = pfCur();
+  return `<div class="card" style="gap:10px"><h2 style="font-size:16px">প্রিন্টের ফন্ট</h2>
+    <p class="t2" style="font-size:13px;line-height:1.6">প্রবেশপত্র, রুটিন, আবেদন, প্রতিবেদন, সনদসহ অ্যাপের সব প্রিন্ট ও PDF এই ফন্টে হবে।</p>
+    <style>${PF_LIST.filter(f => f[2]).map(f => pfFace(f, 'PF_' + f[0])).join('')}</style>
+    <div class="pflist" role="radiogroup" aria-label="প্রিন্টের ফন্ট">${PF_LIST.map(f => `<button role="radio" aria-checked="${cur[0] === f[0]}" class="pfopt${cur[0] === f[0] ? ' on' : ''}" data-pf="${f[0] || 'default'}">
+      <span class="pfr" aria-hidden="true"></span><span class="grow"><b>${f[1]}</b><span class="pfs" style="font-family:${f[2] ? `'PF_${f[0]}',` : ''}'Hind Siliguri',sans-serif">আমার সোনার বাংলা, আমি তোমায় ভালোবাসি। ১২৩৪৫</span></span></button>`).join('')}</div>
+    <p class="hint" id="pfNote">${UI.pfMissing ? '⚠️ এই ফোনের অ্যাপে ফন্টটি নেই — নতুন APK ইনস্টল করলে পাবেন। ততক্ষণ সাধারণ ফন্টে প্রিন্ট হবে।' : ''}</p></div>`;
+}
+function pfCheck(){
+  const f = pfCur(); UI.pfMissing = false; if (!f[2] || typeof FontFace === 'undefined') return;
+  new FontFace('PFCHK_' + f[0], `url(fonts/${f[2]})`).load().then(() => { UI.pfMissing = false; }, () => { UI.pfMissing = true; const n = document.getElementById('pfNote'); if (n) n.textContent = '⚠️ এই অ্যাপে ফন্টটি নেই — নতুন APK ইনস্টল করলে পাবেন। ততক্ষণ সাধারণ ফন্টে প্রিন্ট হবে।'; });
+}
 function settings(){
   return topHeader('সেটিংস','gear') + `
   <div class="sec" style="padding-top:16px">
     ${cloudCard()}
+    ${pfCard()}
     <button class="lrow" data-go="holidays"><span class="ib sm" style="background:#1F4E8C">${S(P.leave)}</span><span class="grow"><span class="t1">ছুটির তালিকা ও শিক্ষাপঞ্জি</span><span class="t2">সাপ্তাহিক ও সরকারি ছুটি, খোলা দিন</span></span><span style="color:var(--mute)">${ic('chev',20)}</span></button>
     <div class="card">
       <h2 style="font-size:16px">ফোনে তথ্য সংরক্ষণ</h2>
@@ -5437,6 +5465,7 @@ function bindView(r){
   if (r === 'mother-meet' || r === 'guardian-meet') bindMeetings();
   if (r === 'reports') bindReports();
   if (r === 'home') setTimeout(() => wxFetch(), 300);
+  if (r === 'settings') pfCheck();
   if (r === 'routine') bindRoutine();
   if (r === 'leave') {
     bindLogo();
@@ -5511,6 +5540,7 @@ document.addEventListener('click', e => {
   if (Object.keys(ds).some(k => /^mt[A-Z]/.test(k))) return mtClick(ds);
   if (Object.keys(ds).some(k => /^rp[A-Z]/.test(k))) return rpClick(ds);
   if (Object.keys(ds).some(k => /^wx[A-Z]/.test(k))) return wxClick(ds);
+  if (ds.pf) { DB.printFont = ds.pf === 'default' ? '' : ds.pf; save(); render(); pfCheck(); return toast(`প্রিন্টের ফন্ট: ${pfCur()[1]}`); }
   if (ds.rtpart) { UI.rtPart = ds.rtpart; window.scrollTo(0, 0); return render(); }
   if (Object.keys(ds).some(k => /^ex[A-Z]/.test(k))) return exClick(ds);
   if (Object.keys(ds).some(k => /^rs[A-Z]/.test(k))) return rtSetupClick(ds);
