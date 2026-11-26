@@ -288,6 +288,7 @@ img.ma{object-fit:cover;background:#E8EEF5}
 .extab{border-collapse:collapse;width:100%;min-width:100%;background:#fff;font-size:13px}.extab th,.extab td{border:1px solid #CBD6E2;padding:3px;text-align:center}.extab th{background:#EEF3F0;font-size:13px;padding:6px 3px}
 .extab td.exd{min-width:118px;text-align:left}.extab td.exd input{width:100%;font:inherit;font-size:12.5px;border:1px solid #CBD6E2;border-radius:8px;padding:5px 4px;background:#fff}.extab td.exd small{display:block;font-size:11.5px;color:var(--mute);padding:1px 2px}
 .exc{width:100%;min-width:62px;min-height:44px;border:0;border-radius:8px;background:#F6F8FA;font:inherit;font-size:12px;font-weight:600;color:var(--ink);padding:3px;line-height:1.25}.exc.on{background:#E3F4EA;color:#17663F}.exc .plus{color:#9AA8B8;font-size:18px}
+.elgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.elbox{border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:2px}.elbox span{font-size:12px;color:#3E5070}.elbox b{font-size:17px}.elbox small{font-size:11.5px;color:#3E5070}
 .pflist{display:grid;gap:8px}.pfopt{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:#F7F9FB;border:1.5px solid #E3EAF1;border-radius:14px;padding:10px 12px;font:inherit;color:var(--ink);cursor:pointer}
 .pfopt.on{border-color:#1E7F4F;background:#EEF8F2}.pfopt .grow{display:flex;flex-direction:column;gap:2px;min-width:0}.pfopt b{font-size:14px}.pfs{font-size:17px;color:#24364F}
 .pfr{width:20px;height:20px;border-radius:50%;border:2px solid #9AAABB;flex:none;position:relative}.pfopt.on .pfr{border-color:#1E7F4F}.pfopt.on .pfr::after{content:'';position:absolute;inset:3px;border-radius:50%;background:#1E7F4F}
@@ -408,7 +409,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '8.6';
+const WEB_VERSION = '8.7';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -3375,10 +3376,99 @@ function lvSave(L){
   for (let i = 0; i < n; i++) { const d = addDays(L.from, i); if (!isHoliday(d)) { const day = attDay('teachers', d, true); if (!day[L.tid]) day[L.tid] = {s:'l'}; } }
   save(); toast(dup ? 'আগেই হিসাবে আছে' : 'ছুটির হিসাবে যোগ হয়েছে, হাজিরাতেও "ছুটি" বসেছে'); return true;
 }
+/* ---------- অর্জিত ছুটির হিসাব ----------
+   নির্ধারিত ছুটি বিধিমালা, ১৯৫৯ অনুযায়ী আনুমানিক হিসাব।
+   অ-অবকাশ বিভাগ: গড় বেতনে কর্মকালের ১/১১, অর্ধগড় বেতনে ১/১২।
+   অবকাশ বিভাগ (প্রাথমিক বিদ্যালয়): পূর্ণ অবকাশ ভোগ করলে গড় বেতনে ছুটি জমা হয় না (বছরে কত দিন জমা হয় তা বদলানো যায়), অর্ধগড় বেতনে ১/১২।
+   DB.elCalc[tid] = {start, asOf, vac:1|0, fullPerYear, eol, fullPrev, halfPrev} */
+const elRec = tid => { DB.elCalc = DB.elCalc || {}; const t = DB.teachers.find(x => x.id === tid) || {};
+  return DB.elCalc[tid] = Object.assign({start:t.join || '', vac:1, fullPerYear:0, eol:0, fullPrev:0, halfPrev:0}, DB.elCalc[tid] || {}); };
+const elNum = v => Math.max(0, parseInt(toEn(String(v || '0')).replace(/\D/g, '')) || 0);
+const elAppUsed = (tid, type) => (DB.leaves || []).filter(l => l.tid === tid && l.type === type).reduce((a, l) => a + (l.days || 0), 0);
+const elYmd = n => { n = Math.max(0, Math.round(n)); const y = Math.floor(n / 365), m = Math.floor((n % 365) / 30), d = n - y * 365 - m * 30; return [y && bn(y) + ' বছর', m && bn(m) + ' মাস', (d || (!y && !m)) && bn(d) + ' দিন'].filter(Boolean).join(' '); };
+function elCalc(tid, asOf){
+  const R = elRec(tid), end = asOf || todayISO();
+  if (!R.start || R.start > end) return null;
+  const total = lvDays(R.start, end);
+  const fullUsed = elNum(R.fullPrev) + elAppUsed(tid, 'earned'), halfUsed = elNum(R.halfPrev) + elAppUsed(tid, 'medical'), eol = elNum(R.eol);
+  const duty = Math.max(0, total - eol - fullUsed - halfUsed);   // ছুটিকাল কর্মকাল হিসেবে গণ্য নয়
+  const fullEarned = R.vac ? Math.floor(duty / 365 * elNum(R.fullPerYear)) : Math.floor(duty / 11);
+  const halfEarned = Math.floor(duty / 12);
+  const fullBal = fullEarned - fullUsed, halfBal = halfEarned - halfUsed;
+  return {R, end, total, eol, duty, fullUsed, halfUsed, fullEarned, halfEarned, fullBal, halfBal, halfAsFull: Math.floor(Math.max(0, halfBal) / 2),
+    appFull: elAppUsed(tid, 'earned'), appHalf: elAppUsed(tid, 'medical')};
+}
+function lvCalcView(L){
+  const t = DB.teachers.find(x => x.id === L.tid); if (!t) return '<div class="card empty"><p class="t2">আগে শিক্ষক তালিকায় শিক্ষক যোগ করুন।</p></div>';
+  const R = elRec(t.id), C = elCalc(t.id, L.elAsOf);
+  const box = (lbl, v, sub, bg, col) => `<div class="elbox" style="background:${bg}"><span>${lbl}</span><b style="color:${col}">${v}</b>${sub ? `<small>${sub}</small>` : ''}</div>`;
+  const numIn = (id, k, lbl, hint) => field(id, lbl, inp(id, R[k] ? bn(R[k]) : '', `inputmode="numeric" maxlength="5" data-el-in="${k}" placeholder="০"`) + (hint ? `<span class="hint" style="margin:2px 0 0">${hint}</span>` : ''));
+  return `<div class="card" style="gap:12px;padding:18px 16px">
+    ${field('lv_tid','শিক্ষক', sel('lv_tid', bySerial(DB.teachers).map(x => [x.id, `${x.name} — ${x.designation || ''}`]), L.tid || ''))}
+    <div class="row2">${field('el_start','চাকরিতে প্রথম যোগদান', inp('el_start', R.start, 'type="date" data-el-in="start"'))}${field('el_asof','হিসাবের তারিখ', inp('el_asof', L.elAsOf || todayISO(), 'type="date"'))}</div>
+    ${!R.start ? '<p class="hint" style="color:#B42318;margin:-4px 0 0">প্রথম যোগদানের তারিখ দিন।</p>' : ''}
+    <div><b style="font-size:13.5px">বিভাগের ধরন</b><div class="tabs2" style="grid-template-columns:1fr 1fr;margin-top:6px" role="tablist">
+      <button role="tab" class="${R.vac ? 'on' : ''}" data-el-vac="1">অবকাশ বিভাগ (বিদ্যালয়)</button><button role="tab" class="${!R.vac ? 'on' : ''}" data-el-vac="0">অ-অবকাশ বিভাগ</button></div></div>
+    ${R.vac ? numIn('el_fpy', 'fullPerYear', 'অবকাশ বিভাগে গড় বেতনে বছরে কত দিন জমা হয়', 'পূর্ণ অবকাশ ভোগ করলে সাধারণত ০ ধরা হয়; আপনার অফিসের হিসাব আলাদা হলে এখানে দিন।') : ''}
+    <div class="row2">${numIn('el_fp', 'fullPrev', 'আগে ভোগ করা অর্জিত (গড় বেতনে) ছুটি')}${numIn('el_hp', 'halfPrev', 'আগে ভোগ করা অর্ধগড় বেতনে/চিকিৎসা ছুটি')}</div>
+    ${numIn('el_eol', 'eol', 'বিনা বেতনে (অসাধারণ) ছুটি', 'এই সময় কর্মকাল হিসেবে ধরা হয় না।')}
+    ${C && (C.appFull || C.appHalf) ? `<p class="hint" style="margin:-4px 0 0">অ্যাপে রেকর্ড করা ছুটিও যোগ হয়েছে: অর্জিত ${bn(C.appFull)} দিন, চিকিৎসা ${bn(C.appHalf)} দিন।</p>` : ''}
+  </div>
+  ${C ? `<div class="card" style="gap:10px">
+    <div class="top"><b style="font-size:15px">${esc(t.name)}</b><span class="t2" style="font-size:12.5px">${dFmt(C.end)} পর্যন্ত</span></div>
+    <div class="elgrid">
+      ${box('মোট চাকরিকাল', elYmd(C.total), bn(C.total) + ' দিন', '#EEF3F8', '#1F4E8C')}
+      ${box('ছুটি বাদে কর্মকাল', elYmd(C.duty), bn(C.duty) + ' দিন', '#EEF3F8', '#1F4E8C')}
+      ${box('গড় বেতনে অর্জিত', bn(C.fullEarned) + ' দিন', `ভোগ ${bn(C.fullUsed)} দিন`, '#E8F5EE', '#17663F')}
+      ${box('গড় বেতনে অবশিষ্ট', bn(C.fullBal) + ' দিন', C.fullBal < 0 ? 'অর্জনের চেয়ে বেশি ভোগ' : '', C.fullBal < 0 ? '#FDE8E6' : '#E8F5EE', C.fullBal < 0 ? '#B42318' : '#17663F')}
+      ${box('অর্ধগড় বেতনে অর্জিত', bn(C.halfEarned) + ' দিন', `ভোগ ${bn(C.halfUsed)} দিন`, '#FFF6E5', '#7A4A00')}
+      ${box('অর্ধগড় বেতনে অবশিষ্ট', bn(C.halfBal) + ' দিন', `= গড় বেতনে ${bn(C.halfAsFull)} দিনের সমান`, C.halfBal < 0 ? '#FDE8E6' : '#FFF6E5', C.halfBal < 0 ? '#B42318' : '#7A4A00')}
+    </div>
+    <div class="row2"><button class="btn big solid" data-el-print>${ic('doc', 18)} প্রিন্ট / PDF</button><button class="btn big" data-el-all>সব শিক্ষকের হিসাব</button></div>
+  </div>` : ''}
+  <p class="hint">নিয়ম (নির্ধারিত ছুটি বিধিমালা, ১৯৫৯): অ-অবকাশ বিভাগে কর্মকালের ১/১১ গড় বেতনে এবং ১/১২ অর্ধগড় বেতনে ছুটি জমা হয়। অবকাশ বিভাগে (প্রাথমিক বিদ্যালয়) পূর্ণ অবকাশ ভোগ করলে গড় বেতনে ছুটি সাধারণত জমা হয় না, অর্ধগড় বেতনে ১/১২ হারে জমা হয়। ২ দিন অর্ধগড় = ১ দিন গড় বেতনের ছুটি। এটি আনুমানিক হিসাব — সার্ভিস বুকের ছুটির হিসাবের সঙ্গে মিলিয়ে নিন।</p>`;
+}
+function elDoc(list, asOf){
+  const T = DB.teacher, info = [T.emis && `ইএমআইএস কোড: ${bn(T.emis)}`, [T.upazila && 'উপজেলা: ' + T.upazila, T.district && 'জেলা: ' + T.district].filter(Boolean).join(', ')].filter(Boolean).join(' · ');
+  const rows = list.map(t => ({t, C: elCalc(t.id, asOf)})).filter(x => x.C);
+  const css = `@page{size:A4 ${rows.length > 1 ? 'landscape' : 'portrait'};margin:12mm}body{font-family:'Hind Siliguri','Noto Sans Bengali',sans-serif;color:#000;margin:0}
+  .h{text-align:center;margin-bottom:10px}.s{font-size:20px;font-weight:700}.i{font-size:12.5px}.t{display:inline-block;margin-top:6px;font-size:16px;font-weight:700;border:2px solid #000;border-radius:6px;padding:1px 14px}
+  table{width:100%;border-collapse:collapse;border:2px solid #000}th,td{border:1.3px solid #000;padding:5px;text-align:center;font-size:12.5px}th{background:#E6E6E6;-webkit-print-color-adjust:exact;print-color-adjust:exact}td.l{text-align:left}
+  .n{font-size:11.5px;margin-top:8px;line-height:1.6}.sig{display:flex;justify-content:space-between;margin-top:46px;font-size:13px}.sig div{border-top:1.5px solid #000;min-width:180px;text-align:center;padding-top:3px}`;
+  const one = rows.length === 1 && rows[0];
+  const body = one ? `<table>${[['শিক্ষকের নাম ও পদবি', esc(one.t.name) + (one.t.designation ? ', ' + esc(one.t.designation) : '')],['চাকরিতে প্রথম যোগদান', dFmt(one.C.R.start)],['হিসাবের তারিখ', dFmt(one.C.end)],
+      ['বিভাগের ধরন', one.C.R.vac ? 'অবকাশ বিভাগ' : 'অ-অবকাশ বিভাগ'],['মোট চাকরিকাল', `${elYmd(one.C.total)} (${bn(one.C.total)} দিন)`],['বিনা বেতনে ছুটি', bn(one.C.eol) + ' দিন'],
+      ['ছুটি বাদে কর্মকাল', `${elYmd(one.C.duty)} (${bn(one.C.duty)} দিন)`],['গড় বেতনে অর্জিত ছুটি', bn(one.C.fullEarned) + ' দিন'],['গড় বেতনে ভোগকৃত ছুটি', bn(one.C.fullUsed) + ' দিন'],['গড় বেতনে অবশিষ্ট ছুটি', bn(one.C.fullBal) + ' দিন'],
+      ['অর্ধগড় বেতনে অর্জিত ছুটি', bn(one.C.halfEarned) + ' দিন'],['অর্ধগড় বেতনে ভোগকৃত ছুটি', bn(one.C.halfUsed) + ' দিন'],['অর্ধগড় বেতনে অবশিষ্ট ছুটি', `${bn(one.C.halfBal)} দিন (গড় বেতনে ${bn(one.C.halfAsFull)} দিনের সমান)`]]
+      .map(([k, v]) => `<tr><td class="l" style="width:45%"><b>${k}</b></td><td class="l">${v}</td></tr>`).join('')}</table>`
+    : `<table><tr><th>ক্রম</th><th>নাম ও পদবি</th><th>প্রথম যোগদান</th><th>কর্মকাল (দিন)</th><th>গড় বেতনে অর্জিত</th><th>গড় বেতনে ভোগ</th><th>গড় বেতনে অবশিষ্ট</th><th>অর্ধগড়ে অর্জিত</th><th>অর্ধগড়ে ভোগ</th><th>অর্ধগড়ে অবশিষ্ট</th></tr>
+      ${rows.map(({t, C}, i) => `<tr><td>${bn(i + 1)}</td><td class="l">${esc(t.name)}${t.designation ? ', ' + esc(t.designation) : ''}</td><td>${dFmt(C.R.start)}</td><td>${bn(C.duty)}</td><td>${bn(C.fullEarned)}</td><td>${bn(C.fullUsed)}</td><td>${bn(C.fullBal)}</td><td>${bn(C.halfEarned)}</td><td>${bn(C.halfUsed)}</td><td>${bn(C.halfBal)}</td></tr>`).join('')}</table>`;
+  return `<!DOCTYPE html><html lang="bn"><head><meta charset="utf-8"><title>অর্জিত ছুটির হিসাব</title><link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;600;700&display=swap" rel="stylesheet"><style>${css}</style></head><body>
+    <div class="h"><div class="s">${esc(T.school || '')}</div>${info ? `<div class="i">${esc(info)}</div>` : ''}<div class="t">অর্জিত ছুটির হিসাব বিবরণী</div>${one ? '' : `<div class="i" style="margin-top:4px">${dFmt(asOf || todayISO())} পর্যন্ত</div>`}</div>
+    ${body}<div class="n">হিসাবের ভিত্তি: নির্ধারিত ছুটি বিধিমালা, ১৯৫৯। ছুটিকাল কর্মকাল হিসেবে ধরা হয়নি। অর্ধগড় বেতনের ২ দিন = গড় বেতনের ১ দিন। আনুমানিক হিসাব — সার্ভিস বুকের সঙ্গে মিলিয়ে নিন।</div>
+    <div class="sig"><div>শিক্ষকের স্বাক্ষর</div><div>প্রধান শিক্ষকের স্বাক্ষর</div></div></body></html>`;
+}
+function elClick(ds){
+  const L = lvState(), R = L.tid && elRec(L.tid);
+  if (ds.elVac !== undefined && R) { R.vac = +ds.elVac; save(); return render(); }
+  if ('elPrint' in ds) { toast('প্রিন্টের পর্দায় "Save as PDF" বাছলে PDF হবে', 4000); return printDoc('অর্জিত ছুটির হিসাব', elDoc([DB.teachers.find(t => t.id === L.tid)], L.elAsOf)); }
+  if ('elAll' in ds) { const list = bySerial(DB.teachers).filter(t => elCalc(t.id, L.elAsOf)); if (!list.length) return toast('কোনো শিক্ষকের প্রথম যোগদানের তারিখ দেওয়া নেই');
+    if (list.length < DB.teachers.length) toast(`${bn(DB.teachers.length - list.length)} জনের যোগদানের তারিখ নেই — তাঁরা বাদ গেছেন`, 4000);
+    return printDoc('অর্জিত ছুটির হিসাব', elDoc(list, L.elAsOf)); }
+}
+function bindEl(){
+  const L = lvState(), R = L.tid && elRec(L.tid); if (!R) return;
+  let tm;
+  document.querySelectorAll('[data-el-in]').forEach(el => el.addEventListener(el.type === 'date' ? 'change' : 'input', () => {
+    const k = el.dataset.elIn; R[k] = el.type === 'date' ? el.value : elNum(el.value); save();
+    clearTimeout(tm); tm = setTimeout(() => { const a = document.activeElement && document.activeElement.id; render(); const b = a && document.getElementById(a); if (b) { b.focus(); try { b.setSelectionRange(b.value.length, b.value.length); } catch(_) {} } }, el.type === 'date' ? 0 : 700); }));
+  const a = document.getElementById('el_asof'); if (a) a.addEventListener('change', () => { L.elAsOf = a.value; render(); });
+}
+
 function leave(){
   const L = lvState(), head = innerHeader('ছুটি ও আবেদন','leave','#E0701A');
-  const tabs = `<div class="tabs2" role="tablist"><button role="tab" class="${L.tab==='apply'?'on':''}" data-lv-tab="apply">আবেদন তৈরি</button><button role="tab" class="${L.tab==='record'?'on':''}" data-lv-tab="record">ছুটির হিসাব</button></div>`;
-  return head + `<div class="sec" style="padding-top:16px">${tabs}${L.tab === 'apply' ? lvApply(L) : lvRecord(L)}</div>`;
+  const tabs = `<div class="tabs2" role="tablist"><button role="tab" class="${L.tab==='apply'?'on':''}" data-lv-tab="apply">আবেদন তৈরি</button><button role="tab" class="${L.tab==='record'?'on':''}" data-lv-tab="record">ছুটির হিসাব</button><button role="tab" class="${L.tab==='calc'?'on':''}" data-lv-tab="calc">অর্জিত ছুটি</button></div>`.replace('class="tabs2"', 'class="tabs2" style="grid-template-columns:repeat(3,minmax(0,1fr))"');
+  return head + `<div class="sec" style="padding-top:16px">${tabs}${L.tab === 'apply' ? lvApply(L) : L.tab === 'calc' ? lvCalcView(L) : lvRecord(L)}</div>`;
 }
 function lvApply(L){
   const ty = LV_TYPES[L.type], n = lvDays(L.from, L.to), t = DB.teachers.find(x => x.id === L.tid);
@@ -5479,7 +5569,7 @@ function bindView(r){
   if (r === 'settings') pfCheck();
   if (r === 'routine') bindRoutine();
   if (r === 'leave') {
-    bindLogo();
+    bindLogo(); if (lvState().tab === 'calc') bindEl();
     const L = lvState(), pv = () => { const el = document.getElementById('lvPreview'); if (el) el.innerHTML = lvLetterHtml(L); };
     document.querySelectorAll('[data-lv-in]').forEach(el => el.addEventListener('input', () => { L[el.dataset.lvIn] = el.value; pv(); }));
     document.querySelectorAll('[data-lv-in][type="date"]').forEach(el => el.addEventListener('change', () => { L[el.dataset.lvIn] = el.value; if (el.dataset.lvIn === 'from' && L.to < L.from) L.to = L.from; render(); }));
@@ -5655,6 +5745,7 @@ document.addEventListener('click', e => {
   if ('p2Clear' in ds) return confirmSheet('সব পাতা মুছবেন?', 'যোগ করা সব ছবি তালিকা থেকে সরে যাবে।', 'মুছুন', () => { p2State().pages = []; UI.p2last = null; });
   if (ds.p2Make) return p2Make(ds.p2Make);
   if (ds.lvTab) { lvState().tab = ds.lvTab; return render(); }
+  if (Object.keys(ds).some(k => /^el[A-Z]/.test(k))) return elClick(ds);
   if ('lvFill' in ds) { const L = lvState(); L.to = addDays(L.from, LV_DAYS[L.type] - 1); return render(); }
   if ('lvPrint' in ds) { const L = lvState(); if (L.type === 'student' && !L.sid) return toast('শিক্ষার্থী বেছে নিন'); if (LV_TYPES[L.type][1]) lvSave(L); return printDoc(`${LV_TYPES[L.type][0]} - ${(DB.teachers.find(x => x.id === L.tid) || {}).name || ''}`, lvDoc(L)); }
   if ('lvCopy' in ds) return copyText(lvText(lvState()), 'আবেদন কপি হয়েছে');
