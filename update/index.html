@@ -408,7 +408,7 @@ const P = {
 const ic = (k, sz=22) => S(P[k], `width="${sz}" height="${sz}"`);
 
 /* ---------- version & updates ---------- */
-const WEB_VERSION = '8.5';
+const WEB_VERSION = '8.6';
 const BR = window.AppBridge || null;
 let UPD = {state: BR ? 'idle' : 'webapp'};
 let updDismissed = false;
@@ -4187,10 +4187,13 @@ function rtClick(ds){
 /* ---------- পরীক্ষার রুটিন ও প্রবেশপত্র ----------
    DB.exams = {cur:id, list:[{id, name, year, start, end, classes:[], rows:[{id, date, s:{cls:subjId}}], rules:[], perPage}]}
    Religion subjects are sat on the same day, so they are offered as one subject "rel". */
-const EX_NAMES = ['প্রথম প্রান্তিক মূল্যায়ন','দ্বিতীয় প্রান্তিক মূল্যায়ন','বার্ষিক মূল্যায়ন','বার্ষিক পরীক্ষা','মডেল টেস্ট','অর্ধবার্ষিক পরীক্ষা'];
+const EX_NAMES = ['প্রথম প্রান্তিক মূল্যায়ন','দ্বিতীয় প্রান্তিক মূল্যায়ন','তৃতীয় প্রান্তিক মূল্যায়ন','বার্ষিক মূল্যায়ন','বার্ষিক পরীক্ষা','মডেল টেস্ট','অর্ধবার্ষিক পরীক্ষা'];
 const EX_RULES = ['পরীক্ষা শুরুর অন্তত ১৫ মিনিট আগে পরীক্ষার কক্ষে উপস্থিত হতে হবে।','প্রতিদিন প্রবেশপত্র সঙ্গে আনতে হবে এবং পরিদর্শককে দেখাতে হবে।','কলম, পেন্সিল, রাবার, স্কেল ইত্যাদি নিজে সঙ্গে আনতে হবে।','পরীক্ষার কক্ষে মোবাইল ফোন, বই বা কোনো কাগজ আনা যাবে না।','প্রবেশপত্র হারালে সাথে সাথে প্রধান শিক্ষককে জানাতে হবে।'];
 const EX_REL = new Set(['islam','hindu','buddha','christ']);
-const exRoot = () => { if (!DB.exams || !Array.isArray(DB.exams.list)) DB.exams = {cur:null, list:[]}; return DB.exams; };
+const exRoot = () => { if (!DB.exams || !Array.isArray(DB.exams.list)) DB.exams = {cur:null, list:[]};
+  /* one-time (v8.6): the 2026 year-end assessment is officially the "third terminal" one */
+  if (!DB.exams.v86) { DB.exams.v86 = 1; DB.exams.list.forEach(e => { if ((e.name || '').trim() === 'বার্ষিক মূল্যায়ন') e.name = 'তৃতীয় প্রান্তিক মূল্যায়ন'; }); try { save(); } catch(_) {} }
+  return DB.exams; };
 const exCur = () => { const R = exRoot(); return R.list.find(e => e.id === R.cur) || R.list[0] || null; };
 /* subjects of the DPE 2026 assessment timetable that are not in the textbook list */
 const EX_ARTS = 'শিল্পকলা (চারু ও কারুকলা, সংগীত, নৃত্য, নাট্যকলা)', EX_HEALTH = 'শারীরিক ও মানসিক স্বাস্থ্য শিক্ষা';
@@ -4211,7 +4214,7 @@ const exSubName = (cls, sid) => sid === 'rel' ? 'ধর্ম ও নৈতি�
 const exNextDay = iso => { let d = addDays(iso, 1); for (let i = 0; i < 40 && isHoliday(d); i++) d = addDays(d, 1); return d; };
 function exNew(){
   const R = exRoot(), cl = classesWithStudents().map(c => c[0]).filter(c => c !== 'pre');
-  const e = {id:uid(), name:EX_NAMES[2], year:String(new Date().getFullYear()), start:'10:00', end:'12:30', lo:{start:'10:00', end:'11:30'}, classes:cl.length ? cl : ['1','2','3','4','5'], rows:[], rules:EX_RULES.slice(), perPage:2};
+  const e = {id:uid(), name:'তৃতীয় প্রান্তিক মূল্যায়ন', year:String(new Date().getFullYear()), start:'10:00', end:'12:30', lo:{start:'10:00', end:'11:30'}, classes:cl.length ? cl : ['1','2','3','4','5'], rows:[], rules:EX_RULES.slice(), perPage:2};
   let d = todayISO(); if (isHoliday(d)) d = exNextDay(d);
   e.rows.push({id:uid(), date:d, s:{}});
   R.list.unshift(e); R.cur = e.id; save(); return e;
